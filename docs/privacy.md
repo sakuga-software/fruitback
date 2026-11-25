@@ -133,6 +133,9 @@ them is the visibility of the site, chosen in the console when it is added: `mem
 session of its workspace and nobody else, which is what a site added with no visibility gets; or
 `everyone`, anybody who knows a page address and the id of the site, with or without the widget.
 [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#who-reads-the-pins-the-visibility-of-each-site) says it in full.
+The tab « Access » of a site in the console sets it, with who may leave a note and what a visitor
+may do to a note of their own (FRU-703). These are settings of the site, kept on its row: they
+hold nothing about a person.
 
 - A worker of before 0.3.0 read `FRUITBACK_READ` instead, public by default. That worker no longer
   starts.
@@ -205,7 +208,7 @@ destination.
 
 When the team marks a note done, the worker can write once to the person who left it. **It is a
 setting of each site, off by default**: « Offer visitors an e-mail when their note is done », in
-the console, under « Who can leave a note? ». The console shows it only for a site where anybody
+the console, in the tab « Access » of the site. The console shows it only for a site where anybody
 may leave a note, and it does nothing on a site whose notes come from its members only. Off, the
 widget asks nobody, the worker keeps no address and no account for it, and sends nothing. Turned
 off, it deletes every address and account that waited for a message on that site. It needs a worker
