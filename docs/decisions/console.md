@@ -641,8 +641,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
-  them says « Not delivered yet » on its row. The search says what the index searches (the 64
-  characters, the page, the reference), and not « the author » of the mockup. A guest
+  them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
+  mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
   keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
@@ -715,6 +715,28 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     the other.
   - **j and k** give the focus to the text of the next note and of the one before; Enter opens it.
     A field, a menu and a dialog keep their keys.
+- **The head and the bar of the notes are Linear's** (FRU-686, the mockup « Notes après » of
+  2026-11-25), from one edge of the screen to the other. `parts/notes-filters.tsx`.
+  - **The head, 48 px**: « Notes » at 14 px, a tab per place the notes went with its mark and its
+    count (`ViewTab` of the kit, the rule of FRU-548: no tabs with one place), then « New task ». No
+    lead under the title. The title is not at the place of the others (`console-titles.spec.ts`
+    leaves Notes out). No bell: the console has no notification to show.
+  - **A tab is a place, not a kind.** The mockup draws « Webhook and REST »; the filter `place` of
+    the worker reads one connector, so two connectors of one kind are two tabs, as the chips were.
+  - **The bar, 44 px**: « Filter » opens a menu by field (Status, Site, Left by, then Assignee,
+    Priority, Label and Due day once the list holds a task Fruitback keeps), each a choice that shows
+    the value of the address. Each filter on is a chip, « field value » with a cross
+    (`FilterTag`), and « Clear » takes them all off with the search. The chips are read from the
+    address the list is read from, so they say exactly what the list shows. « Only my notes » is
+    « Left by: Me ». **No chip « Created · Last 30 days »**: the worker reads no date of creation, and
+    a filter it does not read would show a list it did not filter.
+  - **At the end**: the count of the notes of the whole filter, the search of 220 px (« Search
+    notes »; « / » gives it the focus, unless a field, a menu or a dialog has the key) and
+    « Display », whose menu shows the table or the board. Grouping and order stay those of FRU-551 and
+    FRU-436: the table is read by status, the board by date, and another order is a change of the
+    worker.
+  - **Controls of 28 px**, the token `h-control-md` of FRU-683, where the mockup draws 26: no token is
+    26 px. Under 640 px the bar goes on two lines, and a submenu opens under its item.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
   `?view=board` (the table writes nothing); the filters, the search and the page are the same, and the

@@ -1489,6 +1489,71 @@ export function FilterChip({ pressed, onChange, count, alert = false, children }
   );
 }
 
+/**
+ * A tab of a view (FRU-686): the head of the notes, one per place the notes went. Pressed, it is
+ * framed and in ink; else muted, framed under the pointer only. A picture before the words, a count
+ * after them.
+ */
+export function ViewTab({
+  pressed,
+  onChange,
+  count,
+  mark,
+  children,
+}: {
+  pressed: boolean;
+  onChange: (pressed: boolean) => void;
+  count?: number;
+  mark?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <HeroButton
+      type="button"
+      variant="ghost"
+      aria-pressed={pressed}
+      onPress={() => onChange(!pressed)}
+      className={`kit-view-tab inline-flex flex-none items-center gap-[6px] [&_svg]:size-[14px] h-control-md px-[8px] py-0 border rounded-control text-(length:--text-body) font-medium leading-auto whitespace-nowrap cursor-pointer transform-none [transition:none] ${pressed ? 'border-line bg-page text-ink' : 'border-transparent bg-transparent text-muted [&:hover]:bg-hover [&:hover]:text-ink data-[hovered=true]:bg-hover data-[hovered=true]:text-ink'}`}
+    >
+      {mark}
+      {children}
+      {count === undefined ? null : (
+        <span className="kit-view-tab__count text-(length:--text-hint) font-normal text-muted tabular-nums">
+          {count}
+        </span>
+      )}
+    </HeroButton>
+  );
+}
+
+/**
+ * A filter that is on (FRU-686): its field, its value, and a cross that takes it off. The words are
+ * the filter as the list reads it, so a chip says exactly what the list shows.
+ */
+export function FilterTag({
+  field,
+  value,
+  removeLabel,
+  onRemove,
+}: {
+  field: string;
+  value: string;
+  removeLabel: string;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="kit-filter-tag inline-flex max-w-[260px] flex-none items-center gap-[6px] h-control-sm pl-[8px] pr-[2px] border border-line rounded-control bg-page text-(length:--text-hint) font-medium text-ink-soft whitespace-nowrap">
+      <span className="text-muted">{field}</span>
+      <span className="min-w-0 truncate">{value}</span>
+      <IconButton label={removeLabel} onClick={onRemove} size="tiny">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </IconButton>
+    </span>
+  );
+}
+
 type DataTableProps = {
   /** What the table lists. It names the region, which a keyboard scrolls when the table is wider. */
   label: string;
@@ -2146,22 +2211,33 @@ export function MenuTree({
   triggerLabel,
   open,
   onOpenChange,
+  trigger = 'icon',
+  triggerClassName = '',
   children,
 }: {
   branches: readonly TreeBranch[];
   items: readonly MenuItem[];
   onAction: (id: string) => void;
-  triggerLabel: string;
+  /** The name of a button that is a picture. A button of words (`plain`) is named by them. */
+  triggerLabel?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A picture (the menu of a task), or words with a picture, as « Filter » of the notes (FRU-686). */
+  trigger?: 'icon' | 'plain';
+  triggerClassName?: string;
   children: ReactNode;
 }) {
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 640;
+
   return (
     <Dropdown isOpen={open} onOpenChange={onOpenChange}>
-      <Dropdown.Trigger className={`${MENU_TRIGGER} ${ICON_BUTTON} ${ICON_BUTTON_SIZE.chip}`} aria-label={triggerLabel}>
+      <Dropdown.Trigger
+        className={`${MENU_TRIGGER} ${trigger === 'icon' ? `${ICON_BUTTON} ${ICON_BUTTON_SIZE.chip}` : ''} ${triggerClassName}`}
+        {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
+      >
         {children}
       </Dropdown.Trigger>
-      <Dropdown.Popover className={MENU} placement="bottom end">
+      <Dropdown.Popover className={MENU} placement={trigger === 'icon' ? 'bottom end' : 'bottom start'}>
         <Dropdown.Menu onAction={(id) => onAction(String(id))}>
           {[
             ...branches.map((branch) => (
@@ -2172,7 +2248,13 @@ export function MenuTree({
                   </span>
                   <Dropdown.SubmenuIndicator />
                 </Dropdown.Item>
-                <Dropdown.Popover className={MENU}>{branchMenu(branch)}</Dropdown.Popover>
+                {/* On a phone a submenu has no room beside its menu: it opens under its item (FRU-686). */}
+                <Dropdown.Popover
+                  className={`${MENU} max-w-[calc(100vw-32px)]`}
+                  {...(narrow ? { placement: 'bottom start' as const } : {})}
+                >
+                  {branchMenu(branch)}
+                </Dropdown.Popover>
               </Dropdown.SubmenuTrigger>
             )),
             ...items.map((item) => menuItem(item, false)),

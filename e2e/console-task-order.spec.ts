@@ -82,6 +82,13 @@ async function worker(p: Page): Promise<Sent[]> {
 
 const order = (p: Page) => p.locator('section[data-column] li[data-note]').allInnerTexts();
 
+/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+async function choose(page: Page, field: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: field, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
+}
+
 test('a task goes down its column from its menu, and a drag puts it back on top', async ({ page: p }) => {
   const sent = await worker(p);
   await p.goto(`${CONSOLE}/w/w1/notes?view=board`);
@@ -120,8 +127,7 @@ test('an archived task leaves the board, the filter « Archived » finds it, and
   await p.getByRole('menuitem', { name: 'Archive' }).click();
 
   await expect(p.getByText('Gamma task')).toHaveCount(0);
-  await p.getByRole('button', { name: /Any status/ }).click();
-  await p.getByRole('option', { name: 'Archived' }).click();
+  await choose(p, 'Status', 'Archived');
   await expect(p.getByText('Gamma task')).toBeVisible();
   await expect(p).toHaveURL(/archived=1/);
   await p.locator('tr', { hasText: 'Gamma task' }).getByText('Gamma task').click({ button: 'right' });

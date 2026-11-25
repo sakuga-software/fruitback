@@ -13,7 +13,8 @@ const PAGES = [
   '/w/w1/sites',
   '/w/w1/sites/s1',
   '/w/w1/sites/s1/statuses',
-  '/w/w1/notes',
+  // FRU-686: Notes has the head of 48 px of its mockup, « Notes » at 14 px beside its tabs:
+  // console-notes.spec.ts measures it.
   '/w/w1/connectors',
   '/w/w1/members',
   '/w/w1/account',

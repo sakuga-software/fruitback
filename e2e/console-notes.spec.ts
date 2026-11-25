@@ -29,10 +29,7 @@ const CONSOLE = 'http://localhost:5178';
 
 const INK = '#0f172a';
 const MUTED = '#5b6779';
-const CONTROL = '#7b8797';
 const ACCENT_STRONG = '#b91c1c';
-const WHITE = '#ffffff';
-const RAIL_TEXT = '#d4d4d8';
 
 const MINUTE = 60_000;
 /**
@@ -312,6 +309,16 @@ const chip = (page: Page, name: string | RegExp) =>
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Search notes' });
 const pages = (page: Page) => page.getByRole('navigation', { name: 'Pages of notes' });
 const row = (page: Page, excerpt: string) => rows(page).filter({ hasText: excerpt });
+/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+async function choose(page: Page, field: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: field, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
+}
+/** The chips of the filters that are on, and the cross of one. */
+const filtersOn = (page: Page) => page.getByRole('group', { name: 'Filters on' });
+const removeFilter = (page: Page, field: string) =>
+  filtersOn(page).getByRole('button', { name: new RegExp(`^Remove the filter ${field}:`) });
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
   // A list of HeroUI fades in: axe reads it once it is there.
@@ -336,71 +343,44 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(rail).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
   await expect(rail.nth(1)).toHaveAttribute('aria-current', 'page');
 
-  // The head.
+  // The head (FRU-686): 48 px from one edge of the screen to the other, « Notes », the tabs, then
+  // « New task ». No lead under the title: the mockup draws none.
   await expect(page.locator('main h1')).toHaveText('Notes');
-  await expect(page.getByText('Every note left on the sites of Acme, and where it went.')).toBeVisible();
-  expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '24px' });
+  await expect(page.getByText('Every note left on the sites of Acme, and where it went.')).toHaveCount(0);
+  expectBox(await box(page.locator('main header').first()), { x: 248, y: 0, width: 1192, height: 48 }, 2, 'the head');
+  expect.soft(await styles(page.locator('main h1'), ['font-size', 'font-weight'])).toEqual({
+    'font-size': '14px',
+    'font-weight': '600',
+  });
 
-  // The chips: every note, and each place with notes. No « Not delivered »: the route counts those
-  // notes and does not filter them, and a chip that chooses nothing is not drawn.
+  // The tabs: every note, and each place with notes, its mark and its count. No « Not delivered »:
+  // the route counts those notes and does not filter them, and a tab that chooses nothing is not drawn.
   await expect(chips(page)).toHaveText(['All10', 'Linear6', 'REST API3', 'In Fruitback1']);
   const all = chip(page, /^All/);
   await expect(all).toHaveAttribute('aria-pressed', 'true');
   await expect(chip(page, /^Linear/)).toHaveAttribute('aria-pressed', 'false');
-  expectBox(await box(all), { x: 297, y: 116, height: 24 }, 2, '« All »');
   expect
-    .soft(
-      await styles(all, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight', 'column-gap']),
-    )
-    .toEqual({
-      height: '24px',
-      'padding-left': '14px',
-      'border-top-left-radius': '6px',
-      'font-size': '12px',
-      'font-weight': '600',
-      'column-gap': '8px',
-    });
-  // Pressed: ink, white words, a light count.
-  expect.soft(await painted(all, 'backgroundColor')).toEqual(rgb(INK));
-  expect.soft(await painted(all, 'color')).toEqual(rgb(WHITE));
-  expect.soft(await painted(all.locator('span').last(), 'color')).toEqual(rgb(RAIL_TEXT));
-  // At rest: white, the border of a control, a muted count at 400.
+    .soft(await styles(all, ['height', 'border-top-left-radius', 'font-size', 'font-weight']))
+    .toEqual({ height: '28px', 'border-top-left-radius': '6px', 'font-size': '13px', 'font-weight': '500' });
+  // Pressed: framed, in ink; at rest: muted, no frame.
+  expect.soft(await painted(all, 'color')).toEqual(rgb(INK));
   const linear = chip(page, /^Linear/);
-  expect.soft(await painted(linear, 'backgroundColor')).toEqual(rgb(WHITE));
-  expect.soft(await painted(linear, 'borderTopColor')).toEqual(rgb(CONTROL));
-  expect.soft(await painted(linear.locator('span').last(), 'color')).toEqual(rgb(MUTED));
-  expect.soft(await styles(linear.locator('span').last(), ['font-weight'])).toEqual({ 'font-weight': '400' });
-  await linear.hover();
-  expect.soft(await painted(linear, 'borderTopColor')).toEqual(rgb(INK));
-  await page.mouse.move(700, 880);
-  expect
-    .soft(await styles(page.getByRole('group', { name: 'Where the notes went' }), ['column-gap', 'margin-bottom']))
-    .toEqual({
-      'column-gap': '8px',
-      'margin-bottom': '14px',
-    });
+  expect.soft(await painted(linear, 'color')).toEqual(rgb(MUTED));
+  await expect(linear.locator('svg[data-mark="linear"]')).toHaveCount(1);
+  await expect(chip(page, /^In Fruitback/).locator('svg')).toHaveCount(1);
 
-  // The filters: a search and two lists, 40 px, their names for a screen reader only.
-  expectBox(await box(search(page)), { x: 297, y: 154, height: 28 }, 2, 'the search');
-  // What the index searches: not the author, which the mockup says.
-  await expect(search(page)).toHaveAttribute('placeholder', 'Search the text, the page or the reference');
-  const site = page
-    .getByRole('button', { name: /Site$/ })
-    .or(page.getByRole('button', { name: /^Every site/ }))
-    .first();
-  await expect(site).toBeVisible();
-  expect.soft((await box(site)).height).toBe(28);
-
-  // « Only my notes »: a box of 16 px, its words at 14 px 8 px after it, on a line of 40 px.
-  const mine = page.getByRole('checkbox', { name: 'Only my notes' });
-  await expect(mine).not.toBeChecked();
-  const tick = await box(page.locator('.kit-checkbox .checkbox__control'));
-  expect.soft({ width: tick.width, height: tick.height }).toEqual({ width: 16, height: 16 });
-  expectBox(await box(page.locator('.kit-checkbox')), { x: 1280, y: 154, height: 28 }, 2, '« Only my notes »');
-  expect.soft(await styles(page.locator('.kit-checkbox .checkbox__content'), ['column-gap'])).toEqual({
-    'column-gap': '8px',
-  });
-  expect.soft(await styles(page.locator('.kit-checkbox .label'), ['font-size'])).toEqual({ 'font-size': '13px' });
+  // The bar (FRU-686): 44 px, « Filter », no chip with no filter on, the count of the notes, the
+  // search of 220 px with « / », and « Display ».
+  const bar = page.locator('[data-notes-toolbar]');
+  expect.soft((await box(bar)).height).toBe(44);
+  const filterButton = page.getByRole('button', { name: 'Filter', exact: true });
+  expect.soft((await box(filterButton)).height).toBe(28);
+  await expect(filtersOn(page)).toHaveCount(0);
+  await expect(bar.getByText('10 notes', { exact: true })).toBeVisible();
+  await expect(search(page)).toHaveAttribute('placeholder', 'Search notes');
+  expect.soft((await box(search(page).locator('..'))).width).toBeLessThanOrEqual(220);
+  await expect(bar.locator('kbd')).toHaveText('/');
+  await expect(page.getByRole('button', { name: /Display/ })).toBeVisible();
 
   // FRU-685: the list goes from one edge of the screen to the other, a line of 36 px per note under
   // the head of its group, 32 px. The heads of the columns are for a screen reader only: the mockup
@@ -440,6 +420,8 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(row(page, 'returns policy').locator('td').nth(3)).toHaveText('Aacme.dev');
   // The way to see it on its page: an icon in the last column, the address in its tooltip (FRU-546).
   const show = first.getByRole('link', { name: 'Show on the page' });
+  // A tooltip opens on a pointer that moves: the pointer has not moved yet in this test.
+  await page.mouse.move(700, 880);
   await expect(first.locator('td').last().getByRole('link')).toHaveCount(1);
   await expect(show.locator('svg')).toHaveAttribute('aria-hidden', 'true');
   await show.hover();
@@ -572,7 +554,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await open(page);
   await expect(rows(page)).toHaveCount(8);
 
-  // A chip.
+  // A tab.
   await chip(page, /^REST API/).click();
   await expect(page).toHaveURL(/[?&]place=c2(&|$)/);
   await expect(rows(page)).toHaveCount(3);
@@ -582,11 +564,11 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await chip(page, /^All/).click();
   await expect(rows(page)).toHaveCount(8);
 
-  // The status.
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'Done', exact: true }).click();
+  // The status, from « Filter » (FRU-686): its chip says it.
+  await choose(page, 'Status', 'Done');
   await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
   await expect(rows(page)).toHaveCount(3);
+  await expect(filtersOn(page).locator('.kit-filter-tag')).toHaveText(['StatusDone']);
 
   // The search waits 300 ms after the last key, and reads once. The clock of the page is held while
   // the keys go in: 299 ms later nothing is read, whatever the load of the machine (FRU-327).
@@ -613,45 +595,24 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   // So wait for the read itself, and only one made after the keys (FRU-327).
   await expect.poll(() => worker.asked.slice(typed).at(-1)).toEqual({ stage: 'done', q: 'mug' });
 
-  // « Only my notes ».
-  const mine = page.getByRole('checkbox', { name: 'Only my notes' });
+  // « Left by: Me », in place of the box « Only my notes » (FRU-686). The cross of a chip takes
+  // its filter off, and the list is read again.
   await search(page).fill('');
   await expect(page).not.toHaveURL(/q=/);
-  await page.getByRole('button', { name: /Done/ }).first().click();
-  await page.getByRole('option', { name: 'Any status', exact: true }).click();
+  await removeFilter(page, 'Status').click();
   await expect(page).not.toHaveURL(/stage=/);
   await expect(rows(page)).toHaveCount(8);
-  // FRU-550: the box itself ticks, where it is drawn, and not only its words. The input of HeroUI is
-  // hidden under it. Before, the box was outside the label that takes the press, and a press on it
-  // did nothing.
-  await page.locator('.kit-checkbox .checkbox__control').click();
-  await expect(mine).toBeChecked();
+  await choose(page, 'Left by', 'Me');
   await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
-  // Ticked, the box is ink, as the mockups draw it: HeroUI lays its accent over it in a `::before`.
-  await page.mouse.move(0, 0);
-  await expect
-    .poll(() =>
-      page
-        .locator('.kit-checkbox .checkbox__control')
-        .evaluate((control) => getComputedStyle(control, '::before').backgroundColor),
-    )
-    .toBe(`rgb(${rgb(INK).join(', ')})`);
   await expect(rows(page)).toHaveCount(1);
   await expect.poll(() => worker.asked.at(-1)).toEqual({ mine: '1' });
-  await page.keyboard.press('Space');
-  await expect(mine).not.toBeChecked();
+  await expect(filtersOn(page).locator('.kit-filter-tag')).toHaveText(['Left byMe']);
+  await removeFilter(page, 'Left by').click();
   await expect(rows(page)).toHaveCount(8);
-  // Its words tick it too, and so does the gap of 8 px between the box and them.
-  await page.getByText('Only my notes', { exact: true }).click();
-  await expect(mine).toBeChecked();
-  const control = await box(page.locator('.kit-checkbox .checkbox__control'));
-  await page.mouse.click(control.x + control.width + 4, control.y + control.height / 2);
-  await expect(mine).not.toBeChecked();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(filtersOn(page)).toHaveCount(0);
   await search(page).fill('mug');
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'Done', exact: true }).click();
+  await choose(page, 'Status', 'Done');
   await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
   await expect(rows(page)).toHaveCount(1);
 
@@ -659,8 +620,26 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await page.reload();
   await expect(rows(page)).toHaveCount(1);
   await expect(search(page)).toHaveValue('mug');
-  await expect(page.getByRole('button', { name: /Done/ }).first()).toBeVisible();
+  await expect(filtersOn(page).locator('.kit-filter-tag')).toHaveText(['StatusDone']);
   expect(worker.asked.at(-1)).toEqual({ stage: 'done', q: 'mug' });
+
+  // « Clear » takes off every filter and the search.
+  await filtersOn(page).getByRole('button', { name: 'Clear' }).click();
+  await expect(page).not.toHaveURL(/stage=|q=/);
+  await expect(search(page)).toHaveValue('');
+  await expect(rows(page)).toHaveCount(8);
+});
+
+test('« / » gives the focus to the search, but not from a field (FRU-686)', async ({ page }) => {
+  await workerWith(page);
+  await open(page);
+  await page.locator('main h1').click();
+  await page.keyboard.press('/');
+  await expect(search(page)).toBeFocused();
+  await expect(search(page)).toHaveValue('');
+  // In the search, « / » is a letter.
+  await page.keyboard.press('/');
+  await expect(search(page)).toHaveValue('/');
 });
 
 test('a list chosen while the search waits its 300 ms is kept when the search lands', async ({ page }) => {
@@ -669,8 +648,7 @@ test('a list chosen while the search waits its 300 ms is kept when the search la
   await expect(rows(page)).toHaveCount(8);
   await search(page).fill('mug');
   // Inside the 300 ms of the search: a status is chosen.
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'Done', exact: true }).click();
+  await choose(page, 'Status', 'Done');
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await page.waitForTimeout(400);
   await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
@@ -769,12 +747,6 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   // Closed, the panel gives the focus back to the note it showed.
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(title(1)).toBeFocused();
-
-  // A closed list keeps j to choose an option: the focus stays on it (raised in review, FRU-685).
-  const status = page.getByRole('button', { name: /Any status/ });
-  await status.focus();
-  await page.keyboard.press('j');
-  await expect(status).toBeFocused();
 
   // In the search, j is a letter.
   await search(page).focus();
@@ -893,8 +865,7 @@ test('while a filter is read, the rows stay and nothing a pointer can reach move
   const before = await Promise.all(reachable.map(box));
 
   worker.read = 'waits';
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'New', exact: true }).click();
+  await choose(page, 'Status', 'New');
   await expect(page).toHaveURL(/stage=new/);
   await page.waitForTimeout(300);
   // The answer is held: the eight rows are still there, and nothing moved.
@@ -924,8 +895,8 @@ test('a guest reads no place, no reference, no chip and no « Send again »', as
   await expect(page.getByRole('group', { name: 'Where the notes went' })).toHaveCount(0);
   await expect(table(page).getByRole('link', { name: /ACM-/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send again' })).toHaveCount(0);
-  // The route does not search a reference for a guest, and the field does not say it does.
-  await expect(search(page)).toHaveAttribute('placeholder', 'Search the text or the page');
+  // The search says « Search notes » to everyone (FRU-686); the route searches no reference for a guest.
+  await expect(search(page)).toHaveAttribute('placeholder', 'Search notes');
   // The worker tells a guest nothing of where a note went: no column for it.
   await expect(table(page).locator('thead th')).toHaveText([
     'Status',
@@ -1022,34 +993,32 @@ test('with one place, no chip says where the notes went; a place in the address 
 });
 
 for (const width of [1440, 390]) {
-  test(`a long site is cut with « … » in the select and in its list, at ${width} px (FRU-549)`, async ({ page }) => {
+  test(`a long site is cut with « … » in its chip, and its menu fits the screen, at ${width} px (FRU-549, FRU-686)`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: width > 500 ? 900 : 844 });
     await workerWith(page);
     await onePlace(page);
     await open(page);
-    const select = page.getByRole('button', { name: /Every site/ });
-    await select.click();
-    const option = page.getByRole('option', { name: /a-very-long-client-name/ });
-    const label = option.locator('.kit-option-label');
-    // Cut to the list, whole under the pointer; the list is no wider than 360 px nor than the screen.
-    await expect(label).toHaveAttribute('title', 'https://staging.a-very-long-client-name-for-the-select.co.uk');
-    expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-    expect(await label.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
-    const list = await box(page.getByRole('listbox'));
-    expect(list.width).toBeLessThanOrEqual(Math.min(360, width - 32) + 0.5);
-    expect(list.x + list.width).toBeLessThanOrEqual(width);
+    await page.getByRole('button', { name: 'Filter', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Site', exact: true }).click();
+    const option = page.getByRole('menuitemradio', { name: /a-very-long-client-name/ });
+    await expect(option).toBeVisible();
+    for (const menu of await page.getByRole('menu').all()) {
+      const drawn = await box(menu);
+      expect(drawn.x).toBeGreaterThanOrEqual(0);
+      expect(drawn.x + drawn.width).toBeLessThanOrEqual(width);
+    }
     await option.click();
     await expect(page).toHaveURL(/[?&]site=s9(&|$)/);
 
-    // Chosen, the value is cut before the chevron, in its button, and the page does not scroll sideways.
-    const trigger = page.locator('.select__trigger').filter({ hasText: 'a-very-long-client-name' });
-    const value = trigger.locator('.select__value');
-    const cut = value.locator('.kit-option-label');
-    expect(await cut.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-    expect(await cut.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
-    const button = await box(trigger);
-    const words = await box(value);
-    expect(words.x + words.width).toBeLessThanOrEqual(button.x + button.width - 20);
+    // Chosen, the site is cut with « … » in its chip, no wider than 260 px, and the page does not
+    // scroll sideways.
+    const tag = filtersOn(page).locator('.kit-filter-tag');
+    const value = tag.getByText(/a-very-long-client-name/);
+    expect(await value.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await value.evaluate((element) => getComputedStyle(element).textOverflow)).toBe('ellipsis');
+    expect((await box(tag)).width).toBeLessThanOrEqual(260);
     expect(await sideScroll(page)).toBe(0);
   });
 }

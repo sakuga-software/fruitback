@@ -931,15 +931,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
     '{count} notes : {new} nouvelles, {todo} à faire, {progress} en cours, {done} terminées, {closed} fermées',
   // Notes (FRU-245).
-  'Every note left on the sites of {workspace}, and where it went.':
-    'Chaque note laissée sur les sites de {workspace}, et où elle est partie.',
   'Where the notes went': 'Où sont parties les notes',
   All: 'Toutes',
   'In Fruitback': 'Dans Fruitback',
   'A connector that was removed': 'Un connecteur retiré',
   'Search notes': 'Chercher dans les notes',
-  'Search the text, the page or the reference': 'Chercher le texte, la page ou la référence',
-  'Search the text or the page': 'Chercher le texte ou la page',
   Status: 'Statut',
   'Any status': 'Tous les statuts',
   // FRU-667: every status but Done and Closed.
@@ -951,7 +947,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes by status': 'Notes par statut',
   'Notes in this column:': 'Notes dans cette colonne :',
   'No note here.': 'Aucune note ici.',
-  'Only my notes': 'Seulement mes notes',
   Note: 'Note',
   'Left by': 'Laissée par',
   'Went to': 'Partie vers',
@@ -1025,6 +1020,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Fruitback: 'Fruitback',
   Failed: 'Échec',
   Actions: 'Actions',
+  // The head and the bar of the notes (FRU-686).
+  Me: 'Moi',
+  Filter: 'Filtrer',
+  'Filters on': 'Filtres actifs',
+  'Remove the filter {field}: {value}': 'Retirer le filtre {field} : {value}',
+  Clear: 'Effacer',
+  Display: 'Affichage',
   // The panel of a note, beside the list (FRU-687).
   'Open in {place}': 'Ouvrir dans {place}',
   'the tracker': 'l’outil de suivi',
