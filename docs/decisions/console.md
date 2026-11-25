@@ -662,8 +662,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
-  them says « Not delivered yet » on its row. The search says what the index searches (the 64
-  characters, the page, the reference), and not « the author » of the mockup. A guest
+  them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
+  mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
   keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
@@ -702,7 +702,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup « Notes après » of 2026-11-25): fourteen notes at 1440 × 900, where the rows of one to three
   lines showed six (measured with a list of 14). `parts/notes-table.tsx`; `e2e/console-notes.spec.ts` holds the values.
   - **A line**: the box of the task and the status (the drop, or the select of FRU-551), the text at
-    500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653), the
+    500 on one line cut with « … » and never underlined (a press opens the panel of FRU-653 and FRU-687), the
     marks of a task after it on the same line, the path of the page, the site (a tile and its host),
     where the note went, who left it, its age, then the page and the menu, shown under the pointer and
     the keyboard. A refusal, or « Delete… » asked again, is said under the line: only then is a row
@@ -736,6 +736,28 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     the other.
   - **j and k** give the focus to the text of the next note and of the one before; Enter opens it.
     A field, a menu and a dialog keep their keys.
+- **The head and the bar of the notes are Linear's** (FRU-686, the mockup « Notes après » of
+  2026-11-25), from one edge of the screen to the other. `parts/notes-filters.tsx`.
+  - **The head, 48 px**: « Notes » at 14 px, a tab per place the notes went with its mark and its
+    count (`ViewTab` of the kit, the rule of FRU-548: no tabs with one place), then « New task ». No
+    lead under the title. The title is not at the place of the others (`console-titles.spec.ts`
+    leaves Notes out). No bell: the console has no notification to show.
+  - **A tab is a place, not a kind.** The mockup draws « Webhook and REST »; the filter `place` of
+    the worker reads one connector, so two connectors of one kind are two tabs, as the chips were.
+  - **The bar, 44 px**: « Filter » opens a menu by field (Status, Site, Left by, then Assignee,
+    Priority, Label and Due day once the list holds a task Fruitback keeps), each a choice that shows
+    the value of the address. Each filter on is a chip, « field value » with a cross
+    (`FilterTag`), and « Clear » takes them all off with the search. The chips are read from the
+    address the list is read from, so they say exactly what the list shows. « Only my notes » is
+    « Left by: Me ». **No chip « Created · Last 30 days »**: the worker reads no date of creation, and
+    a filter it does not read would show a list it did not filter.
+  - **At the end**: the count of the notes of the whole filter, the search of 220 px (« Search
+    notes »; « / » gives it the focus, unless a field, a menu or a dialog has the key) and
+    « Display », whose menu shows the table or the board. Grouping and order stay those of FRU-551 and
+    FRU-436: the table is read by status, the board by date, and another order is a change of the
+    worker.
+  - **Controls of 28 px**, the token `h-control-md` of FRU-683, where the mockup draws 26: no token is
+    26 px. Under 640 px the bar goes on two lines, and a submenu opens under its item.
 - **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
   2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
   `?view=board` (the table writes nothing); the filters, the search and the page are the same, and the
@@ -1326,16 +1348,29 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The rules, in short
 
-- **A panel over the list, at the right edge** (option A of the board of 2026-11-22): `Drawer` of the
-  kit, on the drawer of HeroUI, 560 px wide and the whole width at 390 px. The text of a note in a
-  row or on a card opens it (« Open the note »), and its address is `?task=<id>`: a link opens it,
-  and Escape, its close button or a press outside close it.
-- **It reads the note whole** (`GET …/notes/<note>`): the text, the page and its link, the element,
-  the component, the file, the size of the screen, and the replies. A task Fruitback keeps, that
-  this person may change, shows its fields as controls that save at once, as the menu does, the day
-  as a field of the calendar of the browser. Any other note shows them disabled, or not at all.
-- **Not here yet**: to write a reply, to edit the text, the files of a note. The console has no route
-  to write a reply, and a note Fruitback keeps keeps no file.
+- **A panel beside the list, 440 px at the right edge** (FRU-687, the mockup « Détail d'une note » of
+  2026-11-25, in place of the drawer of 560 px over the list of FRU-653). Not modal (`role=dialog`,
+  `aria-modal=false`): the list stays in view and drops the columns it has no room for (its
+  container query), the row of the note is marked as a selected one, and a press on another note
+  opens it in the same panel. From 1024 px the screen keeps the room of the panel; under it the panel
+  takes the whole width. The text of a note opens it, and its address is `?task=<id>`: a link opens
+  it. Escape (from a field of the panel too) and its close button close it, and the focus goes back
+  to the row of the note; the arrows up and down, and the chevrons of its head, open the note above
+  and under it in the list.
+- **Its order**: a head of 44 px (the mark of the place and the reference, the issue in a new tab,
+  the chevrons, a menu with the three copies of FRU-658, Close); the title at 18 px and the rest of
+  the text; the fields as lines of 32 px (Status, Sent to, Assignee, Priority, Due day, Left by,
+  Page), the labels under them; the page in a picture (the capture with the element framed when the
+  note has one that loads, else a frame that says there is none, with the address, never the
+  selector), and « Open on the page »; the replies, under their initials, with « Synced with
+  <place> » for a tracker; and **« Technical details » folded at the end**: the element, the
+  component, the file, the screen and the browser (`browser-name.ts`), its summary the screen and the
+  browser. So no selector is a press away from the list.
+- **It reads the note whole** (`GET …/notes/<note>`). A task Fruitback keeps, that this person may
+  change, shows its fields as controls that save at once, as the menu does, the day as a field of
+  the calendar of the browser. Any other note shows them disabled, or not at all.
+- **Not here yet**: to write a reply (FRU-712: the field of the mockup needs a route of the worker,
+  which a screen PR does not add), to edit the text, the files of a note.
 
 ## Several tasks at once (FRU-656)
 

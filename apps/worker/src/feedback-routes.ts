@@ -125,12 +125,26 @@ export async function getFeedback(
     const hidden = await hidesTracker(request, config, route.policy);
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
-    const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
+    // FRU-700: a visitor's browser is known by its key, and its notes are `mine` too.
+    const reader = await notesOfReader(
+      request,
+      config,
+      route.policy,
+      route.client?.workspace,
+      clientId,
+      all,
+      noteIndex,
+    );
+    const own = reader.notes;
     // FRU-475: the reader may edit a note of theirs that is still open (FRU-605), on a site with one
     // place whose store takes an edit. The route decides again; this only says where to offer it.
-    const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client, route.policy));
-    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again.
-    const withdrawalsHere = own.size > 0 && places.length < 2 && (await takesWithdrawals(store, route.client));
+    // FRU-701: a visitor known by their browser too, where the site lets its visitors edit.
+    const byAccount = own.size > 0 && reader.by === 'account';
+    const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'edit'));
+    const editsHere = mayEdit && places.length < 2 && (await takesEdits(store, route.client, route.policy));
+    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. A visitor
+    // known by their browser withdraws nothing yet (FRU-702).
+    const withdrawalsHere = byAccount && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -521,7 +535,9 @@ export async function postFeedback(
     let notify: { token: string } | undefined;
     const workspace = route.client?.workspace;
     if (workspace !== undefined && clientId !== undefined) {
-      const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue);
+      // FRU-700: the digest of the key of this browser, so that it knows this note as its own.
+      const visitor = checks.visitorOf(request, clientId);
+      const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue, visitor);
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
       // FRU-604: only on a site that offers it (Mathieu, 2026-11-06), for a visitor and a member alike.
       if (route.client?.notifyDone === true) {
@@ -744,11 +760,15 @@ async function postBatch(
   // FRU-237: the notes this request planted. One kept by an earlier attempt is in the index already.
   const workspace = route.client?.workspace;
   if (workspace !== undefined && clientId !== undefined) {
+    // FRU-700: one browser for the whole batch, as one identity.
+    const visitor = checks.visitorOf(request, clientId);
     const entries = attributed.flatMap((note, index) => {
       const result = results[index];
       const issue = result !== undefined && 'issue' in result ? result.issue : undefined;
 
-      return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, note, channel, target, issue)] : [];
+      return held[index] && issue !== undefined
+        ? [noteEntry(workspace, clientId, note, channel, target, issue, visitor)]
+        : [];
     });
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
     // FRU-604: a member is told when each note is done. A batch offers a visitor no address: it asks

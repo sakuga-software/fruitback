@@ -18,6 +18,7 @@ import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
 import type { ReplyAuthor, NoteStore } from './store.ts';
+import type { VisitorAction } from './visitor-key.ts';
 
 /**
  * What one request of `app.ts` reads, out of `app.ts` so that each module of routes names it
@@ -187,7 +188,11 @@ export type CallerChecks = {
   authorizeRead: (request: Request, policy: ClientPolicy) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** Whether the worker would take a note of this caller on this client: `writesHere` of `app.ts`. */
   writesHere: (request: Request, policy: ClientPolicy) => Promise<boolean>;
-  /** The notes of `issues` that the reader of this request left: `notesOfReader` of `app.ts`. */
+  /**
+   * The notes of `issues` that the reader of this request left, and whether the worker knows the
+   * reader by the session of an account or by the key of their browser (FRU-700): `notesOfReader` of
+   * `app.ts`.
+   */
   notesOfReader: (
     request: Request,
     config: Served,
@@ -196,7 +201,7 @@ export type CallerChecks = {
     site: string | undefined,
     issues: readonly NoteIssue[],
     noteIndex: NoteIndex | undefined,
-  ) => Promise<Set<string>>;
+  ) => Promise<{ notes: Set<string>; by?: 'account' | 'browser' }>;
   /** The account of a session of the extension that reads `site` in `workspace` now: `memberOf` of `app.ts`. */
   memberOf: (
     request: Request,
@@ -204,6 +209,16 @@ export type CallerChecks = {
     workspace: string,
     site: string | undefined,
   ) => Promise<string | undefined>;
+  /**
+   * The digest of the key of the visitor's browser for `site`, or `undefined` with no key of the
+   * right shape (FRU-700): `visitorDigestOf` of `visitor-key.ts`, which `app.ts` alone imports.
+   */
+  visitorOf: (request: Request, site: string | undefined) => string | undefined;
+  /**
+   * Whether a visitor known by their browser may edit or withdraw a note of theirs on a site of this
+   * policy (FRU-701, FRU-702): `visitorMay` of `visitor-key.ts`.
+   */
+  visitorMay: (policy: Pick<ClientPolicy, 'write'>, action: VisitorAction) => boolean;
   /** Whether the caller is a person who may see the tracker of this client: `seesTracker` of `app.ts`. */
   seesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
   /** Whether the worker would sign a note of this caller with an identity it verified: `signsNotes` of `app.ts`. */

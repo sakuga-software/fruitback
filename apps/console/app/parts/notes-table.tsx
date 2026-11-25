@@ -55,10 +55,11 @@ const LINE = 'flex h-[35px] min-w-0 items-center';
  * screen, and on the row of the panel. They keep their room, so nothing moves when they show.
  */
 const REVEALED =
-  'opacity-0 [tr:hover_&]:opacity-100 [tr:focus-within_&]:opacity-100 [tr[data-selected=true]_&]:opacity-100 pointer-coarse:opacity-100';
+  'opacity-0 [tr:hover_&]:opacity-100 [tr:focus-within_&]:opacity-100 [tr:is([data-selected=true],[data-open=true])_&]:opacity-100 pointer-coarse:opacity-100';
 
 export function NoteRow({
   note,
+  open = false,
   seesTracker,
   origin,
   source,
@@ -70,6 +71,8 @@ export function NoteRow({
   choose,
 }: {
   note: IndexedNote;
+  /** Its page is in the panel beside the list (FRU-687): the row is marked. */
+  open?: boolean;
   /** The column « Went to » is there: the worker tells a guest nothing of where a note went (FRU-244). */
   seesTracker: boolean;
   /** The origin of the site of the note, when the sites were read. */
@@ -116,7 +119,13 @@ export function NoteRow({
   if (taskMenu.confirm !== null) under.push(<span key="confirm">{taskMenu.confirm}</span>);
 
   return (
-    <tr data-note={note.id} onContextMenu={taskMenu.onContextMenu} onKeyDown={taskMenu.onKeyDown} {...selectRow}>
+    <tr
+      data-note={note.id}
+      data-open={open}
+      onContextMenu={taskMenu.onContextMenu}
+      onKeyDown={taskMenu.onKeyDown}
+      {...selectRow}
+    >
       <td className={GONE.lead}>
         {/* FRU-551: the status is its drop before the note, a list of the statuses for whoever may
           change it; the group above says it in words. */}
@@ -323,6 +332,7 @@ export function NotesTable({
   folded,
   onFold,
   onAdd,
+  opened,
 }: {
   notes: readonly IndexedNote[];
   counts: NotesAnswer['counts'];
@@ -345,6 +355,8 @@ export function NotesTable({
   onFold: (stage: Stage, folded: boolean) => void;
   /** « + » at the end of the head of a group: a new task of its status. None: no button. */
   onAdd?: ((stage: Stage) => void) | undefined;
+  /** The note in the panel beside the list (FRU-687). */
+  opened?: string | undefined;
 }) {
   useLocale();
   const list = useRef<HTMLDivElement>(null);
@@ -354,20 +366,14 @@ export function NotesTable({
   return (
     // The list goes from one edge of the screen to the other, as the mockup draws it.
     <div aria-busy={reading} className="@container -mx-[clamp(16px,4vw,48px)]">
-      <div
-        ref={list}
-        role="region"
-        aria-label={t('Notes')}
-        tabIndex={-1}
-        className="kit-notes-list border-t border-line outline-none"
-      >
+      <div ref={list} role="region" aria-label={t('Notes')} tabIndex={-1} className="kit-notes-list outline-none">
         <table
           className={[
             'w-full table-fixed border-separate border-spacing-0 text-table',
             '[&_td]:p-0 [&_td]:align-top [&_td]:border-b [&_td]:border-line/60',
             '[&_tbody_tr[data-note]:hover]:bg-hover [&_tbody_tr[data-note]:focus-within]:bg-hover',
-            '[&_tr[data-selected=true]]:bg-selected [&_tr[data-selected=true]:hover]:bg-selected',
-            '[&_tr[data-selected=true]>td:first-child]:shadow-[inset_2px_0_0_var(--color-accent)]',
+            '[&_tr:is([data-selected=true],[data-open=true])]:bg-selected [&_tr:is([data-selected=true],[data-open=true]):hover]:bg-selected',
+            '[&_tr:is([data-selected=true],[data-open=true])>td:first-child]:shadow-[inset_2px_0_0_var(--color-accent)]',
             // What takes the focus is scrolled to under the heads, never behind them (FRU-586).
             '[&_:is(a,button,input,[tabindex])]:scroll-mt-[calc(var(--kit-pinned-top,0px)+80px)]',
           ].join(' ')}
@@ -422,6 +428,7 @@ export function NotesTable({
                       <NoteRow
                         key={`${note.id} ${note.status ?? note.stage}`}
                         note={note}
+                        open={note.id === opened}
                         seesTracker={seesTracker}
                         origin={originOf(note.site.id)}
                         source={sourceOf(note)}

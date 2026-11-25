@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { type Stage } from '../stages';
 import { type Connector, type SiteChoice, call, siteChoices } from '../api';
 import { type Fetched, type Listed, listedOf } from '../listed';
-import { Button, LinkButton, PageHead } from '../ui';
+import { Button, LinkButton } from '../ui';
 import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
@@ -26,7 +26,7 @@ import {
 } from '../parts/notes-model';
 import { NotesFailed } from '../parts/note-parts';
 import { NotePages } from '../parts/note-pages';
-import { NotesFilters, Pinned, ViewChoice } from '../parts/notes-filters';
+import { NotesHead, NotesToolbar, Pinned, Places } from '../parts/notes-filters';
 import { NotesTable, useFoldedGroups } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
 import { dayFromToday } from '../parts/task-menu';
@@ -317,10 +317,30 @@ export default function Notes() {
     setParams(next);
   };
   const closeTask = () => {
-    const next = new URLSearchParams(params);
-    next.delete('task');
-    setParams(next);
+    // The address as it is now: a key can come after a press opened another note, and before React
+    // drew it (FRU-687). The address of this render would close the note of before.
+    const now = new URLSearchParams(window.location.search);
+    const shut = now.get('task');
+    now.delete('task');
+    setParams(now);
+    // FRU-687: the focus goes back to the row of the note, where the person was in the list.
+    const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find((each) => each.dataset.note === shut);
+    row?.querySelector<HTMLElement>('[data-note-title]')?.focus();
   };
+  // FRU-687: the arrows of the panel go to the note above or under it, as the list shows them.
+  const shownInOrder = view === 'board' ? ordered : ordered.filter((note) => !folded.has(note.stage));
+  const openAt = opened === undefined ? -1 : shownInOrder.findIndex((note) => note.id === opened);
+  const stepTo = (note: IndexedNote) => {
+    const next = new URLSearchParams(latest.current);
+    next.set('task', note.id);
+    latest.current = next;
+    setParams(next, { replace: true });
+    const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find(
+      (each) => each.dataset.note === note.id,
+    );
+    row?.scrollIntoView({ block: 'nearest' });
+  };
+  const openedNote = typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined;
 
   // FRU-657: « New task », at the head of the list and of each column of the board, and the key « C ».
   const create = useTaskCreate({
@@ -381,11 +401,16 @@ export default function Notes() {
     return () => document.removeEventListener('keydown', onKey);
   }, [openCreate]);
   const newTask = (
-    <Button tone="outline" onClick={() => create.open()} disabled={typeof sites !== 'object' || sites.length === 0}>
+    <Button
+      tone="primary"
+      size="panel"
+      onClick={() => create.open()}
+      disabled={typeof sites !== 'object' || sites.length === 0}
+    >
       {t('New task')}
       {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}
       <kbd
-        className="ml-[8px] inline-flex h-[20px] min-w-[20px] flex-none items-center justify-center rounded-inner border border-line px-[4px] font-sans text-hint leading-none font-semibold text-muted"
+        className="ml-[6px] inline-flex h-[18px] min-w-[18px] flex-none items-center justify-center rounded-inner border border-page/50 px-[4px] font-sans text-tiny leading-none font-semibold text-page"
         aria-hidden="true"
       >
         C
@@ -401,178 +426,196 @@ export default function Notes() {
       <SelectionStatus />
       <TaskPanel
         id={opened}
-        listed={typeof shown === 'object' ? shown.notes.find((note) => note.id === opened) : undefined}
+        listed={openedNote}
         base={base}
+        source={openedNote === undefined ? undefined : sourceOf(openedNote)}
+        origin={openedNote === undefined ? undefined : originOf(openedNote.site.id)}
+        previous={openAt > 0 ? shownInOrder[openAt - 1] : undefined}
+        next={openAt >= 0 ? shownInOrder[openAt + 1] : undefined}
+        onStep={stepTo}
         onClose={closeTask}
       />
-      <PageHead
-        title={t('Notes')}
-        lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
-        className="mb-[24px]"
-        action={
-          <div className="flex flex-wrap items-center gap-[12px]">
-            {listed ? <ViewChoice view={view} onChoose={show} /> : null}
-            {newTask}
-          </div>
-        }
-      />
-
-      {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
-
-      {shown === 'failed' ? <NotesFailed onRetry={() => void read()} /> : null}
-
-      {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
-        <p className="max-w-[640px] text-body text-muted">
-          {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
-            workspace: workspace.name,
-          })}
-        </p>
-      ) : null}
-
-      {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
-        <Pinned
-          bar={
-            <NotesFilters
-              counts={shown.counts}
-              connectors={connectors}
-              sites={sites}
-              seesTracker={seesTracker}
-              filters={filters}
-              onFilter={filter}
-              typed={typed}
-              onType={setTyped}
-              // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
-              {...(shown.notes.some((note) => note.task !== undefined) ||
-              TASK_FILTERS.some((name) => filters[name] !== '')
-                ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
-                : {})}
-            />
-          }
-        >
-          {shown.notes.length === 0 ? (
-            <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
-              <p>{t('No note matches.')}</p>
-              <LinkButton
-                autoFocus={movedOut}
-                onClick={() => {
-                  setTyped('');
-                  filter({
-                    place: '',
-                    site: '',
-                    stage: '',
-                    mine: '',
-                    archived: '',
-                    unresolved: '',
-                    assignee: '',
-                    priority: '',
-                    label: '',
-                    due: '',
-                    q: '',
-                  });
-                }}
-              >
-                {t('Clear the filters')}
-              </LinkButton>
-            </div>
-          ) : (
-            <div data-notes-list="" data-selecting={selected > 0}>
-              {view === 'board' ? (
-                <NotesBoard
-                  columns={columns}
-                  onAdd={(column) =>
-                    create.open({
-                      ...(siteInView === undefined ? {} : { site: siteInView }),
-                      status: column.status?.key ?? `own:${column.stage}`,
-                    })
-                  }
-                  reorder={async (note, before, after) => {
-                    if (note.task === undefined || note.canSetStatus !== true) return undefined;
-                    const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
-                      position: placeBetween(before, after),
-                    });
-                    if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
-                    await read();
-
-                    return undefined;
-                  }}
-                  busy={reading}
-                  movable={(note) =>
-                    note.canSetStatus === true && siteInView !== undefined && shown.statuses?.[siteInView] !== undefined
-                  }
-                  move={async (note, status) => {
-                    const answer = await choose(note, status);
-                    if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
-                    await read();
-
-                    return undefined;
-                  }}
-                  card={(note, moved) => (
-                    <NoteCard
-                      note={note}
-                      source={sourceOf(note)}
-                      seesTracker={seesTracker}
-                      statuses={shown.statuses?.[note.site.id]}
-                      choose={(status) => choose(note, status)}
-                      onSaved={() => {
-                        moved();
-                        setMovedOut(true);
-                        void read();
-                      }}
-                    />
-                  )}
-                />
-              ) : (
-                <NotesTable
-                  notes={shown.notes}
-                  counts={shown.counts}
-                  statuses={shown.statuses}
-                  seesTracker={seesTracker}
-                  manages={manages}
-                  reading={reading}
-                  base={base}
-                  originOf={originOf}
-                  sourceOf={sourceOf}
-                  choose={choose}
-                  onSent={() => void read()}
-                  onStatusSaved={(note) => {
-                    setRefocus(note);
-                    void read();
-                  }}
-                  folded={folded}
-                  onFold={fold}
-                  // FRU-685: « + » in the head of a group, a new task of its stage.
-                  onAdd={
-                    typeof sites === 'object' && sites.length > 0
-                      ? (stage) =>
-                          create.open({
-                            ...(siteInView === undefined ? {} : { site: siteInView }),
-                            status: `own:${stage}`,
-                          })
-                      : undefined
-                  }
-                />
-              )}
-              <NotePages
-                from={from}
-                shown={shown.notes.length}
-                total={shown.total}
-                first={cursor === ''}
-                last={shown.next === undefined}
-                onPage={(to) => page(to, shown)}
-                // Opened from a link past the second page, the page before has no known cursor.
-                previousIsFirst={at > 2 && known[at - 1] === undefined}
-                numbers={{
-                  at,
-                  count: Math.ceil(shown.total / NOTES_PER_PAGE),
-                  reach: (to) => reach(to, shown),
-                  onGo: (to) => go(to, shown),
-                }}
+      {/* FRU-687: beside the panel, from 1024 px, the screen keeps the room the panel takes. */}
+      <div className={opened === undefined ? '' : 'min-[1024px]:mr-[440px]'}>
+        {/* FRU-686: the head of 48 px, « Notes » and a tab per place, then « New task ». */}
+        <NotesHead
+          tabs={
+            typeof shown === 'object' && listed && seesTracker ? (
+              <Places
+                counts={shown.counts}
+                connectors={connectors}
+                chosen={filters.place}
+                onChoose={(place) => filter({ place })}
               />
-              <TaskBulkBar />
-            </div>
-          )}
-        </Pinned>
-      ) : null}
+            ) : null
+          }
+          action={newTask}
+        />
+
+        {shown === 'loading' ? <p className="mt-[24px] text-small text-muted">{t('Loading…')}</p> : null}
+
+        {shown === 'failed' ? (
+          <div className="mt-[24px]">
+            <NotesFailed onRetry={() => void read()} />
+          </div>
+        ) : null}
+
+        {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
+          <p className="mt-[24px] max-w-[640px] text-body text-muted">
+            {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
+              workspace: workspace.name,
+            })}
+          </p>
+        ) : null}
+
+        {typeof shown === 'object' && (shown.counts.all > 0 || filtered) ? (
+          <Pinned
+            bar={
+              <NotesToolbar
+                total={shown.total}
+                sites={sites}
+                filters={filters}
+                onFilter={filter}
+                typed={typed}
+                onType={setTyped}
+                view={view}
+                onView={show}
+                // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
+                {...(shown.notes.some((note) => note.task !== undefined) ||
+                TASK_FILTERS.some((name) => filters[name] !== '')
+                  ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
+                  : {})}
+              />
+            }
+          >
+            {shown.notes.length === 0 ? (
+              <div className="flex flex-wrap items-center gap-x-[12px] pt-[16px] text-body text-muted">
+                <p>{t('No note matches.')}</p>
+                <LinkButton
+                  autoFocus={movedOut}
+                  onClick={() => {
+                    setTyped('');
+                    filter({
+                      place: '',
+                      site: '',
+                      stage: '',
+                      mine: '',
+                      archived: '',
+                      unresolved: '',
+                      assignee: '',
+                      priority: '',
+                      label: '',
+                      due: '',
+                      q: '',
+                    });
+                  }}
+                >
+                  {t('Clear the filters')}
+                </LinkButton>
+              </div>
+            ) : (
+              <div data-notes-list="" data-selecting={selected > 0}>
+                {view === 'board' ? (
+                  <NotesBoard
+                    columns={columns}
+                    onAdd={(column) =>
+                      create.open({
+                        ...(siteInView === undefined ? {} : { site: siteInView }),
+                        status: column.status?.key ?? `own:${column.stage}`,
+                      })
+                    }
+                    reorder={async (note, before, after) => {
+                      if (note.task === undefined || note.canSetStatus !== true) return undefined;
+                      const answer = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/task`, {
+                        position: placeBetween(before, after),
+                      });
+                      if (!answer.ok) return problemOf(answer, TASK_PROBLEMS, TASK_NOT_SAVED);
+                      await read();
+
+                      return undefined;
+                    }}
+                    busy={reading}
+                    movable={(note) =>
+                      note.canSetStatus === true &&
+                      siteInView !== undefined &&
+                      shown.statuses?.[siteInView] !== undefined
+                    }
+                    move={async (note, status) => {
+                      const answer = await choose(note, status);
+                      if (!answer.ok) return problemOf(answer, STATUS_PROBLEMS, STATUS_NOT_SAVED);
+                      await read();
+
+                      return undefined;
+                    }}
+                    card={(note, moved) => (
+                      <NoteCard
+                        note={note}
+                        source={sourceOf(note)}
+                        seesTracker={seesTracker}
+                        statuses={shown.statuses?.[note.site.id]}
+                        choose={(status) => choose(note, status)}
+                        onSaved={() => {
+                          moved();
+                          setMovedOut(true);
+                          void read();
+                        }}
+                      />
+                    )}
+                  />
+                ) : (
+                  <NotesTable
+                    notes={shown.notes}
+                    counts={shown.counts}
+                    statuses={shown.statuses}
+                    seesTracker={seesTracker}
+                    manages={manages}
+                    reading={reading}
+                    base={base}
+                    originOf={originOf}
+                    sourceOf={sourceOf}
+                    choose={choose}
+                    onSent={() => void read()}
+                    onStatusSaved={(note) => {
+                      setRefocus(note);
+                      void read();
+                    }}
+                    folded={folded}
+                    onFold={fold}
+                    opened={opened}
+                    // FRU-685: « + » in the head of a group, a new task of its stage.
+                    onAdd={
+                      typeof sites === 'object' && sites.length > 0
+                        ? (stage) =>
+                            create.open({
+                              ...(siteInView === undefined ? {} : { site: siteInView }),
+                              status: `own:${stage}`,
+                            })
+                        : undefined
+                    }
+                  />
+                )}
+                <NotePages
+                  from={from}
+                  shown={shown.notes.length}
+                  total={shown.total}
+                  first={cursor === ''}
+                  last={shown.next === undefined}
+                  onPage={(to) => page(to, shown)}
+                  // Opened from a link past the second page, the page before has no known cursor.
+                  previousIsFirst={at > 2 && known[at - 1] === undefined}
+                  numbers={{
+                    at,
+                    count: Math.ceil(shown.total / NOTES_PER_PAGE),
+                    reach: (to) => reach(to, shown),
+                    onGo: (to) => go(to, shown),
+                  }}
+                />
+                <TaskBulkBar />
+              </div>
+            )}
+          </Pinned>
+        ) : null}
+      </div>
     </TaskContexts>
   );
 }

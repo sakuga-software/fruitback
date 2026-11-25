@@ -298,9 +298,33 @@ export const STYLES = `
   gap: 7px;
   flex: 1 1 auto;
   min-width: 0;
+  /*
+    As tall as the cross is drawn, as the heading: when the heading wraps (FRU-700: the chip of a
+    visitor, the way out), its first line stays centred on the cross.
+  */
+  min-height: 28px;
   font-weight: 600;
   font-size: 13px;
   letter-spacing: -0.006em;
+}
+/*
+  « You · this browser » (FRU-700): a chip of the sunken surface, after the word of the state, in the
+  heading that wraps. Its words wrap too, in a thread narrower than the chip.
+*/
+.fruitback-thread-you {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 1px 7px;
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+  color: var(--fruitback-color-text);
+  font: 500 12px/1.5 var(--fruitback-font-sans);
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+.fruitback-thread-head[data-fruitback-you] .fruitback-thread-stage { flex-grow: 0; }
+@media (forced-colors: active) {
+  .fruitback-thread-you { border: 1px solid CanvasText; }
 }
 /* The silhouette of the pin, which is not in the scale and is not settable (see theme.ts). */
 .fruitback-thread-drop {
@@ -538,7 +562,7 @@ export const STYLES = `
   caret-color: var(--fruitback-color-accent);
 }
 .fruitback-thread-edit-field:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
-.fruitback-thread-edit-actions { display: flex; align-items: center; gap: 12px; }
+.fruitback-thread-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .fruitback-thread-edit-save {
   display: inline-flex;
   align-items: center;
@@ -554,10 +578,16 @@ export const STYLES = `
 .fruitback-thread-edit-save:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
 .fruitback-thread-edit-save[disabled], .fruitback-thread-edit-cancel[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-thread-edit-status { font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* FRU-701: where the new words go, at the start of the row of « Save », which keeps the end. */
+.fruitback-thread-edit-sent { margin-inline-end: auto; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* FRU-701: what a visitor known by their browser may do with their note, under it. */
+.fruitback-thread-you-may { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-edit-status:empty { display: none; }
 @media (pointer: coarse) {
   .fruitback-thread-edit-field { font-size: 16px; }
   .fruitback-thread-edit-save, .fruitback-thread-edit, .fruitback-thread-edit-cancel { min-height: 44px; }
+  /* « Edit » is one short word (FRU-701: a visitor's note offers it in public mode too): 44 px wide to press. */
+  .fruitback-thread-edit { min-width: 44px; text-align: start; }
 }
 /* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
 .fruitback-thread-reply-form {

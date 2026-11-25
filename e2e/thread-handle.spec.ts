@@ -61,7 +61,9 @@ const MOVE =
 test('the bubble moves by its handle with the mouse and the keyboard, with a dashed line to its pin, and comes back on a double click (FRU-420)', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
+  // FRU-701: the note is the visitor's own, so its thread holds the edit and the line of what they may
+  // do. The window is that much taller, so the bubble has the room to move 90 px down.
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await mount(page, 'thread-handle');
   const thread = await plantAndOpen(page, 'The bubble hides the card.');
