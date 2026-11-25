@@ -7,9 +7,8 @@ import {
   openBareSite,
   openPopup,
   test,
-  SITE_MENU,
   SITE_ON,
-  STOP_REVIEWING,
+  SITE_SWITCH,
   sessionSitesOf,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -144,15 +143,19 @@ for (const language of ['en', 'fr'] as const) {
     await expect(turnOn).toBeVisible();
     await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on (FRU-298, FRU-599): the account, « ⋯ », « Leave a note » and the side
-    // panel; the head names the person of the pairing. The worker of this spec says nothing of the
-    // notes of the site, so the side panel has no counts.
+    // 5. The site turned on (FRU-298, FRU-599, FRU-695): the account, the switch, « Leave a note »,
+    // « Open sidebar », the menu of the site and the « Sign out » of the pairing in the foot. The
+    // page has no note, so « On this page » has no line.
     await turnOn.click();
     await expect(offered.getByRole('img', { name: SITE_ON })).toBeVisible();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
-    // The row of the pairing stays, with its log out.
+    // The person of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Connected as|Connecté en tant que) /)).toBeVisible();
-    await expectLaidOut(offered, 'site turned on', 5);
+    await expect(offered.locator('.page-notes-said')).toHaveText(
+      /^(No notes on this page yet|Aucune note sur cette page)/,
+    );
+    await expectLaidOut(offered, 'site turned on', 6);
+    await expectNothingCut(offered, 'site turned on', language);
 
     // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
     // 2026-10-20, the accent of the extension, and no word cut.
@@ -165,30 +168,27 @@ for (const language of ['en', 'fr'] as const) {
         .toBe(ACCENT[colorScheme]);
       const kit = await readKit(offered);
       const where = `${language}, ${colorScheme}`;
-      // « Leave a note » of screen 3 (FRU-298): the tall button of the kit, 56 px, the corner of 12.
+      // « Leave a note » of screen 3 (FRU-695): 40 px, the corner of a control of the console, 6.
       expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
-        height: 56,
-        radius: '12px',
-        font: '16px 650',
+        height: 40,
+        radius: '6px',
+        font: '14px 600',
         fill: ACCENT[colorScheme],
       });
-      // « ⋯ » (FRU-599): a square of 32, the edge of a second button.
+      // The menu of the site, in the foot (FRU-695): a square of 28, the corner of 6, no edge.
       expect.soft(kit.secondary, `${where}: the menu of the site`).toMatchObject({
-        height: 32,
-        width: 32,
-        radius: '10px',
-        edge: CONTROL_EDGE[colorScheme],
+        height: 28,
+        width: 28,
+        radius: '6px',
+        edge: 'rgba(0, 0, 0, 0)',
       });
       expect.soft(kit.cut, `${where}: a word cut`).toEqual([]);
     }
     await offered.emulateMedia({ colorScheme: 'light' });
 
-    // The keyboard turns the site off from « ⋯ », and « Turn on » turns it on again (FRU-599).
-    await offered.getByRole('button', { name: SITE_MENU }).focus();
-    await offered.keyboard.press('Enter');
-    await expect(offered.getByRole('menu')).toBeVisible();
-    await offered.getByRole('menuitem', { name: STOP_REVIEWING }).focus();
-    await offered.keyboard.press('Enter');
+    // The keyboard turns the site off with its switch, and « Turn on » turns it on again (FRU-695).
+    await offered.getByRole('switch', { name: SITE_SWITCH }).focus();
+    await offered.keyboard.press('Space');
     await expect(offered.getByRole('img', { name: SITE_ON })).toHaveCount(0);
     const again = offered.getByRole('button', { name: /^(Turn on|Activer)$/ });
     await expect(again).toBeVisible();
@@ -314,8 +314,6 @@ test.describe('screen 4 (FRU-297)', () => {
 
 /** The accent of the extension in each scheme: the red of the console and of the widget (FRU-372). */
 const ACCENT = { light: 'rgb(221, 44, 39)', dark: 'rgb(236, 106, 101)' } as const;
-/** The edge of a second button: `--line-control`. */
-const CONTROL_EDGE = { light: 'rgb(161, 161, 170)', dark: 'rgb(113, 113, 122)' } as const;
 /** The parts of the kit on the screen of a site that is on. */
 function readKit(popup: Page) {
   return popup.evaluate(() => {

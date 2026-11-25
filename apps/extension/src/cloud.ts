@@ -83,8 +83,18 @@ export type WorkspaceSites = {
   account: boolean;
   origin?: string;
 };
-/** `pattern` is the rule the click stores: the origin of the site, or the wildcard of its previews. */
-export type Offer = { endpoint: string; workspace: Workspace; site: WorkspaceSite; pattern: string };
+/**
+ * `pattern` is the rule the click stores: the origin of the site, or the wildcard of its previews.
+ * `workspaces`: every workspace of an account, as the same answer lists them (FRU-695); none for a
+ * session of a pairing.
+ */
+export type Offer = {
+  endpoint: string;
+  workspace: Workspace;
+  site: WorkspaceSite;
+  pattern: string;
+  workspaces?: Workspace[];
+};
 
 export type CloudSeams = {
   endpoints: () => Promise<string[]>;
@@ -336,12 +346,13 @@ export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer
 /** The offer of `origin` in a list of `endpoint`, or nothing. */
 function offerIn(endpoint: string, listed: WorkspaceSites, origin: string): Offer | undefined {
   // The site itself first: a page that is a site of the workspace is that site, whatever covers it.
+  const workspaces = listed.account ? { workspaces: listed.workspaces } : {};
   const site = listed.sites.find((each) => each.origin === origin);
-  if (site !== undefined) return { endpoint, workspace: site.workspace, site, pattern: origin };
+  if (site !== undefined) return { endpoint, workspace: site.workspace, site, pattern: origin, ...workspaces };
   // FRU-103: a page under a domain the workspace proved is a preview of the site the worker named.
   for (const each of listed.sites) {
     const pattern = each.previews?.find((wildcard) => coversOrigin(wildcard, origin));
-    if (pattern !== undefined) return { endpoint, workspace: each.workspace, site: each, pattern };
+    if (pattern !== undefined) return { endpoint, workspace: each.workspace, site: each, pattern, ...workspaces };
   }
 
   return undefined;

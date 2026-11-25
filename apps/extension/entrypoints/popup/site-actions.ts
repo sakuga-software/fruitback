@@ -10,7 +10,8 @@ import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { wantsSession as siteWantsSession } from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
 import { browserFamily, extensionsPlace, unreachedPageLine } from '../../src/browser-family.ts';
-import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
+import { type TabCommandAnswer, type TabCommandArguments, parseAnswer, tabCommand } from '../../src/tab-command.ts';
+import type { PageNotesRead } from '../../src/popup-notes.ts';
 import { make } from '../../src/kit.ts';
 
 import { CLOUD, pending, type PopupTab, render, sessions } from './context.ts';
@@ -46,10 +47,32 @@ export const NOT_NOW_WRITING = msg('A note is being written on the page. Send it
 export const NOT_THERE = msg('The page did not answer. Reload it, then try again.');
 
 /** A command to the widget of the tab the popup was opened on (FRU-254). See `tab-command.ts`. */
-export async function askTab(tab: PopupTab | undefined, command: TabCommand): Promise<TabCommandAnswer> {
+export async function askTab(
+  tab: PopupTab | undefined,
+  command: TabCommand,
+  args: TabCommandArguments = {},
+): Promise<TabCommandAnswer> {
   if (tab?.id === undefined) return { done: false };
 
-  return parseAnswer(await browser.tabs.sendMessage(tab.id, tabCommand(command)).catch(() => undefined));
+  return parseAnswer(await browser.tabs.sendMessage(tab.id, tabCommand(command, args)).catch(() => undefined));
+}
+
+/** How many times, and how far apart, the popup asks again for notes the widget is still reading. */
+const NOTES_ASKS = 4;
+const NOTES_ASK_MS = 600;
+
+/**
+ * The notes of the tab, for « On this page » (FRU-695): `notes` of the side panel (FRU-299). A widget
+ * still reading is asked again a few times, then the popup says why it has none. Never rejects.
+ */
+export async function pageNotesOf(tab: PopupTab | undefined): Promise<PageNotesRead> {
+  for (let ask = 1; ; ask += 1) {
+    const answer = await askTab(tab, 'notes');
+    if (answer.notes !== undefined) return { notes: answer.notes };
+    const reading = answer.reading ?? 'unreached';
+    if (ask >= NOTES_ASKS || reading === 'failed' || reading === 'signed-out') return { reading };
+    await new Promise((resolve) => setTimeout(resolve, NOTES_ASK_MS));
+  }
 }
 
 /** How long a tab gets to start its scripts before a second ask: the popup can open as it loads. */
