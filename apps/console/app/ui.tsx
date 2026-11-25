@@ -1738,7 +1738,7 @@ export function SidePanel({
       {...(label === undefined ? { 'aria-labelledby': id } : { 'aria-label': label })}
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
-      className={`kit-panel min-w-0 max-w-full ${flush ? 'border-0 border-none border-current rounded-none bg-transparent' : 'border border-line rounded-frame bg-subtle'} ${className}`}
+      className={`kit-panel min-w-0 max-w-full ${flush ? '[border:0] rounded-none bg-transparent' : 'border border-line rounded-frame bg-subtle'} ${className}`}
       data-spacing={spacing}
       {...(flush ? { 'data-flush': '' } : {})}
     >
