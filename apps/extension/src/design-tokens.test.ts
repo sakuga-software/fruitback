@@ -319,7 +319,8 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
 
   it('draws an action as a pill', () => {
     assert.match(themeSheet, /--radius-pill:\s*999px;/);
-    assert.match(sheet, /\nbutton \{[^}]*border-radius:\s*var\(--radius-pill\);/);
+    // `rounded-pill` is `border-radius: var(--radius-pill)` (FRU-679).
+    assert.match(sheet, /\nbutton \{[^}]*@apply [^;}]*\brounded-pill\b/);
   });
 });
 

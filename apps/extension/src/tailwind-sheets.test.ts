@@ -18,6 +18,16 @@ import { compile } from '@tailwindcss/node';
 
 const KIT = fileURLToPath(new URL('./kit.css', import.meta.url));
 
+/** Each sheet that Tailwind writes, and how many of its rules the test must read at the least. */
+const SHEETS = [
+  { name: 'kit.css', file: KIT, least: 60 },
+  {
+    name: 'popup/style.css',
+    file: fileURLToPath(new URL('../entrypoints/popup/style.css', import.meta.url)),
+    least: 150,
+  },
+];
+
 /** What Tailwind writes for a sheet, or for the text of a sheet placed at `file`. */
 async function built(file: string, text = readFileSync(file, 'utf8')): Promise<string> {
   const compiler = await compile(text, {
@@ -57,23 +67,53 @@ function writtenColours(body: string): string[] {
   const unknown = [...body.matchAll(/var\((--color-[a-z0-9-]+)/g)]
     .map(([, name]) => name)
     .filter((name) => name !== undefined && !TOKENS.has(name));
+  // color-mix() of two tokens is read through its variables, above and below.
   const withoutFallbacks = body.replace(/var\(--[a-z0-9-]+,\s*[^()]*(?:\([^()]*\))?[^()]*\)/gi, 'var()');
-  const values = [...withoutFallbacks.matchAll(/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|color-mix)\(/gi)].map(
+  const values = [...withoutFallbacks.matchAll(/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab)\(/gi)].map(
     ([colour]) => colour,
   );
 
   return [...values, ...unknown.map((name) => `var(${name})`)];
 }
 
-describe('what Tailwind writes for the kit (FRU-679)', () => {
-  it('reads every colour of a rule from a variable, which the dark scheme sets again', async () => {
-    const css = await built(KIT);
-    const kitRules = rules(css).filter(({ selector }) => /kit-|focus-visible|visually-hidden/.test(selector));
-    assert.ok(kitRules.length > 60, `only ${kitRules.length} rules of the kit were read`);
-    const values = kitRules.flatMap(({ selector, body }) => writtenColours(body).map((c) => `${selector}: ${c}`));
+describe('what Tailwind writes for the sheets of the extension (FRU-679)', () => {
+  for (const { name, file, least } of SHEETS) {
+    it(`reads every colour of a rule from a variable, which the dark scheme sets again: ${name}`, async () => {
+      const css = await built(file);
+      // The theme itself, written on :root by popup/style.css, is where the values are.
+      const read = rules(css).filter(({ selector }) => !selector.startsWith(':root'));
+      assert.ok(read.length >= least, `only ${read.length} rules of ${name} were read`);
+      const values = read.flatMap(({ selector, body }) => writtenColours(body).map((c) => `${selector}: ${c}`));
 
-    assert.deepEqual(values, []);
-    // The focus ring and the main action, as Tailwind writes them.
+      assert.deepEqual(values, []);
+    });
+
+    it(`sets no style of edge through a variable, which a later edge of the same element would read: ${name}`, async () => {
+      // `border-none` writes `--tw-border-style: none`; then `border` on the same element, from another
+      // rule, reads it and draws nothing: a second button of the popup lost its edge so. `border: 0`
+      // stays CSS.
+      assert.doesNotMatch(await built(file), /--tw-border-style: none/);
+    });
+
+    it(`gives each variable of Tailwind that a rule reads a start value, in the same output: ${name}`, async () => {
+      const css = await built(file);
+      const read = new Set([...css.matchAll(/var\((--tw-[a-z-]+)\)/g)].map(([, variable]) => variable));
+      const started = new Set(
+        [...css.matchAll(/@property (--tw-[a-z-]+) \{[^}]*initial-value:/g)].map(([, variable]) => variable),
+      );
+      // The edges need one, in both sheets.
+      assert.ok(read.has('--tw-border-style'), [...read].join(', '));
+
+      assert.deepEqual(
+        [...read].filter((variable) => !started.has(variable)),
+        [],
+      );
+    });
+  }
+
+  it('writes the focus ring and the main action of the kit on the variables of the theme', async () => {
+    const css = await built(KIT);
+    assert.match(css, /:focus-visible \{[^}]*outline-style: var\(--tw-outline-style\)/);
     assert.match(css, /:focus-visible \{[^}]*outline-color: var\(--color-accent\b/);
     assert.match(css, /button\.kit-primary \{[^}]*background-color: var\(--color-accent\b/);
   });
@@ -89,30 +129,10 @@ describe('what Tailwind writes for the kit (FRU-679)', () => {
     assert.deepEqual(writtenColours(body), ['#123456', 'var(--color-red-500)']);
   });
 
-  it('sets no style of edge through a variable, which a later edge of the same element would read', async () => {
-    // `border-none` writes `--tw-border-style: none`; then `border` on the same element, from the sheet
-    // of a page, reads it and draws nothing: a button of the kit lost its edge so. `border: 0` stays CSS.
-    const css = await built(KIT);
-    assert.doesNotMatch(css, /--tw-border-style: none/);
-    // The control: the utility does write it.
+  it('finds a style of edge set through a variable', async () => {
     assert.match(
       await built(KIT, "@reference './theme.css';\n.kit-planted { @apply border-none; }"),
       /--tw-border-style: none/,
-    );
-  });
-
-  it('gives each variable of Tailwind that a rule reads a start value, in the same output', async () => {
-    const css = await built(KIT);
-    const read = new Set([...css.matchAll(/var\((--tw-[a-z-]+)\)/g)].map(([, name]) => name));
-    const started = new Set(
-      [...css.matchAll(/@property (--tw-[a-z-]+) \{[^}]*initial-value:/g)].map(([, name]) => name),
-    );
-    // The two the focus ring and the edges need are among them.
-    assert.ok(read.has('--tw-outline-style') && read.has('--tw-border-style'), [...read].join(', '));
-
-    assert.deepEqual(
-      [...read].filter((name) => !started.has(name)),
-      [],
     );
   });
 });
