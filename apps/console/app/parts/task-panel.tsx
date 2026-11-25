@@ -121,7 +121,12 @@ export function TaskPanel({
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (!keyOfPanel(event.target, panel.current)) return;
+      // Escape closes the panel from a field of it too, as it closed the drawer of before.
+      const field =
+        event.target instanceof Element &&
+        event.target.closest('input, textarea') !== null &&
+        panel.current?.contains(event.target) === true;
+      if (!keyOfPanel(event.target, panel.current) && !(field && event.key === 'Escape')) return;
       const { previous: above, next: under, onStep: step, onClose: close } = keys.current;
       if (event.key === 'Escape') {
         event.preventDefault();

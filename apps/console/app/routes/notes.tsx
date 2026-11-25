@@ -317,13 +317,14 @@ export default function Notes() {
     setParams(next);
   };
   const closeTask = () => {
-    const next = new URLSearchParams(params);
-    next.delete('task');
-    setParams(next);
+    // The address as it is now: a key can come after a press opened another note, and before React
+    // drew it (FRU-687). The address of this render would close the note of before.
+    const now = new URLSearchParams(window.location.search);
+    const shut = now.get('task');
+    now.delete('task');
+    setParams(now);
     // FRU-687: the focus goes back to the row of the note, where the person was in the list.
-    const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find(
-      (each) => each.dataset.note === opened,
-    );
+    const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find((each) => each.dataset.note === shut);
     row?.querySelector<HTMLElement>('[data-note-title]')?.focus();
   };
   // FRU-687: the arrows of the panel go to the note above or under it, as the list shows them.
