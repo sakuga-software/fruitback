@@ -62,15 +62,6 @@ describe('a screen that reads a list (FRU-162)', () => {
       empty.has(setter),
     );
   };
-  /**
-   * The cases of before FRU-675 that a ticket of their own fixes: each one needs a place on the screen
-   * to say its failure. Remove a line when its case is fixed: the test fails until it is removed.
-   */
-  const KNOWN_KEPT_EMPTY = [
-    // FRU-682: the connectors of the screen of the notes, which name the chips and the trackers.
-    'notes.tsx setConnectors',
-  ];
-
   it('never keeps an empty list for an answer that failed', () => {
     const found = folders.flatMap((folder) =>
       readdirSync(folder).filter((name) => EMPTY_FOR_A_FAILURE.test(readFileSync(new URL(name, folder), 'utf8'))),
@@ -86,7 +77,8 @@ describe('a screen that reads a list (FRU-162)', () => {
       ),
     );
 
-    assert.deepEqual(found, KNOWN_KEPT_EMPTY);
+    // FRU-682 fixed the last known case, the connectors of the screen of the notes.
+    assert.deepEqual(found, []);
   });
 
   it('finds the two forms it looks for: the control (FRU-675)', () => {
