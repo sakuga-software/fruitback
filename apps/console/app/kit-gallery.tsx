@@ -360,7 +360,7 @@ export default function KitGallery() {
             <circle cx="19" cy="12" r="1.8" fill="currentColor" />
           </svg>
         </Menu>
-        <span className="kit-rail bg-rail p-3">
+        <span className="kit-rail [view-transition-name:rail] [&_:focus-visible]:outline-rail-accent! bg-rail p-3">
           <Menu
             chosen={workspace}
             onAction={setWorkspace}
@@ -438,7 +438,7 @@ export default function KitGallery() {
 
       <section aria-label="Logos" className="flex flex-wrap items-center gap-6" data-kit="logos">
         <Logo />
-        <span className="kit-rail bg-rail p-3">
+        <span className="kit-rail [view-transition-name:rail] [&_:focus-visible]:outline-rail-accent! bg-rail p-3">
           <Logo on="rail" />
         </span>
         <Divider className="w-[400px] max-w-full">or</Divider>

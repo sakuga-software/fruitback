@@ -212,7 +212,10 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
       {BY_SIGN_IN ? <SetupGuide /> : null}
       {/* The drop beats while the page reads the site again. It hangs in the gutter: the words stay on the column. */}
       <p role="status" className="mt-4.5 -ml-4.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 text-small">
-        <span aria-hidden="true" className="setup-waiting" />
+        <span
+          aria-hidden="true"
+          className="setup-waiting size-[8px] mt-[calc((var(--text-small--line-height)*1em-8px)/2)] rounded-[50%] bg-accent animate-[setup-waiting_1.6s_cubic-bezier(0.16,1,0.3,1)_infinite] motion-reduce:animate-none"
+        />
         <span>
           <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
           <span className="text-muted">{t('Open the site, click Leave a note, then any part of the page.')}</span>{' '}
