@@ -480,7 +480,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   only when the person has several workspaces**: with one it is a link to `/w/<id>/settings`
   (FRU-414), `aria-current` there when the bar has no « Settings », and draws no chevron; with
   several, the menu of the workspaces ends with « Workspace settings », in a group of its own under
-  a rule that chooses nothing (`after` of `Menu`). The screen renames the workspace for an owner or
+  a rule that chooses nothing (`after` of `Menu`). Each workspace of that menu has its tile before
+  its name, as the name of the bar has (FRU-661, `mark` of `MenuItem`): its logo, or its initial; the
+  tile is a picture, so the name of the item stays its name and its role. The screen renames the workspace for an owner or
   an admin (FRU-236), and the bar shows the new name at once; another role reads the name, locked.
   **The logo** (FRU-428): `WorkspaceMark` draws it at 20 px in the bar and 40 px on the settings
   (`object-contain`, the worker resizes nothing), and the initial of the name when there is none or
