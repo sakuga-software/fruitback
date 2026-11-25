@@ -1,4 +1,4 @@
-import type { NoteComment, NoteIssue, NoteStage } from '@fruitback/shared';
+import type { NoteComment, NoteIssue, NoteStage, TrackerName } from '@fruitback/shared';
 import { createIcon } from './icons.ts';
 import { deepActiveElement } from './focus.ts';
 import type { Translator } from './messages.ts';
@@ -49,6 +49,8 @@ export type MoreFooter = {
   edit?: () => void;
   /** The edit reads « Edit the text », for a visitor known by their browser (FRU-701). */
   editText?: true;
+  /** The withdrawal reads « Delete the note », in red, for a visitor known by their browser (FRU-702). */
+  deleteText?: true;
   /** Asks « Withdraw this note? » in the thread. Left out: the worker does not offer it now. */
   withdraw?: () => void;
   /** Starts the choice of a new element for the note (FRU-605). Left out: not offered now. */
@@ -84,7 +86,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
   menu.hidden = true;
 
   const item = (
-    key: `more.${'edit' | 'editText' | 'copyLink' | 'move' | 'withdraw'}`,
+    key: `more.${'edit' | 'editText' | 'copyLink' | 'move' | 'withdraw' | 'delete'}`,
     run: () => void,
   ): HTMLButtonElement => {
     const button = document.createElement('button');
@@ -107,6 +109,14 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     return button;
   };
 
+  /** « Withdraw the note », or for a visitor « Delete the note », in red (FRU-702). */
+  const withdrawItem = (run: () => void): HTMLButtonElement => {
+    if (more.deleteText !== true) return item('more.withdraw', run);
+    const button = item('more.delete', run);
+    button.dataset.fruitbackDanger = '';
+
+    return button;
+  };
   const { edit } = more;
   const items = [
     ...(edit === undefined ? [] : [item(more.editText === true ? 'more.editText' : 'more.edit', edit)]),
@@ -122,7 +132,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
         });
     }),
     ...(more.move === undefined ? [] : [item('more.move', more.move)]),
-    ...(more.withdraw === undefined ? [] : [item('more.withdraw', more.withdraw)]),
+    ...(more.withdraw === undefined ? [] : [withdrawItem(more.withdraw)]),
   ];
 
   function open(focus: 'first' | 'last'): void {
@@ -239,6 +249,11 @@ export type WithdrawFooter = {
   said: Map<string, string>;
   /** Draws the thread again; with `kept`, the pins too, with this thread kept open. */
   settled: (issue: NoteIssue, focus: 'confirm' | 'said' | 'more', kept?: WithdrawAnswer) => void;
+  /**
+   * The reader is a visitor known by their browser (FRU-702): the question is « Delete your note? »,
+   * and says that the pin goes, and what the tracker of the note does with it, when it has one.
+   */
+  deletes?: { tracker?: TrackerName };
 };
 
 const WITHDRAW_FAILURES = {
@@ -246,6 +261,14 @@ const WITHDRAW_FAILURES = {
   wait: 'withdraw.failedWait',
   'signed-out': 'withdraw.failedSignedOut',
   refused: 'withdraw.refused',
+} as const;
+
+/** The words of a deletion by a visitor (FRU-702). A `401` is a key the worker does not know: try again. */
+const DELETE_FAILURES = {
+  retry: 'delete.failed',
+  wait: 'withdraw.failedWait',
+  'signed-out': 'delete.failed',
+  refused: 'delete.refused',
 } as const;
 
 /**
@@ -279,12 +302,24 @@ export function withdrawBlock(
   const ask = document.createElement('p');
   ask.className = 'fruitback-thread-withdraw-ask';
   ask.id = askId;
-  ask.textContent = t.text('withdraw.ask');
+  const { deletes } = withdraw;
+  ask.textContent = t.text(deletes === undefined ? 'withdraw.ask' : 'delete.ask');
+  const detail: HTMLElement[] = [];
+  if (deletes !== undefined) {
+    const said = document.createElement('p');
+    said.className = 'fruitback-thread-withdraw-detail';
+    said.textContent =
+      deletes.tracker === undefined
+        ? t.text('delete.detailOwn')
+        : t.text('delete.detail', { tracker: deletes.tracker });
+    detail.push(said);
+  }
   const sending = withdraw.inFlight.has(id);
+  const sendingWords = t.text(deletes === undefined ? 'withdraw.sending' : 'delete.sending');
   const confirm = document.createElement('button');
   confirm.type = 'button';
   confirm.className = 'fruitback-thread-withdraw-confirm';
-  confirm.textContent = sending ? t.text('withdraw.sending') : t.text('withdraw.confirm');
+  confirm.textContent = sending ? sendingWords : t.text(deletes === undefined ? 'withdraw.confirm' : 'delete.confirm');
   confirm.disabled = sending;
   const keep = document.createElement('button');
   keep.type = 'button';
@@ -300,7 +335,7 @@ export function withdrawBlock(
   status.className = 'fruitback-thread-withdraw-status';
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
-  status.textContent = sending ? t.text('withdraw.sending') : (said ?? '');
+  status.textContent = sending ? sendingWords : (said ?? '');
 
   keep.addEventListener('click', () => {
     withdraw.asking.delete(id);
@@ -318,17 +353,17 @@ export function withdrawBlock(
       .then((answer) => {
         withdraw.inFlight.delete(id);
         if (typeof answer === 'string') {
-          withdraw.said.set(id, t.text(WITHDRAW_FAILURES[answer]));
+          withdraw.said.set(id, t.text((deletes === undefined ? WITHDRAW_FAILURES : DELETE_FAILURES)[answer]));
           withdraw.settled(issue, 'confirm');
 
           return;
         }
         withdraw.asking.delete(id);
-        withdraw.said.set(id, t.text('withdraw.done'));
+        withdraw.said.set(id, t.text(deletes === undefined ? 'withdraw.done' : 'delete.done'));
         withdraw.settled(issue, 'said', answer);
       });
   });
-  block.append(ask, actions, status);
+  block.append(ask, ...detail, actions, status);
 
   return [block];
 }

@@ -1984,6 +1984,13 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   sent to Linear too », the tracker read from the address of the issue (`trackerOf`). A note kept by
   the worker says nothing of a tracker. **No « Move the note »**: the route of a move takes a session.
   A member keeps « Edit the note » and the move, and sees none of these lines.
+- **A visitor deletes their note, with the words of the mock-up** (FRU-702): « Delete the note » in
+  red in « ⋯ », then « Delete your note? », « The pin goes away for everyone. The issue in Linear is
+  closed as withdrawn. » (or « The team keeps it, closed. » with no tracker), « Keep it » and
+  « Delete ». The line under the note becomes « You can edit or delete it until a member picks it
+  up. ». After it, the thread says « Deleted. The pin goes away when you close this note. », and a read
+  when the thread closes takes the pin away: the worker no longer gives it. A member keeps
+  « Withdraw the note » and its words.
 - **The key names nobody.** It only tells the notes of this browser from the others. SECURITY.md says
   what it opens, and docs/privacy.md what is kept of it.
 

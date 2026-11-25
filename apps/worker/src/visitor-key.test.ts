@@ -69,14 +69,18 @@ describe('a visitor known by the key of their browser (FRU-700)', () => {
     assert.deepEqual(await mine({ key: KEY_B }), []);
   });
 
-  it('offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)', async () => {
+  it('offers a visitor an edit and a deletion, on a note that is mine (FRU-701, FRU-702)', async () => {
     const { send, read, noteOf } = await aSite();
     await send(noteOf('vk_a'), { key: KEY_A });
 
     const pin = (await read({ key: KEY_A })).get('vk_a');
     assert.equal(pin?.mine, true);
     assert.equal(pin?.editable, true);
-    assert.equal(pin?.withdrawable, undefined);
+    assert.equal(pin?.withdrawable, true);
+    // Another browser is offered neither.
+    const theirs = (await read({ key: KEY_B })).get('vk_a');
+    assert.equal(theirs?.editable, undefined);
+    assert.equal(theirs?.withdrawable, undefined);
   });
 
   it("marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session", async () => {
@@ -160,17 +164,6 @@ describe('the guards of the key of a browser, each planted out (FRU-700)', () =>
         await moveTo(await send(noteOf('vk_a'), { key: KEY_A }), 'done');
 
         return (await mine({ key: KEY_A })).length === 0;
-      },
-    },
-    {
-      guard: 'a visitor is offered no withdrawal yet',
-      file: 'feedback-routes.ts',
-      from: "own.size > 0 && reader.by === 'account'",
-      to: 'own.size > 0',
-      holds: async ({ send, read, noteOf }) => {
-        await send(noteOf('vk_a'), { key: KEY_A });
-
-        return (await read({ key: KEY_A })).get('vk_a')?.withdrawable === undefined;
       },
     },
   ];

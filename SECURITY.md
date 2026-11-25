@@ -2512,11 +2512,10 @@ them by a key that their browser holds, and by nothing else.
   test:`keeps a digest that names the site, never the key`.
 - What it opens. Only the notes that this browser left on this site, while they are open (`new`,
   `todo`, `progress`): the mark `mine` on them in `GET /feedback`, and the edit of their text
-  (below). A note done asks its author for a verdict, which takes a session, so it is nobody's on a
+  and its deletion (below). A note done asks its author for a verdict, which takes a session, so it is nobody's on a
   browser.
   test:`marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session`.
-  No withdrawal yet: `withdrawable` stays for a session.
-  test:`offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)`.
+  test:`offers a visitor an edit and a deletion, on a note that is mine (FRU-701, FRU-702)`.
 - The edit of a visitor. `POST /feedback/<id>/text` takes the key of the browser in place
   of a session, on the route of a member's edit (`callerOf` of `edit-routes.ts`), with every guard of
   that route:
@@ -2542,8 +2541,22 @@ them by a key that their browser holds, and by nothing else.
 - A member is not changed. A session of the workspace wins over a key sent with it, and a note that
   a session or a token signs keeps no digest.
   test:`changes nothing for a member: their notes are theirs by their account, whatever key comes with it`.
-- Each guard is taken out of a copy of its module in `visitor-key.test.ts` and `visitor-edit.test.ts`,
-  and the case that holds it fails.
+- The deletion of a visitor. `POST /feedback/<id>/withdraw` takes the key of the browser in place of
+  a session, on the route of a member's withdrawal (`callerOf`), with the guards of the edit above:
+  the author `visitor:<digest>` of this key on this site, a site that takes the notes of anybody, an
+  open note, 5 replies a minute. Nothing is deleted in a store: the note is closed with the reply
+  « Withdrew the note », Linear moves its issue to a canceled state, and an address gets
+  `note.withdrawn`. The index marks the row (`removed_at`) before the store withdraws: an index that
+  does not answer is `502` and nothing is withdrawn, and the mark is taken back when the store
+  withdraws nothing. `GET /feedback` drops a marked note for every reader. The team keeps it, closed, in its tracker and in the console. A member's withdrawal
+  sets no mark, and its pin stays, closed.
+  test:`closes it as withdrawn, says who in a reply, and its pin leaves the page for every reader`,
+  test:`refuses another browser, no key, a key of another shape, a member and a token, and changes nothing`,
+  test:`keeps the pin of a note a member withdraws: the team sees it closed (FRU-605)`,
+  test:`withdraws nothing when the index does not answer, so a pin never stays after « Deleted »`,
+  test:`takes the mark back when the store withdraws nothing, so the pin stays with its note`.
+- Each guard is taken out of a copy of its module in `visitor-key.test.ts`, `visitor-edit.test.ts`
+  and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
 

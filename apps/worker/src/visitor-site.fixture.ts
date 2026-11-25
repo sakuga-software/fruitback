@@ -5,6 +5,7 @@ import { type handleRequest as realHandle, handleRequest } from './app.ts';
 import { WORKER, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
+import type { NoteIndex } from './notes-index.ts';
 import type { NoteStore } from './store.ts';
 import { VISITOR_HEADER } from './visitor-key.ts';
 
@@ -45,7 +46,14 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
  * Alice owns Acme and its site; Bob is a member. Both have a session of the extension. `handle`: the real
  * handler, or a copy of it with a guard taken out. `storeOf`: the worker's own store, or another one.
  */
-export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world: World) => NoteStore } = {}) {
+export async function aVisitorSite(
+  options: {
+    handle?: Handle;
+    storeOf?: (world: World) => NoteStore;
+    /** The index of the notes of the world, or another in its place (FRU-702: one that fails). */
+    indexOf?: (index: NoteIndex) => NoteIndex;
+  } = {},
+) {
   const handle = options.handle ?? handleRequest;
   const world = await open();
   const store = (options.storeOf ?? ((each: World) => createPostgresNoteStore(each.database)))(world);
@@ -73,7 +81,14 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
       world.env,
-      { clientIp: '198.18.2.1', ...world.context, store },
+      {
+        clientIp: '198.18.2.1',
+        ...world.context,
+        store,
+        ...(options.indexOf === undefined || world.context.noteIndex === undefined
+          ? {}
+          : { noteIndex: options.indexOf(world.context.noteIndex) }),
+      },
     );
     const text = await response.text();
 
@@ -111,6 +126,10 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
   const edit = (issue: string, text: unknown, who: Who = {}) =>
     call('POST', `/feedback/${issue}/text?client=${site}`, who, { url: PAGE, text });
 
+  /** `POST /feedback/<issue>/withdraw` of the page (FRU-702). */
+  const withdraw = (issue: string, who: Who = {}) =>
+    call('POST', `/feedback/${issue}/withdraw?client=${site}`, who, { url: PAGE });
+
   /** The team puts a note in a built-in status of the site, as the console does. */
   const moveTo = async (issue: string, stage: string) => {
     const moved = await call(
@@ -125,5 +144,5 @@ export async function aVisitorSite(options: { handle?: Handle; storeOf?: (world:
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
   };
 
-  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, moveTo };
+  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, withdraw, moveTo, handle };
 }
