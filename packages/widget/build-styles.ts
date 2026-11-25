@@ -91,19 +91,36 @@ export function offences(css: string): string[] {
   // A rem is the font size of the page of the host, not of the widget.
   if (/\d(\.\d+)?rem\b/.test(css)) found.push('a size in rem');
   if (/@property\b/.test(css)) found.push('an @property rule, which a Shadow root ignores');
-  // A variable of the theme on :host loses to a rule of the page on the host element.
-  if (/:root|:host\b/.test(css)) found.push('a rule on :root or :host');
+  // A variable of the theme on :host loses to a rule of the page on the host element. A variant of a
+  // corner, :host([data-fruitback-position…]) .part, styles a part and stays.
+  if (/(^|[{},;])\s*:root\b|(^|[{},;])\s*:host\s*[,{]/.test(css)) found.push('a rule on :root or :host');
   if (/@import\b|url\(/.test(css)) found.push('a file to load, which the CSP refuses');
 
   return found;
 }
 
+/** A compiler of `tailwind.css`. A new one each time: `build` adds to what it built before. */
+async function compiler(): Promise<Awaited<ReturnType<typeof compile>>> {
+  const input = (await readFile(INPUT, 'utf8')) + themeReference(THEME_STYLES);
+
+  return compile(input, { base: here, onDependency: () => {} });
+}
+
+/**
+ * The rules of the utilities that `source` writes, minified: what a guard test reads of a module
+ * that has no `*.styles.ts` any more (`direction.test.ts`, `motion.test.ts`, `theme.test.ts`).
+ */
+export async function sheetOfSource(source: string): Promise<string> {
+  const candidates = new Scanner({}).scanFiles([{ content: source, extension: 'ts' }]);
+
+  return optimize((await compiler()).build(candidates), { minify: true }).code.replace(/\/\*![\s\S]*?\*\//g, '');
+}
+
 /** The sheet, minified, from the input and the sources of today. */
 export async function buildSheet(): Promise<string> {
-  const input = (await readFile(INPUT, 'utf8')) + themeReference(THEME_STYLES);
-  const compiler = await compile(input, { base: here, onDependency: () => {} });
-  const scanner = new Scanner({ sources: compiler.sources });
-  const raw = compiler.build(scanner.scan());
+  const tailwind = await compiler();
+  const scanner = new Scanner({ sources: tailwind.sources });
+  const raw = tailwind.build(scanner.scan());
   // The order of the layers is written again: the minifier folds the first statement into the block
   // of the first layer, and host.styles.ts writes its base after this sheet.
   const css = `${LAYERS}${optimize(propertiesOnEveryElement(raw), { minify: true })

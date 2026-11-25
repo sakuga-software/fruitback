@@ -51,6 +51,8 @@ describe('the Tailwind sheet of the widget', () => {
       'an @property rule, which a Shadow root ignores',
     ]);
     assert.deepEqual(offences(':root,:host{--fruitback-spacing:4px}'), ['a rule on :root or :host']);
+    assert.deepEqual(offences('.a{color:red}:host{--fruitback-spacing:4px}'), ['a rule on :root or :host']);
+    assert.deepEqual(offences(":host([data-fruitback-position$='-left']) .a{left:0}"), []);
     assert.deepEqual(offences('@import "x.css";'), ['a file to load, which the CSP refuses']);
     assert.deepEqual(offences('.a{padding:12px;font-size:1em}'), []);
 

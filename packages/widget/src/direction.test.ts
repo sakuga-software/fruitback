@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { sheetOfSource } from '../build-styles.ts';
+import { converted, moduleSheet, partsOf } from './sheets.fixture.ts';
 
 /**
  * Which rules follow the reading direction, and which never do (FRU-38).
@@ -61,11 +62,13 @@ const PHYSICAL_SIDE = /(^|[\s;{])(left|right)\s*:|-(left|right)\s*:|text-align:\
 type Rule = { selector: string; body: string };
 
 async function rulesOf(file: string): Promise<Rule[]> {
-  // The sheet of `host.ts` is in `host.styles.ts`, and likewise for each module (FRU-509).
-  const source = await readFile(new URL(`./${file.replace(/\.ts$/, '.styles.ts')}`, import.meta.url), 'utf8');
-  const sheet = /const STYLES = `([^`]*)`/.exec(source)?.[1];
-  assert.ok(sheet, `${file} has no STYLES literal, so this test would check nothing`);
+  // The sheet of `host.ts` is in `host.styles.ts`, and likewise for each module (FRU-509). A module
+  // converted to Tailwind has the rules of the utilities it writes (FRU-680).
+  return rulesIn(await moduleSheet(file));
+}
 
+function rulesIn(sheet: string): Rule[] {
+  assert.ok(sheet.trim() !== '', 'an empty sheet, so this test would check nothing');
   const withoutComments = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
 
   return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
@@ -114,7 +117,11 @@ describe('the stylesheets and the reading direction (FRU-38)', () => {
       ['orphans.ts', '.fruitback-orphans'],
       ['sidebar.ts', '.fruitback-sidebar'],
     ] as const) {
-      const bodies = (await rulesOf(file)).filter((rule) => rule.selector === selector).map((rule) => rule.body);
+      // A converted module: the rules of the class list of the part (FRU-680).
+      const part = (await partsOf(file)).get(selector.slice(1));
+      const bodies = (await converted(file))
+        ? rulesIn(await sheetOfSource(part ?? '')).map((rule) => rule.body)
+        : (await rulesOf(file)).filter((rule) => rule.selector === selector).map((rule) => rule.body);
       assert.ok(
         bodies.some((body) => /inset-inline-end\s*:/.test(body)),
         `${file} ${selector} is not placed at the inline end`,

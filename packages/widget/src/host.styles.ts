@@ -62,19 +62,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   outline-offset: 2px;
 }
 /*
-  Every glyph in the widget, and this rule sizes them and nothing else. The paint is on the paths
-  themselves, because a fill declared here would be a class selector beating the presentation
-  attribute Phosphor ships its icons with — every imported icon would render in the wrong colour, or
-  not at all. Size in em so an icon is as big as the text beside it, which is the whole reason these
-  are SVG and not characters: an emoji obeys neither the size nor the colour.
+  The icon is a component of Tailwind (FRU-680): a utility on an icon, fruitback:size-3.25, wins over
+  it, as a rule of a module did by its longer selector.
 */
-.fruitback-icon {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  /* A flex item shrinks by default, and a squashed icon reads as a rendering bug. */
-  flex: none;
-  overflow: hidden;
+@layer components {
+  /*
+    Every glyph in the widget, and this rule sizes them and nothing else. The paint is on the paths
+    themselves, because a fill declared here would be a class selector beating the presentation
+    attribute Phosphor ships its icons with — every imported icon would render in the wrong colour, or
+    not at all. Size in em so an icon is as big as the text beside it, which is the whole reason these
+    are SVG and not characters: an emoji obeys neither the size nor the colour.
+  */
+  .fruitback-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    /* A flex item shrinks by default, and a squashed icon reads as a rendering bug. */
+    flex: none;
+    overflow: hidden;
+  }
 }
 /*
   The dock of the mock-up of 2026-10-20 (FRU-303): one capsule, 24 px from the corner, on the surface.

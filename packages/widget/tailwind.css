@@ -44,6 +44,46 @@
   --font-weight-semibold: 600;
   --color-highlight: Highlight;
   --color-button-text: ButtonText;
+  --color-canvas: Canvas;
+  /* The list of the notes whose element is gone (orphans.ts). */
+  --text-list: 13px;
+  --text-list--line-height: 1.45;
+  /* A mark beside a line of text: the drop of a stage, an identifier. */
+  --text-mark: 11px;
+  /* A list that opens 12 px beyond its chip, above or under it. */
+  --spacing-beyond: calc(100% + 12px);
+  /*
+    No higher than the room above the capsule: 24 px under it, 52 px of capsule, 12 px of gap, and
+    16 px left at the top of the window. Never under one row of 44 px.
+  */
+  --spacing-list-room: max(44px, min(220px, calc(100vh - 104px)));
+  --container-orphans: min(300px, calc(100vw - 48px));
+  /* A radius drawn inside a transparent border of 4 px: the corner seen is the radius of md. */
+  --radius-md-outer: calc(var(--fruitback-radius-md) + 4px);
+}
+
+/*
+  The states of a part, as variants. The corner of the dock is an attribute of the host (FRU-443),
+  so a variant of a corner starts with :host() and comes after a variant of the part:
+  fruitback:in-docked:corner-left:left-0.
+*/
+@custom-variant when-hidden (&[hidden]);
+@custom-variant docked (&[data-fruitback-docked]);
+@custom-variant undocked (&:not([data-fruitback-docked]));
+@custom-variant in-docked ([data-fruitback-docked] &);
+@custom-variant corner-left (:host([data-fruitback-position$='-left']) &);
+@custom-variant corner-right (:host([data-fruitback-position$='-right']) &);
+@custom-variant corner-top (:host([data-fruitback-position^='top-']) &);
+
+/* What Tailwind has no utility for. */
+@utility clip-hidden {
+  clip-path: inset(50%);
+}
+@utility stroke-join-round {
+  stroke-linejoin: round;
+}
+@utility paint-stroke-first {
+  paint-order: stroke;
 }
 
 /*

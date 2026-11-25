@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { converted, moduleSheet, partsOf } from './sheets.fixture.ts';
 
 /**
  * Every animation of the widget stops for a person who asked the system for less motion (FRU-471).
@@ -78,11 +78,19 @@ export function unstopped(sheet: string): string[] {
     .filter((selector) => !stopped.has(selector));
 }
 
+/** The parts whose class list starts an animation of Tailwind and has no stop for reduced motion. */
+export function unstoppedParts(parts: Map<string, string>): string[] {
+  return [...parts]
+    .filter(([, classes]) => /fruitback:animate-(?!none)/.test(classes))
+    .filter(([, classes]) => !/fruitback:motion-reduce:animate-none\b/.test(classes))
+    .map(([part]) => part);
+}
+
 async function sheetOf(file: string): Promise<string> {
-  // The sheet of `host.ts` is in `host.styles.ts`, and likewise for each module (FRU-509).
-  const source = await readFile(new URL(`./${file.replace(/\.ts$/, '.styles.ts')}`, import.meta.url), 'utf8');
-  const sheet = /const STYLES = `([^`]*)`/.exec(source)?.[1];
-  assert.ok(sheet, `${file} has no STYLES literal, so this test would check nothing`);
+  // The sheet of `host.ts` is in `host.styles.ts`, and likewise for each module (FRU-509). A module
+  // converted to Tailwind has the rules of the utilities it writes (FRU-680).
+  const sheet = await moduleSheet(file);
+  assert.ok(sheet.trim() !== '', `${file} has no CSS, so this test would check nothing`);
 
   return sheet;
 }
@@ -100,6 +108,19 @@ describe('the motion of the widget (FRU-471)', () => {
       assert.deepEqual(unstopped(await sheetOf(file)), []);
     });
   }
+
+  it('stops each animation of a converted module beside it, in the class list of its part (FRU-680)', async () => {
+    // The control: a part that animates and does not stop is found, and one that stops is not.
+    assert.deepEqual(unstoppedParts(new Map([['a', "'fruitback:animate-spin'"]])), ['a']);
+    assert.deepEqual(
+      unstoppedParts(new Map([['a', "'fruitback:animate-spin fruitback:motion-reduce:animate-none'"]])),
+      [],
+    );
+
+    for (const file of FILES) {
+      if (await converted(file)) assert.deepEqual(unstoppedParts(await partsOf(file)), [], file);
+    }
+  });
 
   it('animates the dock, the settings and the thread (FRU-471)', async () => {
     assert.match(await sheetOf('host.ts'), /\.fruitback-dock \{ animation: fruitback-dock-in/);

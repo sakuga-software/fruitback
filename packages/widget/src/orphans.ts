@@ -3,9 +3,7 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { statusLabel, statusPaint } from './status-paint.ts';
 import { CAPTURE_START } from './events.ts';
-import { adoptStyles } from './stylesheet.ts';
 import { excerpt } from './note-words.ts';
-import { STYLES } from './orphans.styles.ts';
 
 /**
  * The notes whose element is gone (FRU-12).
@@ -57,6 +55,12 @@ export type OrphanListOptions = {
   translator?: Translator;
 };
 
+/** The identifier of a note, a link or a plain label. */
+const LINK = [
+  'fruitback-orphans-link',
+  'fruitback:text-mark fruitback:text-accent fruitback:no-underline fruitback:whitespace-nowrap',
+].join(' ');
+
 /** Enough of the note to recognise it; the rest is one click away in Linear. */
 const EXCERPT_MAX_LENGTH = 60;
 
@@ -65,23 +69,50 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
   const root = document.createElement('div');
-  root.className = 'fruitback-orphans';
+  root.className = [
+    'fruitback-orphans',
+    'fruitback:fixed fruitback:end-4 fruitback:bottom-21 fruitback:z-2147483000 fruitback:max-w-75 fruitback:flex fruitback:flex-col-reverse fruitback:items-end',
+    'fruitback:font-sans fruitback:text-list fruitback:text-text fruitback:when-hidden:hidden',
+    'fruitback:corner-right:undocked:right-4 fruitback:corner-right:undocked:left-auto',
+    'fruitback:corner-left:undocked:left-4 fruitback:corner-left:undocked:right-auto fruitback:corner-left:undocked:items-start',
+    'fruitback:corner-top:undocked:top-21 fruitback:corner-top:undocked:bottom-auto fruitback:corner-top:undocked:flex-col',
+    'fruitback:docked:relative fruitback:docked:inset-auto fruitback:docked:z-auto fruitback:docked:max-w-none',
+  ].join(' ');
   root.dataset.fruitbackOrphans = '';
   root.hidden = true;
   if (options.dock !== undefined) root.dataset.fruitbackDocked = '';
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
-  toggle.className = 'fruitback-orphans-toggle';
+  toggle.className = [
+    'fruitback-orphans-toggle',
+    'fruitback:flex fruitback:items-center fruitback:gap-1.5 fruitback:px-3 fruitback:py-1.75 fruitback:border-0 fruitback:rounded-field fruitback:shadow-md fruitback:cursor-pointer',
+    'fruitback:font-sans fruitback:font-semibold fruitback:text-tiny fruitback:leading-none',
+    'fruitback:[--fruitback-pin-color:var(--fruitback-color-unplaced)] fruitback:bg-(--fruitback-pin-color) fruitback:text-on-stage',
+    'fruitback:in-docked:gap-1.75 fruitback:in-docked:h-control fruitback:in-docked:ps-3 fruitback:in-docked:pe-3.5 fruitback:in-docked:border-4 fruitback:in-docked:border-transparent',
+    'fruitback:in-docked:rounded-md-outer fruitback:in-docked:bg-clip-padding fruitback:in-docked:text-hint fruitback:in-docked:tracking-button',
+    'fruitback:in-docked:whitespace-nowrap fruitback:in-docked:shadow-none',
+    'fruitback:forced-colors:border-canvas fruitback:forced-colors:outline-1 fruitback:forced-colors:outline-button-text fruitback:forced-colors:-outline-offset-5',
+  ].join(' ');
   toggle.setAttribute('aria-expanded', 'false');
   // A dashed drop rather than the fallen leaf that used to open this label (FRU-36). It is the pin's
   // own silhouette, drawn the way the overlay draws a pin it could not re-anchor — the chip and the
   // pin then say the same thing in the same language, which an emoji could not do.
   const toggleCount = document.createElement('span');
-  toggle.append(createIcon(document, 'dropDashed'), toggleCount);
+  const toggleIcon = createIcon(document, 'dropDashed');
+  toggleIcon.classList.add('fruitback:size-3.25');
+  toggle.append(toggleIcon, toggleCount);
 
   const list = document.createElement('ul');
-  list.className = 'fruitback-orphans-list';
+  list.className = [
+    'fruitback-orphans-list',
+    'fruitback:block fruitback:m-0 fruitback:mb-2 fruitback:p-2 fruitback:rounded-md fruitback:bg-surface fruitback:shadow-lg fruitback:list-none fruitback:max-h-55 fruitback:overflow-y-auto fruitback:when-hidden:hidden',
+    'fruitback:in-docked:absolute fruitback:in-docked:bottom-beyond fruitback:in-docked:end-0 fruitback:in-docked:w-max fruitback:in-docked:max-w-orphans',
+    'fruitback:in-docked:max-h-list-room fruitback:in-docked:m-0',
+    'fruitback:in-docked:corner-top:top-beyond fruitback:in-docked:corner-top:bottom-auto',
+    'fruitback:in-docked:corner-left:left-0 fruitback:in-docked:corner-left:right-auto',
+    'fruitback:in-docked:corner-right:right-0 fruitback:in-docked:corner-right:left-auto',
+  ].join(' ');
   list.hidden = true;
 
   toggle.addEventListener('click', () => {
@@ -103,12 +134,14 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   // A sibling of the root, because the root is hidden while the list is empty (FRU-51).
   // A live region inside a hidden element announces nothing.
   const announcer = document.createElement('div');
-  announcer.className = 'fruitback-orphans-announcer';
+  announcer.className = [
+    'fruitback-orphans-announcer',
+    'fruitback:absolute fruitback:w-px fruitback:h-px fruitback:overflow-hidden fruitback:clip-hidden fruitback:whitespace-nowrap',
+  ].join(' ');
   announcer.dataset.fruitbackOrphansAnnouncer = '';
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  const style = adoptStyles(options.host, STYLES);
   options.host.append(announcer);
   if (options.dock === undefined) options.host.append(root);
   else options.dock.prepend(root);
@@ -158,7 +191,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         ...issues.map((issue) => entry(document, issue, options.statusOf?.(issue), t, options.onSelect)),
       );
     },
-    owns: (node) => node === root || style.owns(node) || root.contains(node) || announcer.contains(node),
+    owns: (node) => node === root || root.contains(node) || announcer.contains(node),
     entry: (id) =>
       [...list.children]
         .find((item) => (item as HTMLElement).dataset.fruitbackOrphan === id)
@@ -167,7 +200,6 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       options.dock?.removeEventListener(CAPTURE_START, fold);
       announcer.remove();
       root.remove();
-      style.remove();
     },
   };
 }
@@ -180,19 +212,30 @@ function entry(
   onSelect?: (issue: NoteIssue) => void,
 ): HTMLElement {
   const item = document.createElement('li');
-  item.className = 'fruitback-orphans-item';
+  item.className = [
+    'fruitback-orphans-item',
+    'fruitback:flex fruitback:items-baseline fruitback:gap-1.5 fruitback:list-none fruitback:not-first:mt-1.5',
+  ].join(' ');
   item.dataset.fruitbackOrphan = issue.note.id;
 
   // The stage of the note, as the pin's shape in the stage's colour — the same vocabulary the page
   // itself uses, which is what a reporter has to be able to match up. The stage is named in the
   // button's accessible name rather than in the mark, because colour alone is not a label.
   const mark = createIcon(document, 'drop');
-  mark.classList.add('fruitback-orphans-stage');
+  mark.classList.add(
+    'fruitback-orphans-stage',
+    ...'fruitback:text-(--fruitback-pin-color) fruitback:text-mark fruitback:overflow-visible fruitback:*:stroke-stage-edge fruitback:*:stroke-3 fruitback:*:stroke-join-round fruitback:*:paint-stroke-first'.split(
+      ' ',
+    ),
+  );
   mark.style.setProperty('--fruitback-pin-color', statusPaint(issue, status).fill);
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fruitback-orphans-note';
+  button.className = [
+    'fruitback-orphans-note',
+    'fruitback:flex-1 fruitback:border-0 fruitback:bg-transparent fruitback:p-0 fruitback:text-start fruitback:whitespace-normal fruitback:cursor-pointer',
+  ].join(' ');
   button.textContent = summary(issue);
   // The word of its state, as its pin says it: the name of its status (FRU-370), else the name of its
   // state in the tracker, else the word of its stage (FRU-512).
@@ -219,14 +262,14 @@ function entry(
 function handle(document: Document, issue: NoteIssue): HTMLElement[] {
   if (issue.url === undefined) {
     const label = document.createElement('span');
-    label.className = 'fruitback-orphans-link';
+    label.className = LINK;
     label.textContent = issue.identifier;
 
     return [label];
   }
 
   const link = document.createElement('a');
-  link.className = 'fruitback-orphans-link';
+  link.className = LINK;
   link.href = issue.url;
   link.target = '_blank';
   link.rel = 'noreferrer noopener';

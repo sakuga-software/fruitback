@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { NOTE_STAGES } from '@fruitback/shared';
 import { THEME_STYLES, THEME_TOKENS, applyTheme, missingStageTokens, stageToken } from './theme.ts';
 import { mountPage } from './dom.fixture.ts';
+import { sheetOfSource } from '../build-styles.ts';
+import { converted, partsOf } from './sheets.fixture.ts';
 
 /**
  * The token layer (FRU-35). None of this can be seen in happy-dom — it draws nothing and resolves
@@ -124,6 +126,14 @@ describe('a foreground token is only ever used on the background it is named for
     const blocks: { where: string; body: string }[] = [];
 
     for (const name of MODULES) {
+      // A module converted to Tailwind (FRU-680): one block per part, the rules of its class list.
+      if (await converted(`${name}.ts`)) {
+        for (const [part, classes] of await partsOf(`${name}.ts`)) {
+          const body = [...(await sheetOfSource(classes)).matchAll(/\{([^{}]*)\}/g)].map((match) => match[1]).join(';');
+          blocks.push({ where: `${name}.ts .${part}`, body });
+        }
+        continue;
+      }
       const path = fileURLToPath(new URL(`./${name}.styles.ts`, import.meta.url));
       const source = await readFile(path, 'utf8');
 
