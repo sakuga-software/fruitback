@@ -534,7 +534,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The Sites screen is a dense table, one line of 36 px per site** (FRU-688, the mockup of the
   redesign of 2026-11-25, in place of the grid of cards of FRU-408 and FRU-432, `routes/sites.tsx`).
   **The head of the screen** is 48 px, « Sites » and « Add a site » (28 px), as the head of Notes
-  (FRU-686); the sentence under the large title went with it. **The bar under it** is 44 px: the
+  (FRU-686); the sentence under the large title went with it. « Add a site » opens with a plus of
+  14 px, 6 px from its words and 10 px in, as the mockup draws it (FRU-650): `inset` and `gap` of
+  `Button`, and the `add` of `settings-icons.tsx`, the plus of « Add » on the addresses. **The bar under it** is 44 px: the
   search by address (240 px, « / » gives it the focus, `useSlashKey` of `notes-filters.tsx`), then
   **the colours of the statuses** at the right, the drop and the name of each stage (in place of « no
   legend » of FRU-400: the ticket asks for it); under 720 px the colours go, and the name of each bar

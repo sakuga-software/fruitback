@@ -31,6 +31,7 @@ import { SiteIcon } from '../site-icon';
 import { SitePreview } from '../site-preview';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
 import { NoteIcon } from '../note-icons';
+import { SettingsIcon } from '../settings-icons';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
 import { ReadProblem } from '../read-problem';
@@ -169,7 +170,9 @@ export default function Sites() {
         <h1 className="text-step font-semibold text-ink">{t('Sites')}</h1>
         {listed && manages ? (
           <div className="ml-auto flex items-center">
-            <Button size="panel" onClick={() => setAdding(true)}>
+            {/* FRU-650: a plus before the words, as the mockup of FRU-688 draws it: 14 px, 6 px from them. */}
+            <Button size="panel" inset={10} gap={6} onClick={() => setAdding(true)}>
+              <SettingsIcon name="add" size={14} />
               {t('Add a site')}
             </Button>
           </div>
