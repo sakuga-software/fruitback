@@ -1723,6 +1723,21 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **`0050_note_index_author_visitor` adds a column that may be empty.** No row moves: a note of
   before has no digest, and is nobody's on a browser.
 
+- **A visitor edits through the route of a member's edit** (FRU-701). `callerOf` of `edit-routes.ts`
+  answers who writes: a session, as before, or with no token the key of the browser, as
+  `visitor:<digest>`. The route then compares it with `NoteIndex.authors` as it compares an account,
+  reads the stage in the store and again under the lock of the row, and calls the same
+  `NoteStore.edit`. No second path of a write.
+- **`visitorMay(policy, action)` is the one place that says what a visitor may do** (`visitor-key.ts`,
+  `CallerChecks.visitorMay`). Today: the default of the mock-ups, on a site whose `write` is
+  `public`; the stage is the route's. FRU-703 turns it into a setting of each site
+  (`visitorEdit`, `visitorDelete`), and only this function reads it.
+- **A request with a token is never read as a visitor**: a session that ended is told `401`, and is
+  not taken for the browser it came from.
+- **An edit of a visitor counts with their replies** (`checkReplyLimit`): it writes a reply.
+- **The reply names the visitor by the name the note was sent with**, « not verified »
+  (`replyAuthorOf`). `NewEdit.author` takes a visitor now; `editText` already wrote one.
+
 ### The reasons
 
 - **Why the site is in the digest.** `authors` already reads the rows of one site. The site in the

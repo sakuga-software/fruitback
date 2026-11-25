@@ -951,16 +951,20 @@ describe('every word the widget shows', () => {
     );
     assert.equal(await area, undefined);
 
-    // FRU-700: « You · this browser », in the head of a note of a reader known by their browser.
+    // FRU-700: « You · this browser », in the head of a note of a reader known by their browser. FRU-701:
+    // « Edit the text » in its menu, the line under it, and where the new text goes, in its field.
     const byBrowser = createOverlay({
       document: page.document,
       host: host.root,
       dock: host.dock,
       translator,
       byBrowser: () => true,
+      edit: { send: () => new Promise(() => {}) },
     });
     byBrowser.render([found]);
     byBrowser.select(found.note.id);
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
     snapshots.push(...shown(host.root));
     byBrowser.destroy();
 
