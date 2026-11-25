@@ -951,6 +951,19 @@ describe('every word the widget shows', () => {
     );
     assert.equal(await area, undefined);
 
+    // FRU-700: « You · this browser », in the head of a note of a reader known by their browser.
+    const byBrowser = createOverlay({
+      document: page.document,
+      host: host.root,
+      dock: host.dock,
+      translator,
+      byBrowser: () => true,
+    });
+    byBrowser.render([found]);
+    byBrowser.select(found.note.id);
+    snapshots.push(...shown(host.root));
+    byBrowser.destroy();
+
     // The copy button, with a clipboard that takes the text and then with one that refuses it.
     const copy = host.root.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;
     const clipboard = { writeText: async (): Promise<void> => {} };

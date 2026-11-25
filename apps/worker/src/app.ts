@@ -17,7 +17,7 @@ import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type GithubApp, githubAppFor } from './github-connector.ts';
 import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
+import { EDITABLE_STAGES, type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, isExtensionOrigin, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH } from './pair-page.ts';
@@ -40,6 +40,7 @@ import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import { placedAt, routingFailure } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
+import { visitorAuthor, visitorDigestOf } from './visitor-key.ts';
 
 import {
   accountStoreFor,
@@ -128,10 +129,33 @@ async function hidesTracker(request: Request, config: Served, policy: ClientPoli
 }
 
 /**
- * The ids the widget gave to the notes of `issues` that the reader of this request left (FRU-294): a
- * session of the workspace of the site, whose account the index keeps as their author. Empty for
- * anybody else, and for a worker with no index. An index that does not answer costs `mine`, never
- * the read.
+ * Who reads, as `NoteIndex.authors` names an author (FRU-700): the account of a session of the
+ * workspace of the site, or else `visitor:<digest>` of the key of this browser for this site, or
+ * `undefined`. `by` says which. A session wins: a member is never read as the browser they use.
+ */
+async function readerOf(
+  request: Request,
+  policy: ClientPolicy,
+  site: string,
+): Promise<{ author: string; by: 'account' | 'browser' } | undefined> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token !== undefined && policy.sessions !== undefined) {
+    const verified = await verifyForClient(token, policy);
+    const account = verified?.ok === true && verified.session === true ? verified.reporter.id : undefined;
+    if (account !== undefined) return { author: account, by: 'account' };
+  }
+  const digest = visitorDigestOf(request, site);
+
+  return digest === undefined ? undefined : { author: visitorAuthor(digest), by: 'browser' };
+}
+
+/**
+ * The ids the widget gave to the notes of `issues` that the reader of this request left (FRU-294),
+ * and how the worker knows the reader (`by`): a session of the workspace of the site, whose account
+ * the index keeps as their author, or the key of a visitor's browser, whose digest it keeps (FRU-700).
+ * Empty for anybody else, and for a worker with no index. An index that does not answer costs
+ * `mine`, never the read. A visitor's notes count while they are open only: a note done asks its
+ * author for a verdict, which takes a session.
  */
 async function notesOfReader(
   request: Request,
@@ -141,16 +165,12 @@ async function notesOfReader(
   site: string | undefined,
   issues: readonly NoteIssue[],
   noteIndex: NoteIndex | undefined,
-): Promise<Set<string>> {
+): Promise<{ notes: Set<string>; by?: 'account' | 'browser' }> {
   if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) {
-    return new Set();
+    return { notes: new Set() };
   }
-  if (policy.sessions === undefined) return new Set();
-  const token = readBearerToken(request.headers.get('Authorization'));
-  if (token === undefined) return new Set();
-  const verified = await verifyForClient(token, policy);
-  const account = verified?.ok === true && verified.session === true ? verified.reporter.id : undefined;
-  if (account === undefined) return new Set();
+  const reader = await readerOf(request, policy, site);
+  if (reader === undefined) return { notes: new Set() };
   try {
     const authors = await noteIndex.authors(
       workspace,
@@ -158,13 +178,23 @@ async function notesOfReader(
       issues.map((issue) => issue.note.id),
     );
 
-    return new Set([...authors].flatMap(([note, author]) => (author === account ? [note] : [])));
+    // A visitor's note is theirs while it is open (FRU-700): `mine` on a note done asks its author for
+    // a verdict, and a verdict takes a session (FRU-294).
+    const open = new Set(issues.flatMap((issue) => (EDITABLE_STAGES.has(issue.stage) ? [issue.note.id] : [])));
+    const counts = (note: string) => reader.by === 'account' || open.has(note);
+
+    return {
+      notes: new Set(
+        [...authors].flatMap(([note, author]) => (author === reader.author && counts(note) ? [note] : [])),
+      ),
+      by: reader.by,
+    };
   } catch (error) {
     console.error(
       `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
     );
 
-    return new Set();
+    return { notes: new Set() };
   }
 }
 
@@ -578,6 +608,7 @@ async function routed(
     signsNotes,
     attributionFor,
     chosenPlace,
+    visitorOf: visitorDigestOf,
     done,
   };
 

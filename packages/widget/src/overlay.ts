@@ -162,6 +162,12 @@ export type OverlayOptions = {
    */
   move?: (issue: NoteIssue) => Promise<boolean | 'busy' | undefined>;
   /**
+   * Whether the worker knows this reader by the key of their browser (FRU-700), and not by a session:
+   * a note `mine` then carries « You · this browser » in its head. Left out: the reader is known by a
+   * session, or not at all.
+   */
+  byBrowser?: () => boolean;
+  /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
    */
@@ -1125,6 +1131,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       checkFor(entry.issue),
       moreFor(entry.issue),
       withdrawFor(entry.issue),
+      options.byBrowser?.() === true,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1172,6 +1179,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       checkFor(entry.issue),
       moreFor(entry.issue),
       withdrawFor(entry.issue),
+      options.byBrowser?.() === true,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1586,6 +1594,7 @@ function buildThread(
   check?: CheckFooter,
   more?: MoreFooter,
   withdraw?: WithdrawFooter,
+  byBrowser = false,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1622,6 +1631,8 @@ function buildThread(
     ...(movable ? [handleButton(document, t)] : []),
     element(document, 'div', 'fruitback-thread-heading', [
       element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+      // FRU-700: after the state, in the heading that wraps, so a narrow thread puts it on a line of its own.
+      ...youChip(document, issue, t, byBrowser),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
     ]),
@@ -1636,6 +1647,8 @@ function buildThread(
   // An attribute and not `:has()`: a browser with no `:has()` drops the rule, and the cross would
   // fall to a second line again.
   if (movable) head.dataset.fruitbackMovable = '';
+  // FRU-700: the state keeps its width, so the chip stands right after it. An attribute, as above.
+  if (head.querySelector('.fruitback-thread-you') !== null) head.dataset.fruitbackYou = '';
 
   thread.append(
     head,
@@ -1662,6 +1675,16 @@ function buildThread(
   );
 
   return thread;
+}
+
+/**
+ * « You · this browser » (FRU-700): on a note the worker says is the reader's (`mine`), for a reader it
+ * knows by the key of their browser. Words, never a colour alone; the worker decides who it is.
+ */
+function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
+  if (!byBrowser || issue.mine !== true || DRAFTS.has(issue)) return [];
+
+  return [element(document, 'span', 'fruitback-thread-you', t.text('thread.youBrowser'))];
 }
 
 /** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */

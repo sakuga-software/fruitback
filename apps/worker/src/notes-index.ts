@@ -75,7 +75,11 @@ export type NoteEntry = {
   site: string;
   note: Note;
   channel: Channel;
-  author: { kind: AuthorKind; account?: string };
+  /**
+   * `visitor`: the digest of the key of the browser that sent it (FRU-700), for a note of a visitor
+   * whose widget sent a key. Never the key itself: `visitor-key.ts`.
+   */
+  author: { kind: AuthorKind; account?: string; visitor?: string };
   place: Place;
   issue: { identifier: string; url?: string };
   /** The stage of a note that was just planted. */
@@ -156,9 +160,11 @@ export type NoteIndex = {
    */
   page(workspace: string, query: NoteQuery): Promise<NotePage>;
   /**
-   * The account that left each of these notes of a site, for the notes a member left (FRU-294). A note
-   * of a visitor, of a token of the site, or of an account that is gone is absent. What decides who
-   * may confirm or reopen a note, and which notes are a reader's own (`mine`).
+   * Who left each of these notes of a site: the account, for a note a member left (FRU-294), and
+   * `visitor:<digest>` (`visitorAuthor`) for a note of a visitor whose browser sent a key (FRU-700).
+   * A note of a visitor with no key, of a token of the site, or of an account that is gone is absent.
+   * What decides who may confirm, reopen, edit or withdraw a note, and which notes are a reader's own
+   * (`mine`). An account is never of the form `visitor:…`, so a member is never taken for a visitor.
    */
   authors(workspace: string, site: string, notes: readonly string[]): Promise<Map<string, string>>;
   /**
@@ -330,9 +336,18 @@ export function elementOf(note: Pick<Note, 'anchor' | 'source'>): { selector: st
   };
 }
 
-/** The author of a note, from what the worker verified when it took it. */
-export function authorOf(note: Note, session: boolean): { kind: AuthorKind; account?: string } {
-  if (note.reporter?.verified !== true) return { kind: 'visitor' };
+/**
+ * The author of a note, from what the worker verified when it took it. `visitor`: the digest of the
+ * key of the browser that sent it (FRU-700), kept for a note of a visitor only: a note that a session
+ * or a token signs has its author already.
+ */
+export function authorOf(
+  note: Note,
+  session: boolean,
+  visitor?: string,
+): { kind: AuthorKind; account?: string; visitor?: string } {
+  if (note.reporter?.verified !== true)
+    return visitor === undefined ? { kind: 'visitor' } : { kind: 'visitor', visitor };
   if (session && note.reporter.id !== undefined) return { kind: 'member', account: note.reporter.id };
 
   return { kind: 'site' };

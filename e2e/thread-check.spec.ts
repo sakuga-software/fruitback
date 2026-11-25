@@ -12,9 +12,11 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
  *
  * - **Team mode**, the only mode where a session reaches the worker: the author confirms one note
  *   and reopens another, on the worker with accounts of the suite, end to end.
- * - **Public mode and private mode**: no session, so the read says no `mine`, and the thread says
- *   who marked the note done and asks nothing. In public mode the control is the same thread when
- *   the read says `mine`: the widget asks then. Private mode mounts the widget with `replies: false`,
+ * - **Public mode and private mode**: no session. The worker knows the author by the key of their
+ *   browser (FRU-700), and says `mine` while the note is open only: a note done is nobody's on a
+ *   browser (`visitor-key.test.ts`), so the thread says who marked it done and asks nothing. The read
+ *   is changed here to done, so `mine` is taken out with it. In public mode the control is the same
+ *   thread when the read says `mine`: the widget asks then. Private mode mounts the widget with `replies: false`,
  *   so it never asks there. The store in memory of the first worker moves no note to done, so its
  *   read is changed in the browser, as `thread.spec.ts` does.
  */
@@ -107,9 +109,10 @@ test.describe('public mode (FRU-603)', () => {
     await expect(thread.locator('.fruitback-thread-done')).toHaveText('Marc Petit marked it done');
     await expect(thread.getByRole('button', { name: 'Looks fixed' })).toHaveCount(0);
     await expect(thread.getByText('Does it look right to you?')).toHaveCount(0);
-    // The worker named no author: no session reaches it in public mode.
+    // FRU-700: the worker named the author by their browser while the note was open, as its store
+    // has it. It names nobody on a note done, which the read here plays.
     expect(saidMine.length).toBeGreaterThan(0);
-    expect(saidMine.every((each) => each === undefined)).toBe(true);
+    expect(saidMine.every((each) => each === true)).toBe(true);
   });
 
   test('the control: when the read says the reader is the author, the thread asks, and « Looks fixed » is sent', async ({
@@ -152,9 +155,10 @@ test.describe('private mode (FRU-603)', () => {
     const thread = await openThread(page, 'Verdict in private mode');
     await expect(thread.locator('.fruitback-thread-done')).toHaveText('Marc Petit marked it done');
     await expect(thread.getByRole('button', { name: 'Looks fixed' })).toHaveCount(0);
-    // The worker named no author: private mode carries no session.
+    // FRU-700: private mode carries no session, and the worker named the author by their browser while
+    // the note was open, as its store has it. It names nobody on a note done.
     expect(saidMine.length).toBeGreaterThan(0);
-    expect(saidMine.every((each) => each === undefined)).toBe(true);
+    expect(saidMine.every((each) => each === true)).toBe(true);
     // The thread drawn is the one of a note done: the line above says it, so the absence of the
     // question is about who reads, not about a thread with no verdict to ask. Private mode mounts the
     // widget with `replies: false` too (`page.content.ts`): a verdict is a reply of the store.

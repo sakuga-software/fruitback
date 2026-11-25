@@ -1697,6 +1697,40 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
   changes it. `docs/modes.md` says what holds today.
 
+## A visitor known by the key of their browser (FRU-700)
+
+### The rules, in short
+
+- **A key of the browser, made by the widget, and a digest of it in the index.** The widget sends the
+  key in `X-Fruitback-Visitor` (`visitor-key.ts`). `visitorDigestOf` turns it into a SHA-256 of the
+  site and the key, which `record` writes in `note_index.author_visitor` for a note of a visitor only
+  (`authorOf`). The key itself is kept nowhere on the worker. Decision of the orchestrator for
+  FRU-699, 2026-11-25: the key by default, a confirmed address later (FRU-705).
+- **`NoteIndex.authors` names a visitor `visitor:<digest>`** (`visitorAuthor`), beside the account
+  of a member. So the routes that compare an author with the reader compare one string, whoever
+  wrote the note: one path, not a second one for visitors.
+- **`notesOfReader` asks `readerOf`**: the account of a session of the workspace, or else the digest
+  of the key for this site. A session wins over a key sent with it. It answers `by: 'account'` or
+  `by: 'browser'`, and the read offers an edit or a withdrawal to an account only until FRU-701 and
+  FRU-702.
+- **A visitor's note is `mine` while it is open** (`EDITABLE_STAGES`). `mine` on a note done asks its
+  author for a verdict (`checkOffered`, and the tab « To check » of the list), and the route of a
+  verdict takes a session (FRU-294): a visitor would be asked for what the worker refuses.
+- **Only `app.ts` imports `visitorDigestOf`**, and hands it to the routes as `visitorOf` of
+  `CallerChecks`. A copy of `visitor-key.ts` with a guard taken out then reaches every route, and
+  `visitor-key.test.ts` plants each guard out that way.
+- **A key of another shape is no key**: exactly 43 characters of base64url, what the widget makes.
+- **`0050_note_index_author_visitor` adds a column that may be empty.** No row moves: a note of
+  before has no digest, and is nobody's on a browser.
+
+### The reasons
+
+- **Why the site is in the digest.** `authors` already reads the rows of one site. The site in the
+  digest is a second wall: a digest read from the database, or a key copied from another site,
+  opens nothing elsewhere. It is held by a unit case, since the first wall holds every route.
+- **Why no salt of the worker.** The key has 256 random bits: no list of guesses reaches it, and
+  a secret of the worker would make the digests change with it.
+
 ## Who can leave a note (FRU-330)
 
 ### The rules, in short

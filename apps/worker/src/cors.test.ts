@@ -22,7 +22,7 @@ function headersFor(origin: string): Record<string, string> {
     'Access-Control-Allow-Origin': origin,
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Fruitback-Visitor',
     'Access-Control-Max-Age': '86400',
   };
 }
