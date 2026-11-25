@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import type { StorybookConfig } from '@storybook/html-vite';
 
 /**
@@ -10,6 +11,8 @@ const config: StorybookConfig = {
   // The video of the welcome page (FRU-581), next to `iframe.html` as it is next to `welcome.html`.
   staticDirs: [{ from: '../../public/demo', to: '/demo' }],
   core: { disableTelemetry: true, disableWhatsNewNotifications: true },
+  // FRU-679: the sheets of the screens are Tailwind, as in `wxt.config.ts`.
+  viteFinal: (vite) => ({ ...vite, plugins: [...(vite.plugins ?? []), tailwindcss()] }),
   features: {
     actions: false,
     controls: false,
