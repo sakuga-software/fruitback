@@ -1,0 +1,573 @@
+/*
+  The guides of fruitback.com (docs/_layouts/docs.html), after the board « Fruitback Docs » of FRU-417,
+  in Tailwind on the tokens of src/theme.css (FRU-681). build.ts writes docs/assets/docs.css from this
+  file. Each text colour holds 4.5:1 at least on the surface it sits on, the Rouge palette of the code
+  blocks included (docs-site.test.ts computes each one).
+
+  A rule takes utilities with @apply. A declaration is written out only where no utility computes the
+  same value; its comment says why.
+
+  The page has no preflight of Tailwind: the markdown becomes plain HTML, drawn on the defaults of the
+  browser.
+
+  Text wraps the way the landing does (widget.md, FRU-350): content wraps anywhere, so a selector or an
+  address stays in its box; a code block scrolls in its own box instead.
+*/
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import '@fruitback/shared/tailwind/theme.css' layer(theme);
+@import './theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+:root {
+  @apply scheme-light;
+}
+
+* {
+  @apply box-border;
+}
+
+html {
+  @apply scroll-pt-6 scroll-smooth;
+}
+
+/* A link to another guide fades from one page to the next, where the browser can (FRU-440). */
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    @apply scroll-auto;
+  }
+
+  @view-transition {
+    navigation: none;
+  }
+}
+
+/*
+  -webkit-font-smoothing is written out: the antialiased of Tailwind also sets -moz-osx-font-smoothing,
+  which would change the text in Firefox on macOS.
+*/
+body {
+  @apply m-0 bg-docs-page font-sans text-[16px]/[1.6] text-site-ink wrap-anywhere;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  @apply text-accent-strong;
+}
+
+:focus-visible {
+  @apply outline-2 outline-site-accent outline-offset-2;
+}
+
+img {
+  @apply max-w-full h-auto;
+}
+
+.skip {
+  @apply absolute left-3 -top-12 py-2 px-3.5 rounded-[8px] bg-site-ink text-on-ink font-semibold no-underline z-10;
+}
+
+.skip:focus {
+  @apply top-3;
+}
+
+/* The header. */
+.top {
+  @apply flex flex-wrap items-center gap-y-3 gap-x-6 min-h-16 py-2.5 px-6 bg-site-surface border-b border-b-site-line;
+}
+
+.brand {
+  @apply flex items-center gap-2.5 text-site-ink no-underline;
+}
+
+.brand img {
+  @apply block;
+}
+
+.pill {
+  @apply py-0.75 px-2.5 rounded-full bg-site-chip text-site-body text-[12px] font-semibold whitespace-nowrap;
+}
+
+.top-nav {
+  @apply flex flex-wrap gap-1 flex-[1_1_360px];
+}
+
+.top-nav a {
+  @apply py-2 px-3 rounded-full text-site-body text-[14px] no-underline whitespace-nowrap;
+}
+
+.top-nav a:hover,
+.top-nav a[aria-current] {
+  @apply bg-site-chip text-site-ink;
+}
+
+.top-nav a[aria-current] {
+  @apply font-semibold;
+}
+
+.top-end {
+  @apply flex items-center gap-4;
+}
+
+.top-link {
+  @apply text-site-body text-[14px] no-underline whitespace-nowrap;
+}
+
+.top-link:hover {
+  @apply text-site-ink underline;
+}
+
+.button-outline {
+  @apply inline-flex items-center h-10 py-0 px-4 border border-site-edge rounded-full bg-site-surface text-site-ink text-[14px] font-semibold no-underline whitespace-nowrap;
+}
+
+/* The sidebar, the page and « On this page ». */
+.frame {
+  @apply flex max-w-360 my-0 mx-auto;
+}
+
+.side {
+  @apply flex-[0_0_280px] border-r border-r-site-line;
+}
+
+.side nav {
+  @apply sticky top-0 max-h-screen overflow-y-auto pt-7 pr-4 pb-10 pl-6;
+}
+
+.side-group + .side-group {
+  @apply mt-5.5;
+}
+
+.side-title {
+  @apply m-0 pt-0 px-2.5 pb-1.5 text-docs-muted text-[12px] font-semibold;
+}
+
+.side ul,
+.side-small ul,
+.toc ul {
+  @apply m-0 p-0 list-none;
+}
+
+.side li a,
+.side-small li a {
+  @apply flex justify-between gap-2 py-1.75 px-2.5 rounded-[8px] text-site-body text-[14px] leading-[1.35] no-underline;
+}
+
+.side li a:hover,
+.side-small li a:hover {
+  @apply text-site-ink bg-site-chip;
+}
+
+.side li a[aria-current='page'],
+.side-small li a[aria-current='page'] {
+  @apply bg-site-surface text-site-ink font-[650] shadow-docs-current;
+}
+
+.out {
+  @apply text-docs-muted;
+}
+
+.main {
+  @apply flex flex-auto gap-10 min-w-0 pt-10 px-8 pb-20;
+}
+
+.side-small {
+  @apply hidden;
+}
+
+.page {
+  @apply flex-auto min-w-0 max-w-190;
+}
+
+.toc {
+  @apply flex-[0_0_220px] self-start sticky top-6;
+}
+
+.toc .side-title {
+  @apply pl-3;
+}
+
+.toc li a {
+  @apply block py-1.25 px-3 rounded-[8px] text-docs-muted text-[13px] leading-[1.4] no-underline;
+}
+
+.toc li a:hover {
+  @apply text-site-ink bg-site-surface shadow-docs-ring;
+}
+
+.toc ul {
+  @apply mb-2.5;
+}
+
+.improve {
+  @apply flex flex-col gap-1.5 m-0 pt-3.5 px-3 pb-0 border-t border-t-site-line text-docs-muted text-[12px];
+}
+
+.improve a {
+  @apply text-site-body text-[13px] font-semibold no-underline;
+}
+
+.improve a:hover {
+  @apply underline;
+}
+
+.crumbs {
+  @apply m-0 mb-3.5 text-docs-muted text-[13px];
+}
+
+.crumbs a {
+  @apply text-docs-muted;
+}
+
+.crumb-here {
+  @apply text-site-ink font-semibold;
+}
+
+/* The page itself: what the markdown becomes. */
+.prose {
+  @apply text-site-body text-[15px] leading-[1.7];
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  @apply text-site-ink tracking-[-0.02em];
+}
+
+.prose h1 {
+  @apply m-0 mb-4 text-[clamp(32px,4vw,44px)] leading-[1.08] font-[750] tracking-[-0.03em];
+}
+
+.prose h1 + p {
+  @apply text-[19px] leading-[1.55];
+}
+
+.prose h2 {
+  @apply mt-12 mx-0 mb-3.5 text-[26px] leading-[1.2] font-bold;
+}
+
+.prose h3 {
+  @apply mt-8 mx-0 mb-2.5 text-[19px] leading-[1.3] font-bold;
+}
+
+.prose h4 {
+  @apply mt-6 mx-0 mb-2 text-[16px];
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose table,
+.prose blockquote,
+.prose .highlighter-rouge,
+.prose pre {
+  @apply m-0 mb-4;
+}
+
+.prose li + li {
+  @apply mt-1;
+}
+
+.prose strong {
+  @apply text-site-ink;
+}
+
+.prose hr {
+  @apply my-10 mx-0 border-0 border-t border-t-site-line;
+}
+
+.prose code {
+  @apply py-px px-1.25 rounded-[6px] bg-site-chip text-site-ink font-mono text-[0.87em];
+}
+
+/* A code block: dark, with its own scroll, and « Copy » in its corner when the script ran. */
+.prose .highlighter-rouge,
+.prose .code-box {
+  @apply relative m-0 mb-4;
+}
+
+.prose pre {
+  @apply overflow-x-auto py-3.5 px-4.5 rounded-[14px] bg-docs-code-surface text-docs-code-text text-[13px] leading-[1.65] wrap-normal whitespace-pre;
+}
+
+.prose .highlighter-rouge pre,
+.prose .code-box pre {
+  @apply m-0;
+}
+
+/* The button covers no text: a block that has one keeps room for it on its first line. */
+.prose .copy + pre,
+.prose .copy + .highlight pre {
+  @apply pr-22;
+}
+
+.prose pre code {
+  @apply p-0 bg-transparent text-inherit;
+  /* text-[inherit] is read as a colour. */
+  font-size: inherit;
+}
+
+.copy {
+  /* The whole font of the page, before its size and weight: a button has a font of its own. */
+  font: inherit;
+  @apply absolute top-2 right-2 py-1 px-3 border border-docs-copy-edge rounded-full bg-docs-code-surface text-docs-code-text text-[12px] font-semibold cursor-pointer whitespace-nowrap;
+}
+
+.copy:hover {
+  @apply border-docs-code-text;
+}
+
+/*
+  The Rouge palette on #1c1917: comments #a8a29e 6.9:1, strings #a5d6a7 10.6:1, keywords #f9a8a8 9.3:1,
+  names #fcd38d 12.4:1, numbers and builtins #93c5fd 9.7:1, tags #86efac 12.5:1.
+*/
+.highlight .c,
+.highlight .c1,
+.highlight .cm,
+.highlight .cp,
+.highlight .cs,
+.highlight .cd,
+.highlight .gh,
+.highlight .gu {
+  @apply text-docs-code-comment;
+}
+
+.highlight .nb,
+.highlight .bp,
+.highlight .na,
+.highlight .no,
+.highlight .ss,
+.highlight .m,
+.highlight .mi,
+.highlight .mf,
+.highlight .mh,
+.highlight .mo,
+.highlight .il {
+  @apply text-docs-code-number;
+}
+
+.highlight .nv,
+.highlight .vc,
+.highlight .vg,
+.highlight .vi,
+.highlight .nn,
+.highlight .nc,
+.highlight .nf,
+.highlight .ne {
+  @apply text-docs-code-name;
+}
+
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .sb,
+.highlight .sc,
+.highlight .sd,
+.highlight .se,
+.highlight .sh,
+.highlight .si,
+.highlight .sx,
+.highlight .sr {
+  @apply text-docs-code-string;
+}
+
+.highlight .k,
+.highlight .kc,
+.highlight .kd,
+.highlight .kn,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt,
+.highlight .o,
+.highlight .ow {
+  @apply text-docs-code-keyword;
+}
+
+.highlight .nt {
+  @apply text-docs-code-tag;
+}
+
+.highlight .err {
+  @apply text-inherit bg-transparent;
+}
+
+/* A table scrolls in its own box rather than pushing the page sideways. */
+.prose table {
+  @apply block overflow-x-auto max-w-full border-collapse text-[14px] leading-[1.5];
+}
+
+.prose th,
+.prose td {
+  @apply py-2 px-3 border border-site-line text-left align-top;
+}
+
+.prose th {
+  @apply bg-docs-inset text-site-ink font-[650];
+}
+
+.prose td {
+  @apply bg-site-surface;
+}
+
+.prose td code,
+.prose th code {
+  @apply wrap-normal;
+}
+
+/* A quote is a callout, the « Note » of the board. */
+.prose blockquote {
+  @apply py-4 px-4.5 border border-site-line rounded-[14px] bg-docs-inset text-site-body text-[14px] leading-[1.55];
+}
+
+.prose blockquote > :last-child {
+  @apply mb-0;
+}
+
+.prose img {
+  @apply block border border-site-line rounded-[12px];
+}
+
+/* « Previous » and « Next ». */
+.pager {
+  @apply grid grid-cols-2 gap-3 mt-12 pt-6 border-t border-t-site-line;
+}
+
+.pager a {
+  @apply flex flex-col gap-1 py-4 px-4.5 border border-site-line rounded-[14px] bg-site-surface no-underline;
+}
+
+.pager a:hover {
+  @apply border-site-edge;
+}
+
+.pager-next {
+  @apply items-end text-right col-2;
+}
+
+.pager-word {
+  @apply text-docs-muted text-[12px];
+}
+
+.pager-title {
+  @apply text-site-ink text-[15px] font-[650];
+}
+
+/* The home of the docs (docs.md). */
+.home-paths,
+.home-sections,
+.home-modes {
+  @apply grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 m-0 mb-4 p-0 list-none;
+}
+
+.prose .home-paths li,
+.prose .home-sections li,
+.prose .home-modes li {
+  @apply flex flex-col gap-1.5 m-0 p-4.5 border border-site-line rounded-[14px] bg-site-surface text-[14px] leading-[1.5];
+}
+
+.home-who,
+.home-num {
+  @apply text-docs-muted text-[12px] font-semibold;
+}
+
+.home-title {
+  @apply text-site-ink text-[17px] font-bold;
+}
+
+.home-tags {
+  @apply flex flex-wrap gap-1.5;
+}
+
+.home-tags span {
+  @apply py-0.5 px-2.25 border border-site-edge rounded-full bg-site-surface text-site-ink text-[12px] font-semibold whitespace-nowrap;
+}
+
+.home-cta {
+  @apply mt-auto font-semibold;
+}
+
+.prose .home-sections ul {
+  @apply m-0 p-0 list-none;
+}
+
+.prose .home-sections ul li {
+  @apply p-0 border-0 bg-transparent;
+}
+
+.foot {
+  @apply flex flex-wrap justify-between gap-y-2 gap-x-6 p-6 border-t border-t-site-line text-docs-muted text-[13px];
+}
+
+.foot p {
+  @apply m-0;
+}
+
+.foot a {
+  @apply ml-4 text-site-body;
+}
+
+/* « On this page » leaves first, then the sidebar becomes a list that opens. */
+@media (max-width: 1180px) {
+  .toc {
+    @apply hidden;
+  }
+}
+
+@media (max-width: 900px) {
+  .side {
+    @apply hidden;
+  }
+
+  .main {
+    @apply flex-col gap-4 pt-5 px-4 pb-14;
+  }
+
+  .side-small {
+    @apply block border border-site-line rounded-[14px] bg-site-surface;
+  }
+
+  .side-small summary {
+    @apply py-3 px-4 text-site-ink font-semibold cursor-pointer;
+  }
+
+  .side-small nav {
+    @apply pt-0 px-2 pb-4;
+  }
+
+  .side-small .side-group + .side-group {
+    @apply mt-4;
+  }
+
+  .top {
+    @apply py-2.5 px-4;
+  }
+
+  .top-nav {
+    @apply order-3 basis-full;
+  }
+
+  .top-end {
+    @apply ml-auto;
+  }
+
+  .top-link {
+    @apply hidden;
+  }
+
+  .pager {
+    @apply grid-cols-1;
+  }
+
+  .pager-next {
+    @apply col-1;
+  }
+
+  .foot a {
+    @apply mt-0 mr-4 mb-0 ml-0;
+  }
+}

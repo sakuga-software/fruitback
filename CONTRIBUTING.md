@@ -191,5 +191,6 @@ and the GitHub connector changed in the interface, and why.
 | `apps/extension`     | AGPL-3.0-only                                     |
 | `apps/console`       | AGPL-3.0-only                                     |
 | `apps/playground`    | not published, under the repository's MIT licence |
+| `apps/site`          | not published, under the repository's MIT licence |
 
 A contribution is made under the licence of the package it changes.
