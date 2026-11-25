@@ -41,7 +41,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       if (worker.answersAnother === true) return json({ ...site, ...body, id: 'another', origin: body.url }, 201);
       // A worker of before FRU-703 keeps no right of a visitor, and answers none.
       if (worker.ofBefore === true) {
-        const { visitorEdit: _edit, visitorDelete: _delete, ...kept } = { ...site, ...body };
+        const { visitorEdit: _edit, visitorDelete: _delete, ...kept }: Record<string, unknown> = { ...site, ...body };
 
         return json({ ...kept, id: site?.id ?? 'new', origin: body.url }, 201);
       }
