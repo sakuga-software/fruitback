@@ -304,13 +304,22 @@ test('at 390 px a role reads on one line', async ({ page }) => {
   // FRU-691: the role is the third column, after the address.
   const role = page.locator('tbody tr').nth(1).locator('td').nth(2);
   await expect(role).toHaveText('Member');
+  // The lines of its words: the role is a list of its row for an owner (FRU-691), whose chevron is no
+  // word and sits at another height than them.
   const lines = await role.evaluate((cell) => {
-    const range = document.createRange();
-    range.selectNodeContents(cell);
+    const tops = new Set<number>();
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+    }
 
-    return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+    return tops.size;
   });
   expect(lines).toBe(1);
+  // The control: the cell is one line of 36 px.
+  expect((await role.boundingBox())!.height).toBeLessThanOrEqual(36);
 });
 
 // The setup on a narrow screen (FRU-160) is measured with the setup, in `console-setup.spec.ts`.
