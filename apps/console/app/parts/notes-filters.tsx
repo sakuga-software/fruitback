@@ -321,7 +321,7 @@ function branchesOf(
 }
 
 /** « / » gives the focus to the search (FRU-686), unless a field, a menu or a dialog has the key. */
-function useSlashKey(field: RefObject<HTMLInputElement | null>) {
+export function useSlashKey(field: RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== '/' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;

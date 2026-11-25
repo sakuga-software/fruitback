@@ -1,6 +1,6 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { STAGES, type Stage } from '../stages';
+import { STAGES, STAGE_NAMES, type Stage } from '../stages';
 import { type Destination, type Site, type Visibility, type Workspace, type Writers, call, placesOf } from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Fetched, listedOf } from '../listed';
@@ -11,22 +11,26 @@ import {
   Field,
   LinkButton,
   LoadFailed,
+  Mark,
   Menu,
   type MenuItem,
   Pick,
   Problem,
   StatusBar,
+  StatusDot,
   Tip,
 } from '../ui';
-import { ago } from '../ago';
+import { ago, agoShort } from '../ago';
 import { NotePages } from '../parts/note-pages';
-import { PageHead, useWorkspace } from './workspace';
+import { useSlashKey } from '../parts/notes-filters';
+import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { hostOf, siteAddress, siteName } from '../site-address';
 import { SiteIcon } from '../site-icon';
 import { SitePreview } from '../site-preview';
 import { ConnectorMark, type MarkedKind } from '../connector-marks';
+import { NoteIcon } from '../note-icons';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
 import { ReadProblem } from '../read-problem';
@@ -40,22 +44,25 @@ const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' 
 /** One page of the sites, as the worker answers it (FRU-497): its sites, and how many hold the search. */
 type Page = { sites: readonly Site[]; total: number };
 
-/** How many cards a page shows: 12 fills rows of 1, 2, 3 or 4 cards. */
-const SITES_PER_PAGE = 12;
+/** How many rows a page shows (FRU-688): the page of the notes shows 25 too. */
+const SITES_PER_PAGE = 25;
+
+/** The head, the bar and the table go from one edge of the screen to the other (FRU-688), as on Notes. */
+const BLEED = '-mx-[clamp(16px,4vw,48px)]';
 
 /**
- * The sites of a workspace, as screen 09 of the mockup of 2026-10-13 draws them (FRU-243): a table,
- * a card when there is none, and an alert when the read failed.
+ * The sites of a workspace (FRU-688): a table, one line of 36 px per site, as the mockup of the
+ * redesign of 2026-11-25 draws it. A card when there is none, and an alert when the read failed.
  *
- * The table has the six columns of the mockup (FRU-270): the site, its notes by status, how they
- * came (the script or the extension), where they go, and the last one. The counts are the summary
- * of the sites that the worker keeps from the index of the notes (FRU-237), read with the list:
- * nothing arrives after the rows, so nothing moves under a press.
+ * A row says, from the left: the site, its notes by status, how many are new, where they go, who sees
+ * them, and the last one. The counts are the summary of the sites that the worker keeps from the index
+ * of the notes (FRU-237), read with the list: nothing arrives after the rows, so nothing moves under a
+ * press.
  */
 export default function Sites() {
   useLocale();
   const { workspace } = useWorkspace();
-  // One page of the grid, and how many sites hold the search (FRU-497). `loading` only before the first answer.
+  // One page of the table, and how many sites hold the search (FRU-497). `loading` only before the first answer.
   const [read, setRead] = useState<Fetched<Page>>('loading');
   const [adding, setAdding] = useState(false);
   // What is typed in the form that adds a site is kept here, above every state of the list: the
@@ -66,7 +73,7 @@ export default function Sites() {
   const seesTracker = workspace.role !== 'guest';
 
   // The search and the page live in the address (FRU-408): a reload keeps the view. The worker
-  // answers the page and searches (FRU-497): the screen reads 12 sites, and their notes only.
+  // answers the page and searches (FRU-497): the screen reads one page of sites, and their notes only.
   const [params, setParams] = useSearchParams();
   const latest = useRef(params);
   useEffect(() => {
@@ -97,7 +104,7 @@ export default function Sites() {
   };
 
   // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162). A
-  // read again keeps the cards on the screen until its answer replaces them, and the answer of a read
+  // read again keeps the rows on the screen until its answer replaces them, and the answer of a read
   // that is no longer the last one is dropped.
   const asks = useRef(0);
   const load = useCallback(async () => {
@@ -128,7 +135,7 @@ export default function Sites() {
     setParams(next, { replace: true });
   }, [past, pages, setParams]);
 
-  // A new site opens its page, at how to put Fruitback on it (FRU-433): the grid unfolds nothing.
+  // A new site opens its page, at how to put Fruitback on it (FRU-433): the table unfolds nothing.
   const navigate = useNavigate();
   function added(site: Site) {
     setAdding(false);
@@ -150,33 +157,45 @@ export default function Sites() {
 
   // The workspace has sites: some hold the search, or a search hides them. No search and none is « No site yet ».
   const listed = typeof read !== 'string' && (read.total > 0 || q !== '');
+  // The sites of the page that keep their notes in Fruitback: the band under the table names them.
+  const untracked = seesTracker ? shown.filter((site) => placesOf(site).length === 0) : [];
 
   return (
     <>
-      <PageHead
-        title={t('Sites')}
-        lead={t('Where {workspace} collects notes, and where they stand.', { workspace: workspace.name })}
-        {...(listed && manages ? { action: <Button onClick={() => setAdding(true)}>{t('Add a site')}</Button> } : {})}
-      />
+      {/* FRU-688: « Sites » and « Add a site » in a head of 48 px, as the head of Notes (FRU-686). */}
+      <header
+        className={`${BLEED} -mt-[40px] flex min-h-[48px] items-center gap-[12px] border-b border-line pr-[16px] pl-[20px]`}
+      >
+        <h1 className="text-step font-semibold text-ink">{t('Sites')}</h1>
+        {listed && manages ? (
+          <div className="ml-auto flex items-center">
+            <Button size="panel" onClick={() => setAdding(true)}>
+              {t('Add a site')}
+            </Button>
+          </div>
+        ) : null}
+      </header>
 
-      {read === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+      {read === 'loading' ? <p className="mt-[24px] text-small text-muted">{t('Loading…')}</p> : null}
 
       {/* The mockup sizes the two boxes below by their content: 760 px and 640 px inside the padding. */}
       {read === 'failed' ? (
-        <LoadFailed
-          title={t('The sites did not load')}
-          detail={
-            <>
-              <ReadProblem /> {t('Your sites and notes are safe.')}
-            </>
-          }
-          retry={t('Try again')}
-          onRetry={() => void load()}
-        />
+        <div className="mt-[24px]">
+          <LoadFailed
+            title={t('The sites did not load')}
+            detail={
+              <>
+                <ReadProblem /> {t('Your sites and notes are safe.')}
+              </>
+            }
+            retry={t('Try again')}
+            onRetry={() => void load()}
+          />
+        </div>
       ) : null}
 
       {typeof read !== 'string' && !listed ? (
-        <div className="box-content flex max-w-[640px] flex-col items-start gap-[14px] rounded-card border border-line bg-subtle px-[clamp(20px,5vw,56px)] py-[48px]">
+        <div className="mt-[24px] box-content flex max-w-[640px] flex-col items-start gap-[14px] rounded-card border border-line bg-subtle px-[clamp(20px,5vw,56px)] py-[48px]">
           <svg aria-hidden="true" viewBox="16 6 96 116" className="h-[48px] w-[40px] fill-accent">
             <path
               fillRule="evenodd"
@@ -222,35 +241,18 @@ export default function Sites() {
               preview
             />
           </Dialog>
-          <div className="mb-[16px] max-w-[420px]">
-            <Field
-              label={t('Search sites')}
-              labelHidden
-              compact
-              type="search"
-              placeholder={t('Search by address')}
-              value={typed}
-              onChange={(event) => setTyped(event.target.value)}
-            />
-          </div>
+          <SitesBar typed={typed} onType={setTyped} />
           {total === 0 ? (
-            <p className="text-body text-muted">
+            <p className="mt-[24px] text-body text-muted">
               {t('No site matches « {search} ».', { search: q })}{' '}
               <LinkButton space="inline" onClick={() => search('')}>
                 {t('Clear the search')}
               </LinkButton>
             </p>
           ) : (
-            <ul
-              aria-label={t('Sites')}
-              // FRU-568: every row as high as the highest card, so every card of the page has one size.
-              className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[16px]"
-            >
-              {shown.map((site) => (
-                <SiteCard key={site.id} workspace={workspace} site={site} manages={manages} seesTracker={seesTracker} />
-              ))}
-            </ul>
+            <SitesTable workspace={workspace} sites={shown} manages={manages} seesTracker={seesTracker} />
           )}
+          {untracked.length === 0 ? null : <Untracked workspace={workspace} sites={untracked} />}
           {pages > 1 ? (
             <NotePages
               label={t('Pages of sites')}
@@ -263,22 +265,363 @@ export default function Sites() {
               numbers={{ at, count: pages, onGo: turn }}
             />
           ) : null}
-          {seesTracker ? (
-            <p className="mt-[14px] text-hint text-muted">
-              {t('A site with no tracker keeps its notes in Fruitback.')}{' '}
-              {/* FRU-571: the dialog « Add a connector » of the Connectors screen, opened (FRU-562). */}
-              <LinkButton space="inline" to={`/w/${workspace.id}/connectors?new=1`}>
-                {t('Connect a tracker')}
-              </LinkButton>{' '}
-              {t('or')}{' '}
-              <LinkButton space="inline" to={`/w/${workspace.id}/notes`}>
-                {t('see where every note went')}
-              </LinkButton>
-            </p>
-          ) : null}
         </>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The bar over the table (FRU-688): the search by address, 240 px, which « / » gives the focus to,
+ * then the colours of the statuses at the right. 44 px, from one edge of the screen to the other.
+ * Under 720 px the colours go: the name of each bar says its counts in words.
+ */
+function SitesBar({ typed, onType }: { typed: string; onType: (typed: string) => void }) {
+  useLocale();
+  const field = useRef<HTMLInputElement>(null);
+  useSlashKey(field);
+
+  return (
+    <div className={`${BLEED} flex min-h-[44px] items-center gap-[8px] border-b border-line pr-[16px] pl-[20px]`}>
+      <div className="relative w-[240px] min-w-0 flex-shrink">
+        <Field
+          label={t('Search sites')}
+          labelHidden
+          compact
+          type="search"
+          inputRef={field}
+          placeholder={t('Search by address')}
+          value={typed}
+          onChange={(event) => onType(event.target.value)}
+        />
+        {typed === '' ? (
+          <kbd
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 right-[6px] inline-flex h-[18px] min-w-[18px] -translate-y-1/2 items-center justify-center rounded-inner border border-line bg-page px-[4px] font-sans text-tiny leading-none font-medium text-muted"
+          >
+            /
+          </kbd>
+        ) : null}
+      </div>
+      <ul
+        aria-label={t('Statuses')}
+        className="ml-auto hidden flex-none items-center gap-[14px] text-hint text-muted min-[720px]:flex"
+      >
+        {STAGES.map((stage) => (
+          <li key={stage} className="inline-flex items-center gap-[6px]">
+            <StatusDot status={stage} size={10} />
+            {t(STAGE_NAMES[stage])}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The columns of the table (FRU-688), by the width of the table (a container query): what a row loses
+ * first where the table is narrow. No cell ever goes on a second line: a column that has no room goes.
+ * At 390 px a row keeps the site, its new notes and its menu.
+ */
+const COLUMNS = {
+  site: '',
+  notes: 'w-[184px] @max-[600px]:w-0',
+  open: 'w-[104px]',
+  sent: 'w-[220px] @max-[800px]:w-0',
+  who: 'w-[184px] @max-[1100px]:w-0',
+  last: 'w-[84px] @max-[440px]:w-0',
+  menu: 'w-[48px]',
+} as const;
+
+/**
+ * A cell of a column that has no room: empty, its column 0 px wide. Not `display: none`, which takes a
+ * column out of the table: the line of the notices of a site spans every column.
+ */
+const GONE = {
+  site: '',
+  notes: '@max-[600px]:[&>*]:hidden',
+  open: '',
+  sent: '@max-[800px]:[&>*]:hidden',
+  who: '@max-[1100px]:[&>*]:hidden',
+  last: '@max-[440px]:[&>*]:hidden',
+  menu: '',
+} as const;
+
+type Column = keyof typeof COLUMNS;
+
+/** A cell of a row: one line of 36 px, its border counted. What is longer is cut with « … ». */
+const LINE = 'flex h-[35px] min-w-0 items-center';
+
+/** The border and the box of each cell of a row. */
+const CELL = 'border-b border-line/60 p-0 text-left align-top font-normal';
+
+/** The host is in the head of its row, not in a heading of the page: `CutLink` draws it in a `span`. */
+const IN_A_CELL = 'span';
+
+/** What a press on a row leaves to the control it lands on: a link, a button, a field or a menu. */
+const CONTROLS = 'a, button, input, [role="menu"], [role="menuitem"], [role="dialog"], [role="tooltip"]';
+
+/**
+ * The table of the sites (FRU-688): a head of 32 px, and a line of 36 px per site. A press anywhere
+ * on a row opens the page of its site; the name of the site is the link a keyboard and a screen
+ * reader reach. A row taller than 36 px only says a problem of its site, on a line of its own.
+ */
+function SitesTable({
+  workspace,
+  sites,
+  manages,
+  seesTracker,
+}: {
+  workspace: Workspace;
+  sites: readonly Site[];
+  manages: boolean;
+  seesTracker: boolean;
+}) {
+  useLocale();
+  const columns: [Column, string][] = [
+    ['site', t('Site')],
+    ['notes', t('Notes')],
+    ['open', t('Open')],
+    ...(seesTracker ? [['sent', t('Sent to')] as [Column, string]] : []),
+    ['who', t('Who sees the notes')],
+    ['last', t('Last note')],
+    ['menu', ''],
+  ];
+
+  return (
+    <div className={`@container ${BLEED}`}>
+      <table aria-label={t('Sites')} className="w-full table-fixed border-separate border-spacing-0 text-table">
+        <thead>
+          <tr>
+            {columns.map(([column, words]) => (
+              <th
+                key={column}
+                scope="col"
+                className={`h-[32px] border-b border-line p-0 text-left text-hint font-medium whitespace-nowrap text-muted ${COLUMNS[column]} ${GONE[column]}`}
+              >
+                {column === 'menu' ? (
+                  <span className="sr-only">{t('Actions')}</span>
+                ) : (
+                  <span
+                    className={`block truncate ${column === 'site' ? 'pl-[20px]' : 'pl-[12px]'} ${column === 'last' ? 'pr-[12px] text-right' : 'pr-[12px]'}`}
+                  >
+                    {words}
+                  </span>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        {sites.map((site) => (
+          <SiteRow
+            key={site.id}
+            workspace={workspace}
+            site={site}
+            manages={manages}
+            seesTracker={seesTracker}
+            span={columns.length}
+          />
+        ))}
+      </table>
+    </div>
+  );
+}
+
+type SiteRowProps = {
+  workspace: Workspace;
+  site: Site;
+  manages: boolean;
+  seesTracker: boolean;
+  /** How many columns the line of the notices spans. */
+  span: number;
+};
+
+/**
+ * The line of a site (FRU-688), in a `tbody` of its own with the line of its notices, when it has some.
+ * Its name and « Open its page » lead to the page of the site (FRU-433), where everything else is:
+ * the table unfolds nothing under a row. « See the notes » is the Notes screen with this site chosen
+ * (FRU-504).
+ */
+function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) {
+  useLocale();
+  const navigate = useNavigate();
+  const name = siteName(site.origin);
+  const page = `/w/${workspace.id}/sites/${site.id}`;
+  // Every role reads the page of a site and installs Fruitback on it. The rest is of who manages them.
+  const items: MenuItem[] = [
+    { id: 'open', label: t('Open its page') },
+    { id: 'notes', label: t('See the notes') },
+    ...(manages
+      ? [
+          { id: 'statuses', label: t('Statuses') },
+          // The menu is the first time a removal is asked, and the page asks the second.
+          { id: 'remove', label: t('Remove'), danger: true },
+        ]
+      : []),
+  ];
+  const go = (id: string) => {
+    if (id === 'statuses') navigate(`${page}/statuses`);
+    else if (id === 'open') navigate(page);
+    else if (id === 'notes') navigate(notesOf(workspace.id, site.id));
+    else navigate(`${page}#${id}`);
+  };
+  // A press on the row opens the page of the site, as a press on its name does. A press on a control
+  // is the control's; a press in a menu or a tooltip comes through the tree of React, not of the page;
+  // and a press that ends a selection of text keeps the selection.
+  const open = (event: MouseEvent<HTMLTableRowElement>) => {
+    const target = event.target;
+    if (event.defaultPrevented || !(target instanceof Element)) return;
+    if (!event.currentTarget.contains(target) || target.closest(CONTROLS) !== null) return;
+    if ((globalThis.getSelection?.()?.toString() ?? '') !== '') return;
+    if (event.metaKey || event.ctrlKey) globalThis.open(page, '_blank', 'noopener');
+    else navigate(page);
+  };
+  const notices = seesTracker ? noticesOf(site) : [];
+
+  return (
+    <tbody data-site={site.id}>
+      <tr onClick={open} className="cursor-pointer hover:bg-hover">
+        <th scope="row" className={`${CELL} ${GONE.site}`}>
+          <span className={`${LINE} gap-[10px] pr-[12px] pl-[20px]`}>
+            <SiteIcon
+              origin={site.origin}
+              className="size-[20px] flex-none rounded-inner object-contain"
+              letterClassName="grid place-items-center bg-avatar text-tiny leading-none font-bold text-page"
+            />
+            {/* FRU-585: the host is on one line, cut with « … », and whole in a tooltip when it is cut. */}
+            <span className="min-w-0 shrink">
+              <CutLink
+                to={page}
+                heading={IN_A_CELL}
+                className="block font-semibold"
+                linkClassName="rounded-inner text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                {name}
+              </CutLink>
+            </span>
+            {/* The site itself, in a new tab. */}
+            <a
+              href={site.origin}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t('Open {site} in a new tab', { site: name })}
+              className="inline-flex size-control-sm flex-none items-center justify-center rounded-control text-muted hover:bg-chip hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]"
+            >
+              <NoteIcon name="open" />
+            </a>
+          </span>
+        </th>
+        <td className={`${CELL} ${GONE.notes}`}>
+          <span className={`${LINE} gap-[8px] px-[12px]`}>
+            <Counts site={site} />
+          </span>
+        </td>
+        <td className={`${CELL} ${GONE.open}`}>
+          <span className={`${LINE} px-[12px]`}>
+            <Fresh site={site} name={name} to={notesOf(workspace.id, site.id, 'new')} />
+          </span>
+        </td>
+        {seesTracker ? (
+          <td className={`${CELL} ${GONE.sent}`}>
+            <span className={`${LINE} gap-[6px] px-[12px] text-ink-soft`}>
+              <SentTo site={site} name={name} notes={notesOf(workspace.id, site.id)} />
+            </span>
+          </td>
+        ) : null}
+        <td className={`${CELL} ${GONE.who}`}>
+          <span className={`${LINE} gap-[6px] px-[12px] text-ink-soft`}>
+            <Who site={site} />
+          </span>
+        </td>
+        <td className={`${CELL} ${GONE.last}`}>
+          <span className={`${LINE} justify-end px-[12px] text-muted tabular-nums`}>
+            {site.lastNoteAt === undefined ? (
+              <None />
+            ) : (
+              <>
+                <span aria-hidden="true" title={ago(site.lastNoteAt)}>
+                  {agoShort(site.lastNoteAt)}
+                </span>
+                <span className="sr-only">{ago(site.lastNoteAt)}</span>
+              </>
+            )}
+          </span>
+        </td>
+        <td className={`${CELL} ${GONE.menu}`}>
+          <span className={`${LINE} justify-end pr-[12px]`}>
+            <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+                <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+                <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+              </svg>
+            </Menu>
+          </span>
+        </td>
+      </tr>
+      {notices.length === 0 ? null : (
+        <tr data-notices="">
+          <td colSpan={span} className={CELL}>
+            <span className="flex flex-col gap-[6px] pt-[8px] pr-[16px] pb-[10px] pl-[50px]">{notices}</span>
+          </td>
+        </tr>
+      )}
+    </tbody>
+  );
+}
+
+/**
+ * What a site says on a line of its own, under its row, to whoever sees where its notes go: a public
+ * repository (FRU-382), and a place that the tracker refuses (FRU-640).
+ */
+function noticesOf(site: Site): ReactNode[] {
+  const places = placesOf(site);
+  const notices: ReactNode[] = places
+    .filter((each) => each.private === false)
+    .map((each) => (
+      <Problem key={`${each.connector}/${each.teamId}`}>
+        {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
+          repository: each.teamId ?? '',
+        })}
+      </Problem>
+    ));
+  // FRU-640: a place that the tracker refuses keeps every note of the site from leaving.
+  if (places.some((each) => each.attention !== undefined))
+    notices.push(
+      <Problem key="attention">
+        {t('The tracker refuses a place of this site, and its notes do not leave. Open the site to change it.')}
+      </Problem>,
+    );
+
+  return notices;
+}
+
+/**
+ * The band under the table (FRU-688): the sites of the page that keep their notes in Fruitback, and
+ * the way to connect a tracker, the dialog « Add a connector » of the Connectors screen (FRU-571).
+ */
+function Untracked({ workspace, sites }: { workspace: Workspace; sites: readonly Site[] }) {
+  useLocale();
+  const [only] = sites;
+
+  return (
+    <p
+      // 20 px from each edge of the screen, as the head and the bar: the column of the screen is wider.
+      className="mx-[calc(20px_-_clamp(16px,4vw,48px))] mt-[16px] flex flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-control border border-dashed border-line px-[12px] py-[10px] text-body text-muted"
+    >
+      <Mark size={14} />
+      <span>
+        {sites.length === 1 && only !== undefined
+          ? t('{site} keeps its notes in Fruitback.', { site: siteName(only.origin) })
+          : t('{count} sites keep their notes in Fruitback.', { count: sites.length })}
+      </span>
+      <Link
+        to={`/w/${workspace.id}/connectors?new=1`}
+        className="rounded-inner font-medium text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        {t('Connect a tracker')}
+      </Link>
+    </p>
   );
 }
 
@@ -420,7 +763,6 @@ function TypedSite({ url }: { url: string }) {
     </section>
   );
 }
-
 /** The name of a tracker, and the place in it: « Linear · Design · Website » is « Linear » and the rest. */
 function placeOf(destination: Destination): { name: string; detail: string | undefined } {
   const [name, ...rest] = (destination.label ?? '').split(' · ');
@@ -436,195 +778,110 @@ function placeOf(destination: Destination): { name: string; detail: string | und
  */
 const KIND_OF_NAME: Readonly<Record<string, MarkedKind>> = { Linear: 'linear', GitHub: 'github', 'REST API': 'rest' };
 
-/** Where the notes of a site go: its first destination, and how many more a member can choose. */
-function GoesTo({ site }: { site: Site }) {
+/**
+ * Where the notes of a site go (FRU-688), on one line: the logo of each tracker (FRU-541), then the
+ * places, « Team Acme web » for one place of a Linear, « Acme web, Support » for several. A site with
+ * no tracker keeps them in Fruitback. The labels of the worker are whole in a tooltip.
+ *
+ * Notes that an address did not take yet (REST, FRU-122) add the icon of a retry in red after the
+ * places: it leads to the notes of the site, where each one is sent again.
+ */
+function SentTo({ site, name, notes }: { site: Site; name: string; notes: string }) {
   useLocale();
-  const [first, ...others] = site.destinations ?? (site.destination === undefined ? [] : [site.destination]);
-  if (first === undefined)
+  const places = placesOf(site);
+  if (places.length === 0)
     return (
       <>
-        <span className="block">{t('Kept in Fruitback')}</span>
-        <span className="block text-hint leading-[inherit] text-muted">{t('No tracker yet')}</span>
+        <Mark size={14} />
+        <span className="truncate">{t('Kept in Fruitback')}</span>
       </>
     );
-  const place = placeOf(first);
+  const named = places.map(placeOf);
   // Only a name of the table: « constructor » is not a kind, it is a key of every object.
-  const kind = Object.hasOwn(KIND_OF_NAME, place.name) ? KIND_OF_NAME[place.name] : undefined;
-  // The worker writes « Linear · Design »: the place in a Linear is a team, and its project if any.
-  const named =
-    place.detail !== undefined && place.name === 'Linear' ? t('Team {team}', { team: place.detail }) : place.detail;
-  // Notes that an address did not take yet say so where the address was: it is what to look at.
-  const late = site.undelivered ?? 0;
-  let detail = named;
-  if (late === 1) detail = t('1 not delivered yet');
-  else if (late > 1) detail = t('{count} not delivered yet', { count: late });
+  const kindOf = (place: { name: string }) =>
+    Object.hasOwn(KIND_OF_NAME, place.name) ? KIND_OF_NAME[place.name] : undefined;
+  const kinds = [...new Set(named.map(kindOf))];
+  // A place whose tracker has a mark says its place; one with no mark says its tracker too.
+  const wordsOf = (place: { name: string; detail: string | undefined }) => {
+    if (place.detail === undefined) return t(place.name);
 
+    return kindOf(place) === undefined ? `${t(place.name)} · ${place.detail}` : place.detail;
+  };
+  const [first] = named;
+  const one = named.length === 1 && first !== undefined ? first : undefined;
+  // The worker writes « Linear · Design »: the place in a Linear is a team, and its project if any.
+  const words =
+    one !== undefined && one.name === 'Linear' && one.detail !== undefined
+      ? t('Team {team}', { team: one.detail })
+      : named.map(wordsOf).join(', ');
   // FRU-574: the page of the team at Linear, when the place says the team and the worker gave its
   // page. Only an address of Linear: a link of the console never goes anywhere else.
-  const page =
-    detail === named && kind === 'linear' && first.url?.startsWith('https://linear.app/') === true
-      ? first.url
+  const [place] = places;
+  const linear =
+    one !== undefined && kindOf(one) === 'linear' && place?.url?.startsWith('https://linear.app/') === true
+      ? place.url
       : undefined;
-  const where =
-    others.length === 0
-      ? detail
-      : t('{place} and {count} more', { place: detail ?? t(place.name), count: others.length });
+  const late = site.undelivered ?? 0;
+  const lateWords = late === 1 ? t('1 not delivered yet') : t('{count} not delivered yet', { count: late });
 
   return (
     <>
-      {/* FRU-541: the logo of the tracker before its name, as in the Notes table (FRU-435). */}
-      <span className="flex items-center gap-[6px] [overflow-wrap:anywhere]">
-        {kind === undefined ? null : <ConnectorMark kind={kind} />}
-        <span className="min-w-0">{t(place.name)}</span>
-      </span>
-      {/* FRU-567: a long team or project is cut to one line, and whole in a tooltip and to a screen reader.
-          FRU-574: the team of a Linear leads to its page at Linear, in another tab. */}
-      {where === undefined ? null : (
-        <Tip tip={where} className="text-muted">
-          {page === undefined ? (
-            <span className="min-w-0 truncate text-hint leading-[inherit]">{where}</span>
-          ) : (
-            <a
-              href={page}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={t('{place}, at Linear, in a new tab', { place: where })}
-              className="min-w-0 truncate rounded-inner text-hint leading-[inherit] text-muted underline decoration-1 underline-offset-[3px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              {where}
-            </a>
-          )}
-        </Tip>
+      {kinds.map((kind) => (kind === undefined ? null : <ConnectorMark key={kind} kind={kind} />))}
+      {/* FRU-567: a long place is cut to one line, and whole in a tooltip and to a screen reader. */}
+      <Tip tip={places.map((each) => each.label ?? msg('A tracker')).join(', ')} className="min-w-0">
+        {linear === undefined ? (
+          <span className="min-w-0 truncate">{words}</span>
+        ) : (
+          <a
+            href={linear}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t('{place}, at Linear, in a new tab', { place: words })}
+            className="min-w-0 truncate rounded-inner text-ink-soft underline decoration-1 underline-offset-[3px] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {words}
+          </a>
+        )}
+      </Tip>
+      {late === 0 ? null : (
+        <Link
+          to={notes}
+          aria-label={`${lateWords}: ${t('See the notes of {site}', { site: name })}`}
+          title={lateWords}
+          className="inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]"
+        >
+          <NoteIcon name="retry" />
+        </Link>
       )}
     </>
   );
 }
 
-type SiteCardProps = {
-  workspace: Workspace;
-  site: Site;
-  manages: boolean;
-  seesTracker: boolean;
-};
-
 /**
- * The card of a site (FRU-408). Its name and « Open its page » lead to the page of the site (FRU-433), where
- * everything else is: the grid unfolds nothing under a card. « See the notes » is the Notes screen
- * with this site chosen (FRU-504).
+ * Who reads the notes of a site (FRU-688): an icon and « Members only » or « Everyone who visits »,
+ * with no name of a workspace (FRU-583). Where anyone on the page writes a note on a site that its
+ * members read (FRU-330), a pencil follows, its words in a tooltip and to a screen reader.
  */
-function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
+function Who({ site }: { site: Site }) {
   useLocale();
-  const navigate = useNavigate();
-  const name = siteName(site.origin);
-  const page = `/w/${workspace.id}/sites/${site.id}`;
-  // Every role reads the page of a site and installs Fruitback on it. The rest is of who manages them.
-  const items: MenuItem[] = [
-    { id: 'open', label: t('Open its page') },
-    { id: 'notes', label: t('See the notes') },
-    ...(manages
-      ? [
-          { id: 'statuses', label: t('Statuses') },
-          // The menu is the first time a removal is asked, and the page asks the second.
-          { id: 'remove', label: t('Remove'), danger: true },
-        ]
-      : []),
-  ];
-  const go = (id: string) => {
-    if (id === 'statuses') navigate(`${page}/statuses`);
-    else if (id === 'open') navigate(page);
-    else if (id === 'notes') navigate(notesOf(workspace.id, site.id));
-    else navigate(`${page}#${id}`);
-  };
+  const members = site.visibility === 'members';
 
   return (
-    <li
-      data-site={site.id}
-      className="flex min-w-0 flex-col gap-[14px] rounded-card border border-line bg-surface px-[20px] pt-[16px] pb-[14px]"
-    >
-      <div className="flex items-center gap-[12px]">
-        <SiteIcon
-          origin={site.origin}
-          className="size-[28px] flex-none rounded-control object-contain"
-          letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
-        />
-        {/* FRU-585: the host is on one line, cut with « … », and whole in a tooltip when it is cut. */}
-        <div className="min-w-0 flex-1">
-          <CutLink
-            to={page}
-            className="text-[17px] leading-[1.35] font-semibold"
-            linkClassName="rounded-inner text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {name}
-          </CutLink>
-        </div>
-        <span className="-my-[4px] -mr-[8px] inline-flex flex-none">
-          <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-              <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-              <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-            </svg>
-          </Menu>
-        </span>
-      </div>
-      <Counts site={site} name={name} notes={notesOf(workspace.id, site.id, 'new')} />
-      {/* Who reads and who writes (FRU-432), each a chip with its icon (FRU-566), under the counts of the
-          notes (FRU-584). FRU-330: the card says the exception only. « Members only » is the default of a
-          new site, and a worker of before, which sends no `writers`, says nothing it could be wrong about.
-          FRU-583: the chip names no workspace. */}
-      <div className="flex min-w-0 flex-wrap gap-[6px]">
-        <Access icon={site.visibility === 'members' ? 'members' : 'everyone'}>
-          {site.visibility === 'members' ? t('Members only') : t('Everyone who visits')}
-        </Access>
-        {site.visibility === 'members' && site.writers === 'anyone' ? (
-          <>
-            <span className="sr-only">, </span>
-            <Access icon="anyone">{t('Notes from anyone on the page')}</Access>
-          </>
-        ) : null}
-      </div>
-      {/* The foot of the card (FRU-432): where the notes go at the left, the last one at the right. The
-          terms are for a screen reader: the place and the moment say what they are to the eye. How the
-          notes came is on the page of the site. */}
-      <dl className="mt-auto flex items-start justify-between gap-[12px] border-t border-line pt-[12px] text-hint">
-        {seesTracker ? (
-          <div className="min-w-0">
-            <dt className="sr-only">{t('Notes go to')}</dt>
-            <dd>
-              <GoesTo site={site} />
-            </dd>
-          </div>
-        ) : null}
-        <div className="ml-auto flex-none text-right">
-          <dt className="sr-only">{t('Last note')}</dt>
-          <dd className="relative text-muted tabular-nums">
-            {site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}
-          </dd>
-        </div>
-      </dl>
-      {/* FRU-382: a public repository says so to whoever reads where the notes go, a member too. */}
-      {seesTracker
-        ? placesOf(site)
-            .filter((each) => each.private === false)
-            .map((each) => (
-              <Problem key={`${each.connector}/${each.teamId}`}>
-                {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
-                  repository: each.teamId ?? '',
-                })}
-              </Problem>
-            ))
-        : null}
-      {/* FRU-640: a place that the tracker refuses keeps every note of the site from leaving. */}
-      {seesTracker && placesOf(site).some((each) => each.attention !== undefined) ? (
-        <Problem>
-          {t('The tracker refuses a place of this site, and its notes do not leave. Open the site to change it.')}
-        </Problem>
+    <>
+      <AccessIcon icon={members ? 'members' : 'everyone'} />
+      <span className="min-w-0 truncate">{members ? t('Members only') : t('Everyone who visits')}</span>
+      {members && site.writers === 'anyone' ? (
+        <Tip tip={t('Notes from anyone on the page')} className="flex-none text-muted">
+          <span className="sr-only">, </span>
+          <AccessIcon icon="anyone" />
+          <span className="sr-only">{t('Notes from anyone on the page')}</span>
+        </Tip>
       ) : null}
-    </li>
+    </>
   );
 }
 
-/** The icons of the chips of a card, drawn as the icons of the rail: a grid of 24, a stroke of 2. */
+/** The icons of who reads and who writes, drawn as the icons of the rail: a grid of 24, a stroke of 2. */
 const ACCESS_PATHS = {
   // Two people: the members of the workspace read the notes.
   members:
@@ -635,35 +892,18 @@ const ACCESS_PATHS = {
   anyone: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
 } as const;
 
-/**
- * Who reads or who writes the notes of a site, as a chip (FRU-566): an icon, and the words cut to
- * the room of the card. A cut name is whole in a tooltip, and a screen reader reads it whole.
- */
-function Access({ icon, children }: { icon: keyof typeof ACCESS_PATHS; children: string }) {
+function AccessIcon({ icon }: { icon: keyof typeof ACCESS_PATHS }) {
   return (
-    <Tip
-      tip={children}
-      // The colour only: the merge of HeroUI keeps one `text-` class, and the size is on the words.
-      className="h-[24px] bg-chip px-[8px] text-ink-soft"
-    >
-      <svg
-        aria-hidden="true"
-        focusable="false"
-        viewBox="0 0 24 24"
-        data-access={icon}
-        className="size-[14px] flex-none"
-      >
-        <path
-          d={ACCESS_PATHS[icon]}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="min-w-0 truncate text-hint leading-none font-medium">{children}</span>
-    </Tip>
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" data-access={icon} className="size-[14px] flex-none">
+      <path
+        d={ACCESS_PATHS[icon]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -685,16 +925,15 @@ function None() {
 }
 
 /**
- * The notes of a site, the status of the card (FRU-432): how many, large, a bar of their statuses
- * that the words say again, and how many are new, which are the ones to read. FRU-570: the new ones
- * are always on a line of their own, and lead to the Notes screen with this site and « New » chosen.
+ * The notes of a site (FRU-688): a bar of their statuses, whose name says the counts in words, and how
+ * many. « Waiting for the first note » before the first one.
  */
-function Counts({ site, name, notes: newNotes }: { site: Site; name: string; notes: string }) {
+function Counts({ site }: { site: Site }) {
   useLocale();
   const notes = site.notes;
   if (notes === undefined) return <None />;
   const total = STAGES.reduce((sum, stage) => sum + notes[stage], 0);
-  if (total === 0) return <span className="text-hint text-muted">{t('Waiting for the first note')}</span>;
+  if (total === 0) return <span className="truncate text-muted">{t('Waiting for the first note')}</span>;
   const values = {
     count: total,
     new: notes.new,
@@ -709,35 +948,36 @@ function Counts({ site, name, notes: newNotes }: { site: Site; name: string; not
       : t('{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed', values);
 
   return (
-    <span className="flex flex-col items-start gap-[8px]">
-      <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
-        <span aria-hidden="true" className="text-[20px] leading-none font-semibold tabular-nums">
-          {total}
-        </span>
-        <StatusBar
-          label={label}
-          counts={{
-            new: notes.new,
-            todo: notes.todo,
-            progress: notes.progress,
-            done: notes.done,
-            closed: notes.closed,
-          }}
-        />
+    <>
+      <StatusBar label={label} counts={notes} />
+      <span aria-hidden="true" className="text-ink-soft tabular-nums">
+        {total}
       </span>
-      {notes.new === 0 ? null : (
-        <Link
-          to={newNotes}
-          aria-label={
-            notes.new === 1
-              ? t('See the new note of {site}', { site: name })
-              : t('See the {count} new notes of {site}', { count: notes.new, site: name })
-          }
-          className="rounded-inner text-hint font-semibold text-accent-strong underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          {notes.new === 1 ? t('1 new') : t('{count} new', { count: notes.new })}
-        </Link>
-      )}
-    </span>
+    </>
+  );
+}
+
+/**
+ * The new notes of a site, which are the ones to read (FRU-570): « 3 new » in red after a dot, a link
+ * to the Notes screen with this site and « New » chosen. None: a dot for the eye.
+ */
+function Fresh({ site, name, to }: { site: Site; name: string; to: string }) {
+  useLocale();
+  const fresh = site.notes?.new ?? 0;
+  if (fresh === 0) return <None />;
+
+  return (
+    <Link
+      to={to}
+      aria-label={
+        fresh === 1
+          ? t('See the new note of {site}', { site: name })
+          : t('See the {count} new notes of {site}', { count: fresh, site: name })
+      }
+      className="inline-flex min-w-0 items-center gap-[6px] rounded-inner font-medium text-accent-strong underline-offset-[3px] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      <span aria-hidden="true" className="size-[6px] flex-none rounded-pill bg-accent" />
+      <span className="truncate">{fresh === 1 ? t('1 new') : t('{count} new', { count: fresh })}</span>
+    </Link>
   );
 }
