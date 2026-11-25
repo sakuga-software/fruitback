@@ -225,7 +225,9 @@ test('the room of a screen is as wide as the column beside the bar, with the pad
     const room = await box(main);
     expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
     expectAt(room, { x: 232, y: 0, width: 1208 }, `the room of ${screen}`);
-    expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
+    // FRU-686: the title of Notes is in its head of 48 px, from the edge of the room: 20 px in.
+    if (screen === 'notes') expectAt(await box(page.locator('main h1')), { x: 252, y: 14 }, 'the title of notes');
+    else expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
   expect.soft(await styles(content, ['flex-grow', 'flex-shrink', 'flex-basis', 'min-width'])).toEqual({

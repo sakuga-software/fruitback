@@ -135,18 +135,32 @@ async function expectNoViolation(page: Page): Promise<void> {
   expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual([]);
 }
 
+/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+async function choose(page: Page, field: string, value: string): Promise<void> {
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: field, exact: true }).click();
+  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
+}
+/** FRU-686: the table or the board, from « Display ». */
+async function display(page: Page, view: string, button = 'Display'): Promise<void> {
+  await page.getByRole('button', { name: button }).click();
+  await page.getByRole('menuitemradio', { name: view, exact: true }).click();
+}
+
 test('« Board » shows a column per status of the site, in its order, and the address keeps it', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/notes`);
   await expect(page.locator('tbody tr:not(.kit-table-group)')).toHaveCount(3);
   // FRU-551: the table reads the notes by status, in its groups; the board reads them by date.
   expect(worker.asked.at(-1)?.get('order')).toBe('status');
-  const views = page.getByRole('group', { name: 'Show the notes as' });
-  await expect(views.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
-
-  await views.getByRole('button', { name: 'Board' }).click();
+  // FRU-686: the table or the board is chosen in « Display ».
+  await page.getByRole('button', { name: 'Display' }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Table', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('menuitemradio', { name: 'Board', exact: true }).click();
   await expect(page).toHaveURL(/[?&]view=board/);
-  await expect(views.getByRole('button', { name: 'Board' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Display' }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Board', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
   await expect(page.locator('table')).toHaveCount(0);
   await expect.poll(() => worker.asked.at(-1)?.has('order')).toBe(false);
   const board = page.getByRole('region', { name: 'Notes by status' });
@@ -170,7 +184,7 @@ test('« Board » shows a column per status of the site, in its order, and the a
   // A reload keeps the board; « Table » takes it out of the address.
   await page.reload();
   await expect(page.getByRole('region', { name: 'Notes by status' })).toBeVisible();
-  await page.getByRole('button', { name: 'Table' }).click();
+  await display(page, 'Table');
   await expect(page).not.toHaveURL(/view=board/);
   await expect(page.locator('tbody tr:not(.kit-table-group)')).toHaveCount(3);
 });
@@ -180,8 +194,7 @@ test('the board has the filters of the table, and a filter keeps the board', asy
   await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
   await expect(card(page, 'The headline')).toBeVisible();
 
-  await page.getByRole('button', { name: /Any status/ }).click();
-  await page.getByRole('option', { name: 'In progress', exact: true }).click();
+  await choose(page, 'Status', 'In progress');
   await expect(page).toHaveURL(/stage=progress/);
   await expect(page).toHaveURL(/view=board/);
   // The address changes before the read leaves: wait for the read, do not take the one before it.
@@ -375,7 +388,7 @@ test('in French', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('fruitback:locale', 'fr'));
   await workerWith(page, { locale: 'fr' });
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  await page.getByRole('group', { name: 'Afficher les notes en' }).getByRole('button', { name: 'Tableau' }).click();
+  await display(page, 'Tableau', 'Affichage');
   await expect(page.getByRole('region', { name: 'Notes par statut' })).toBeVisible();
   // A built-in status is named by its stage, in French; a status the team named keeps its name.
   await expect(column(page, 'Nouveau').locator('li')).toHaveText([/The headline/]);
