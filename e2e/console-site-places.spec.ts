@@ -222,7 +222,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
   return worker;
 }
 
-const card = (page: Page) => page.locator('li[data-site]').first();
+/** The row of the site on the Sites screen (FRU-688), with the line of its notices. */
+const card = (page: Page) => page.locator('tbody[data-site]').first();
 const panel = (page: Page) => page.getByRole('region', { name: `Where the notes of ${SITE} go` });
 const add = (page: Page) => panel(page).getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) });
 /** The list of the projects of the team chosen in the first list (FRU-458). */
@@ -286,9 +287,9 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
   expect(worker.sent[1]).toEqual([{ connector: 'c1', teamId: 't1' }, { connector: 'r1' }]);
   await expect(panel(page).getByText('REST API · hooks.acme.dev', { exact: true })).toBeVisible();
 
-  // Back on the grid, the card of the site says where its notes go now.
+  // Back on the table, the row of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
-  await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
+  await expect(card(page).locator('[data-column="sent"]')).toHaveText('Web, hooks.acme.dev');
 });
 
 test('a place that the tracker refuses says « Needs attention » and what to do, here and on the card of the site (FRU-640)', async ({
@@ -584,7 +585,7 @@ test('the control: with no word of the worker, the card says nothing is public (
   worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
   await page.goto(`${CONSOLE}/w/w1/sites`);
 
-  await expect(card(page).getByText('GitHub', { exact: true })).toBeVisible();
+  await expect(card(page).locator('[data-column="sent"]')).toHaveText('acme/docs');
   await expect(card(page).getByRole('alert')).toHaveCount(0);
 });
 
