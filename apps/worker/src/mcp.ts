@@ -54,7 +54,7 @@ export type McpContext = {
 };
 
 /** The version of the tools of this server: it changes when a tool changes what it takes or answers. */
-export const TOOLS_VERSION = '1';
+export const TOOLS_VERSION = '2';
 
 function answer(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return json(status, body, headers);

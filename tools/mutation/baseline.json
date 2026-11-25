@@ -41,6 +41,10 @@
       "src/note-tabs.ts": {
         "score": 100,
         "mutants": 35
+      },
+      "src/task.ts": {
+        "score": 100,
+        "mutants": 40
       }
     }
   },

@@ -1,7 +1,7 @@
 # Connect an AI agent
 
 An AI agent of your team (Claude Code on your machine, in CI, or a cloud agent) can read the notes of
-your sites, reply to them and set their status. It talks to the **remote MCP server** of your
+your sites, reply to them, set their status, and change the tasks that Fruitback keeps. It talks to the **remote MCP server** of your
 worker, `https://<your worker>/mcp`, with an agent key of your workspace. Nothing runs in the
 pages of your sites, and Fruitback calls no model: the agent is yours, with its own provider.
 
@@ -12,7 +12,7 @@ pages of your sites, and Fruitback calls no model: the agent is yours, with its 
 The owner and the admins of a workspace make its keys. A key names:
 
 - its sites, 20 at most: it reads nothing of another site, and nothing of another workspace;
-- its rights: `read`, or `write` to reply and set a status too;
+- its rights: `read`, or `write` to reply, set a status and change a task too;
 - how long it lives: 90 days unless you choose from 1 to 365. No key lives with no end;
 - `verifiedOnly`, on by default: on a site that everyone reads, the key reads only the notes of a
   known person, a member or a reviewer that your site identified. Turn it off only knowing that
@@ -26,7 +26,8 @@ its sites, choose what the agent can do and how long the key lives, then « Crea
 console shows the key once, with the line that connects Claude Code, both ready to copy.
 
 The same screen lists the keys, with when an agent last used each one (to the minute) and when it
-ends; it warns 7 days before the end. « Writes » shows the replies and the statuses a key wrote, and
+ends; it warns 7 days before the end. « Writes » shows the replies, the statuses and the changes of a
+task that a key wrote, and
 « Revoke » stops it at once: its agent is refused from its next request.
 
 The console calls `/console/workspaces/<workspace id>/agent-keys` of the worker: `POST` makes a key,
@@ -43,15 +44,48 @@ claude mcp add --transport http fruitback https://<your worker>/mcp \
 Then ask it, for example: « List the notes of the site `<site id>` with fruitback, and fix the ones
 on the pricing page. » It has these tools:
 
-| Tool                                                                 | Right | What it does                                                                                                            |
-| -------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------- |
-| `list_notes({ site, stage?, status?, since?, q?, cursor?, limit? })` | read  | The notes of a site, newest first, each whole: text, page, element, component, file and line, picture, replies, status. |
-| `get_note({ id })`                                                   | read  | One note, by the `id` that `list_notes` gives.                                                                          |
-| `notes_as_text({ site, page? })`                                     | read  | The notes of a page or of a site as Markdown, each line of a reviewer quoted.                                           |
-| `reply_to_note({ id, body })`                                        | write | A reply in the thread of the note. The reviewer reads « Agent » beside the name of the key.                             |
-| `set_note_status({ id, status })`                                    | write | A status of the site (`own:<key>`), for a note that Fruitback keeps. A note in a tracker takes its tracker's status.    |
+| Tool                                                                                     | Right | What it does                                                                                                                                        |
+| ---------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_notes({ site, stage?, status?, since?, q?, cursor?, limit?, …filters of a task })` | read  | The notes of a site, newest first, each whole: text, page, element, component, file and line, picture, replies, status, and the fields of its task. |
+| `get_note({ id })`                                                                       | read  | One note, by the `id` that `list_notes` gives.                                                                                                      |
+| `notes_as_text({ site, page? })`                                                         | read  | The notes of a page or of a site as Markdown, each line of a reviewer quoted.                                                                       |
+| `reply_to_note({ id, body })`                                                            | write | A reply in the thread of the note. The reviewer reads « Agent » beside the name of the key.                                                         |
+| `set_note_status({ id, status })`                                                        | write | A status of the site (`own:<key>`), for a note that Fruitback keeps. A note in a tracker takes its tracker's status.                                |
+| `task_choices({})`                                                                       | read  | The labels of the workspace, and the members a task can be given to, with their ids.                                                                |
+| `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`                    | write | The status, the assignee, the priority, the due day and the labels of a task that Fruitback keeps.                                                  |
 
 A key writes 30 times a minute at most.
+
+### The tasks that Fruitback keeps
+
+A note that Fruitback keeps is a task: the note of a site with no destination, or of a site that
+sends its notes to an address. `list_notes` and `get_note` give its fields
+in `task`: `assignee` (`id` and `name`), `priority` (`low`, `medium`, `high` or `urgent`), `dueOn` (a
+day, `YYYY-MM-DD`), `labels` (`id`, `name` and `color`), and `archived: true` for an archived task. A
+note in a tracker has no `task`: its tracker keeps its fields.
+
+`list_notes` filters as the list of the console does:
+
+- `assignee`: the id of a member, or `none` for the tasks of nobody;
+- `priority`: one of the four, or `none`;
+- `label`: the id of a label;
+- `due`: `overdue` (a day before today), `week` (today and the six days after it) or `none` (no
+  day). Today is `today` (`YYYY-MM-DD`, in the zone of your team), or the day of UTC with no `today`;
+- `archived: true`: the archived tasks, in place of the others.
+
+`task_choices` gives the ids these filters and `update_task` take: the labels of the workspace, and
+its members who are not guests, by their name (their address when they gave none). A key whose member does not read the members of the
+workspace gets the labels only.
+
+`update_task` changes what it is given and nothing else: `null` clears a field, and `labels` replaces
+the labels of the task. It checks everything before it writes, and refuses a member or a label that
+is not of the workspace. The fields are written first, then the status: if the status then fails,
+the answer says that the fields were saved and the status was not, so send the status again. A person sees the change at once
+in the console, and the log of the key shows it.
+
+On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status` and
+`update_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept
+before.
 
 ## Connect claude.ai, or another app, with OAuth
 

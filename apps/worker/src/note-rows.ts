@@ -19,6 +19,13 @@ import type { ForgetSelector } from './store.ts';
  * This file imports no database.
  */
 
+/**
+ * The page of a task written by hand (FRU-657), in `notes` and in the index: none. No canonical
+ * address is empty (`canonicalizePageUrl` writes a scheme), so no read of a page ever asks for it,
+ * and no pin shows the task.
+ */
+export const NO_PAGE = '';
+
 /** How many replies travel with a pin. A longer thread belongs wherever the team actually talks. */
 export const COMMENTS_PER_ISSUE = 20;
 

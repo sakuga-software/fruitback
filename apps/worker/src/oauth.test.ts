@@ -438,7 +438,7 @@ describe('the tokens', () => {
     assert.equal(listed.status, 200);
     assert.deepEqual(
       listed.body.result.tools.map((tool: any) => tool.name).toSorted(),
-      ['get_note', 'list_notes', 'notes_as_text'],
+      ['get_note', 'list_notes', 'notes_as_text', 'task_choices'],
       'read only: no write tool',
     );
 

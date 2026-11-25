@@ -74,6 +74,8 @@ export async function handleSessionNotes(request: Request, context: SessionNotes
       site,
       sites: [site],
       searchesReference: seesTracker,
+      // FRU-657: a task written by hand has no page for the panel to open, and no pin.
+      onPages: true,
     });
   } catch (error) {
     console.error(
