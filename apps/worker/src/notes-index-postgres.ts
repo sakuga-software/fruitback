@@ -38,6 +38,7 @@ import {
   noNotes,
 } from './notes-index.ts';
 import type { Database } from './postgres.ts';
+import { visitorAuthor } from './visitor-key.ts';
 import { migrated } from './postgres-migrate.ts';
 import {
   connectors,
@@ -216,6 +217,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               channel: entry.channel,
               author_kind: entry.author.kind,
               author_account_id: entry.author.account ?? null,
+              // FRU-700: a digest for a note of a visitor only; `authorOf` gives none to anybody else.
+              author_visitor: entry.author.kind === 'visitor' ? (entry.author.visitor ?? null) : null,
               ...placeColumns(entry.place),
               reference: entry.issue.identifier,
               reference_url: entry.issue.url ?? null,
@@ -300,19 +303,30 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       if (ids.length === 0) return new Map();
       const rows = await run((db) =>
         db
-          .select({ note: note_index.note_id, account: note_index.author_account_id })
+          .select({
+            note: note_index.note_id,
+            kind: note_index.author_kind,
+            account: note_index.author_account_id,
+            visitor: note_index.author_visitor,
+          })
           .from(note_index)
           .where(
             and(
               eq(note_index.workspace_id, workspace),
               eq(note_index.site_id, site),
-              eq(note_index.author_kind, 'member'),
+              inArray(note_index.author_kind, ['member', 'visitor']),
               inArray(note_index.note_id, [...new Set(ids)]),
             ),
           ),
       );
 
-      return new Map(rows.flatMap((row) => (row.account === null ? [] : [[row.note, row.account] as const])));
+      return new Map(
+        rows.flatMap((row) => {
+          if (row.kind === 'member') return row.account === null ? [] : [[row.note, row.account] as const];
+          // FRU-700: a visitor is the digest of the key of their browser, never an account.
+          return row.visitor === null ? [] : [[row.note, visitorAuthor(row.visitor)] as const];
+        }),
+      );
     },
 
     async toCheck(workspace, account) {

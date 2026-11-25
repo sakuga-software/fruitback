@@ -302,6 +302,20 @@ export const STYLES = `
   font-size: 13px;
   letter-spacing: -0.006em;
 }
+/* « You · this browser » (FRU-700): a chip of the sunken surface, after the word of the state. */
+.fruitback-thread-you {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+  color: var(--fruitback-color-text);
+  font: 500 12px/1.5 var(--fruitback-font-sans);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+@media (forced-colors: active) {
+  .fruitback-thread-you { border: 1px solid CanvasText; }
+}
 /* The silhouette of the pin, which is not in the scale and is not settable (see theme.ts). */
 .fruitback-thread-drop {
   flex: none;

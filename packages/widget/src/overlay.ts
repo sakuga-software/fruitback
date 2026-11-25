@@ -162,6 +162,12 @@ export type OverlayOptions = {
    */
   move?: (issue: NoteIssue) => Promise<boolean | 'busy' | undefined>;
   /**
+   * Whether the worker knows this reader by the key of their browser (FRU-700), and not by a session:
+   * a note `mine` then carries « You · this browser » in its head, and no verdict is offered, which
+   * takes a session. Left out: the reader is known by a session, or not at all.
+   */
+  byBrowser?: () => boolean;
+  /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
    */
@@ -984,7 +990,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     )?.focus();
   };
   const checkFor = (issue: NoteIssue): CheckFooter | undefined =>
-    options.check === undefined || DRAFTS.has(issue)
+    options.check === undefined || DRAFTS.has(issue) || options.byBrowser?.() === true
       ? undefined
       : {
           seam: options.check,
@@ -1125,6 +1131,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       checkFor(entry.issue),
       moreFor(entry.issue),
       withdrawFor(entry.issue),
+      options.byBrowser?.() === true,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1172,6 +1179,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       checkFor(entry.issue),
       moreFor(entry.issue),
       withdrawFor(entry.issue),
+      options.byBrowser?.() === true,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1586,6 +1594,7 @@ function buildThread(
   check?: CheckFooter,
   more?: MoreFooter,
   withdraw?: WithdrawFooter,
+  byBrowser = false,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1621,7 +1630,7 @@ function buildThread(
     // On the page only: a thread in the list of the page has its place in the column (FRU-312).
     ...(movable ? [handleButton(document, t)] : []),
     element(document, 'div', 'fruitback-thread-heading', [
-      element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+      element(document, 'span', 'fruitback-thread-stage', [drop, state, ...youChip(document, issue, t, byBrowser)]),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
     ]),
@@ -1662,6 +1671,16 @@ function buildThread(
   );
 
   return thread;
+}
+
+/**
+ * « You · this browser » (FRU-700): on a note the worker says is the reader's (`mine`), for a reader it
+ * knows by the key of their browser. Words, never a colour alone; the worker decides who it is.
+ */
+function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
+  if (!byBrowser || issue.mine !== true || DRAFTS.has(issue)) return [];
+
+  return [element(document, 'span', 'fruitback-thread-you', t.text('thread.youBrowser'))];
 }
 
 /** What the edits of the notes share, by note, as `ReplyFooter` (FRU-475). */

@@ -1,5 +1,6 @@
 import type { MountOptions } from './embed.ts';
 import { type FruitbackTransport, type TransportRequest, type TransportResponse, fetchTransport } from './transport.ts';
+import { VISITOR_HEADER } from './visitor-key.ts';
 
 /**
  * The calls of the widget to the worker (FRU-509): the transport, the token and the headers, written
@@ -7,7 +8,7 @@ import { type FruitbackTransport, type TransportRequest, type TransportResponse,
  */
 
 /** What a call needs of the options of `init`. */
-export type WorkerOptions = Pick<MountOptions, 'endpoint' | 'clientId' | 'identityToken' | 'transport'>;
+export type WorkerOptions = Pick<MountOptions, 'endpoint' | 'clientId' | 'identityToken' | 'transport' | 'visitor'>;
 
 /**
  * The transport of this mount: the host's, or `fetch` from this page.
@@ -20,11 +21,15 @@ function transportFor(options: WorkerOptions): FruitbackTransport {
   return options.transport ?? fetchTransport;
 }
 
-/** A call: its address, its method, and its body. `contentType` goes with a body. */
-export type WorkerRequest = Omit<TransportRequest, 'headers'> & { contentType?: string };
+/**
+ * A call: its address, its method, and its body. `contentType` goes with a body. `asAuthor`: the call
+ * sends a note, so the key of the browser is made first when there is none (FRU-700).
+ */
+export type WorkerRequest = Omit<TransportRequest, 'headers'> & { contentType?: string; asAuthor?: true };
 
 /**
- * Sends one call, with the token of the host when it gives one.
+ * Sends one call, with the token of the host when it gives one, and the key of a visitor's browser
+ * when it has one (FRU-700).
  *
  * The token is asked for at each call: a short-lived token that expired mid-session would otherwise
  * refuse every later call until the page is reloaded. It goes in a header and never in a body: a note
@@ -40,17 +45,21 @@ export function callWorker(
 ): Promise<TransportResponse | undefined>;
 export async function callWorker(
   options: WorkerOptions,
-  { contentType, ...request }: WorkerRequest,
+  { contentType, asAuthor, ...request }: WorkerRequest,
   stillWanted: () => boolean = () => true,
 ): Promise<TransportResponse | undefined> {
   const token = await options.identityToken?.();
   if (!stillWanted()) return undefined;
+  // FRU-700: the key of this browser, with each call once a note made it. Only a mount of `init`
+  // with no token and no transport of a host has one.
+  const visitor = asAuthor === true ? options.visitor?.ensure() : options.visitor?.current();
 
   return transportFor(options)({
     ...request,
     headers: {
       ...(contentType === undefined ? {} : { 'Content-Type': contentType }),
       ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+      ...(visitor === undefined ? {} : { [VISITOR_HEADER]: visitor }),
     },
   });
 }

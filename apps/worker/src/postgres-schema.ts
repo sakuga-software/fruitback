@@ -930,6 +930,9 @@ export const note_index = pgTable(
     channel: text('channel'),
     author_kind: text('author_kind').notNull(),
     author_account_id: text('author_account_id'),
+    // FRU-700: for a note of a visitor, the digest of the key of the browser that sent it
+    // (`visitor-key.ts`), never the key. Empty for every other note, and for a note of before.
+    author_visitor: text('author_visitor'),
     place: text('place').notNull(),
     connector_id: text('connector_id'),
     reference: text('reference'),

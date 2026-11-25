@@ -305,6 +305,7 @@ export const ENGLISH = {
   'withdraw.failedWait': 'Too many requests just now. Try again in a minute.',
   'withdraw.failedSignedOut': 'Your session has ended. Sign in again, then try again.',
   'withdraw.refused': 'This note can no longer be withdrawn: the team marked it done or closed it.',
+  'thread.youBrowser': 'You · this browser',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found. The position is approximate.',
   'thread.uncertain': 'Element found by its position, not by its identity. The page may have changed under the pin.',
