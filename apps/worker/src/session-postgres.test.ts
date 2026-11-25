@@ -10,6 +10,7 @@ import { REFUSED_SINCE_POSTGRES, type WorkerEnv, hasSessions, readConfig } from 
 import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import {
+  type Hold,
   NO_REAL_POSTGRES,
   createPgliteDatabase,
   createRealDatabase,
@@ -317,35 +318,40 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
 describe('the sessions of a member end while one of them refreshes, on two connections (FRU-149)', () => {
   const IN_FLIGHT = 'ends the successor of a refresh that was in flight';
   const identity = { subject: 'alice', workspace: 'ws_acme' };
-  const inFlight = (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
-    it(IN_FLIGHT, async (store) => {
-      const now = Date.now();
-      const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
-      assert.ok(redeemed.ok);
-      const [tokenHash, successorHash] = await Promise.all([
-        digest(redeemed.session.refreshToken),
-        digest('a-successor'),
-      ]);
+  const inFlight =
+    (hold: Hold) =>
+    (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
+      it(IN_FLIGHT, async (store) => {
+        const now = Date.now();
+        const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
+        assert.ok(redeemed.ok);
+        const [tokenHash, successorHash] = await Promise.all([
+          digest(redeemed.session.refreshToken),
+          digest('a-successor'),
+        ]);
 
-      const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
-      // The trigger holds the successor inside the transaction of the refresh: the end starts then.
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      await store.endSessionsOf(identity, now + 2);
+        const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
+        // The refresh holds its chain, and its successor waits at the gate: the end starts then. The
+        // refresh goes on once the end waits for the chain (FRU-719: not after a time).
+        await hold.reached();
+        const ending = store.endSessionsOf(identity, now + 2);
+        await hold.release(ending);
+        await ending;
 
-      assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
-      const after = await store.rotateSession({
-        tokenHash: successorHash,
-        successorHash: await digest('another'),
-        now: now + 3,
-        graceMs: 60_000,
+        assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
+        const after = await store.rotateSession({
+          tokenHash: successorHash,
+          successorHash: await digest('another'),
+          now: now + 3,
+          graceMs: 60_000,
+        });
+        assert.notEqual(after.outcome, 'rotated', 'the successor of the refresh is live after the sessions ended');
       });
-      assert.notEqual(after.outcome, 'rotated', 'the successor of the refresh is live after the sessions ended');
-    });
   const outcomeOf = (change: { after?: string; from: string; to: string }, open: () => Promise<Database>) =>
     outcomeOnChangedStore({
       file: 'session-postgres.ts',
       factory: 'createPostgresSessionStore',
-      cases: inFlight,
+      cases: { gated: inFlight },
       name: IN_FLIGHT,
       change,
       held: { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' },
@@ -390,40 +396,45 @@ describe('the sessions of a member end while one of them refreshes, on two conne
 describe('a person renames themself while their extension refreshes, on two connections (FRU-249)', () => {
   const IN_FLIGHT = 'gives the new name to the successor of a refresh that was in flight';
   const identity = { subject: 'alice', name: 'Alice', workspace: 'ws_acme' };
-  const inFlight = (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
-    it(IN_FLIGHT, async (store) => {
-      const now = Date.now();
-      const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
-      assert.ok(redeemed.ok);
-      const [tokenHash, successorHash] = await Promise.all([
-        digest(redeemed.session.refreshToken),
-        digest('a-successor'),
-      ]);
+  const inFlight =
+    (hold: Hold) =>
+    (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
+      it(IN_FLIGHT, async (store) => {
+        const now = Date.now();
+        const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
+        assert.ok(redeemed.ok);
+        const [tokenHash, successorHash] = await Promise.all([
+          digest(redeemed.session.refreshToken),
+          digest('a-successor'),
+        ]);
 
-      const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
-      // The trigger holds the successor inside the transaction of the refresh: the rename starts then.
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      await store.renameSessionsOf('alice', 'Alice Martin', now + 2);
+        const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
+        // The refresh holds its chain, and its successor waits at the gate: the rename starts then. The
+        // refresh goes on once the rename waits for the chain (FRU-719: not after a time).
+        await hold.reached();
+        const renaming = store.renameSessionsOf('alice', 'Alice Martin', now + 2);
+        await hold.release(renaming);
+        await renaming;
 
-      assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
-      const after = await store.rotateSession({
-        tokenHash: successorHash,
-        successorHash: await digest('another'),
-        now: now + 3,
-        graceMs: 60_000,
+        assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
+        const after = await store.rotateSession({
+          tokenHash: successorHash,
+          successorHash: await digest('another'),
+          now: now + 3,
+          graceMs: 60_000,
+        });
+        assert.equal(after.outcome, 'rotated');
+        assert.equal(
+          after.outcome === 'rotated' ? after.identity.name : undefined,
+          'Alice Martin',
+          'the successor of the refresh kept the name of before',
+        );
       });
-      assert.equal(after.outcome, 'rotated');
-      assert.equal(
-        after.outcome === 'rotated' ? after.identity.name : undefined,
-        'Alice Martin',
-        'the successor of the refresh kept the name of before',
-      );
-    });
   const outcomeOf = (change: { from: string; to: string }, open: () => Promise<Database>) =>
     outcomeOnChangedStore({
       file: 'session-postgres.ts',
       factory: 'createPostgresSessionStore',
-      cases: inFlight,
+      cases: { gated: inFlight },
       name: IN_FLIGHT,
       change,
       held: { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' },
