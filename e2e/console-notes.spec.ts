@@ -923,12 +923,14 @@ test('a member reads « Not delivered yet » and sends nothing again', async ({ 
   await expect(page.getByRole('button', { name: 'Send again' })).toHaveCount(0);
 });
 
-test('the Sites screen leads here: « see where every note went »', async ({ page }) => {
+test('the Sites screen leads here: « See the notes » of the menu of a site (FRU-504, FRU-688)', async ({ page }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites`);
-  const link = page.getByRole('link', { name: 'see where every note went' });
-  await expect(link).toHaveAttribute('href', '/w/w1/notes');
-  await link.click();
+  // The sentence « see where every note went » under the cards went with them (FRU-688): each row
+  // leads to the notes of its site, from its menu.
+  await page.getByRole('button', { name: 'More for staging.acme.dev', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'See the notes' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?site=s1`);
   await expect(page.locator('main h1')).toHaveText('Notes');
 });
 
