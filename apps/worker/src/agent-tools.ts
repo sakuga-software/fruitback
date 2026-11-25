@@ -1,4 +1,4 @@
-import { type FeedbackWords, type NoteIssue, type TaskIssue, feedbackText } from '@fruitback/shared';
+import { type FeedbackWords, type NoteIssue, type TaskIssue, feedbackText, tasksText } from '@fruitback/shared';
 import { type AccountStore, type AgentWrite, can } from './accounts.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import type { ClientConfig, ClientPolicy, ClientResolution } from './clients.ts';
@@ -95,6 +95,9 @@ const WORDS: FeedbackWords = {
 
 const STAGE_NAMES = ['new', 'todo', 'progress', 'done', 'closed'];
 
+/** FRU-658: the heading of the tasks written by hand in `notes_as_text`. */
+const TASKS_HEADING = 'Tasks with no page';
+
 /** The most members `task_choices` gives, as the menu of the console reads them. */
 export const MAX_TASK_MEMBERS = 200;
 
@@ -157,7 +160,7 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
     },
     {
       name: 'notes_as_text',
-      description: `The notes of one page, or of a whole site (${MAX_TEXT_NOTES} at most), as Markdown: each line a reviewer wrote is quoted.`,
+      description: `The notes of one page, or of a whole site (${MAX_TEXT_NOTES} at most) with its tasks written by hand, as Markdown: each line a reviewer wrote is quoted.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -509,14 +512,30 @@ function notesAsText(
       const page = listed.notes.find((note) => note.note === issue.note.id)?.pageUrl ?? `#${position}`;
       byPage.set(page, [...(byPage.get(page) ?? []), shown(issue)]);
     }
-    const text = [...byPage]
-      .map(([page, notes]) =>
+    // FRU-658: the tasks written by hand of the site, after the pages, under a heading of their own.
+    const handwritten = (
+      await Promise.all(
+        listed.notes
+          .filter((note) => note.pageUrl === NO_PAGE)
+          .map((note) => context.accounts.readTask(site.workspace, site.id, note.note)),
+      )
+    ).flatMap((task) => (task === undefined ? [] : [seesTracker ? task : withoutTracker(task, task.task.id)]));
+    const text = [
+      ...[...byPage].map(([page, notes]) =>
         feedbackText(
           notes.map((issue) => ({ issue })),
           { pageUrl: page, words: WORDS },
         ),
-      )
-      .join('\n');
+      ),
+      ...(handwritten.length === 0
+        ? []
+        : [
+            tasksText(
+              handwritten.map((issue) => ({ issue })),
+              { heading: TASKS_HEADING, words: WORDS },
+            ),
+          ]),
+    ].join('\n');
 
     return {
       ok: true,

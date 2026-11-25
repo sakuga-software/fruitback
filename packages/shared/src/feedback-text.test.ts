@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { noteFixture, noteIssueFixture } from './note.fixture.ts';
-import { type FeedbackTextEntry, type FeedbackWords, feedbackText } from './feedback-text.ts';
+import { type FeedbackTextEntry, type FeedbackWords, feedbackText, tasksText } from './feedback-text.ts';
+import { createTask } from './task.ts';
 
 const PAGE = 'https://staging.acme.dev/pricing';
 /** The words of the widget in English, which the caller gives: the contract holds none. */
@@ -298,5 +299,82 @@ describe('the lines that a note leaves out, and the ones it keeps whole', () => 
     const issue = { ...base, comments: [{ id: 'c1', author: 'Léa', body: 'Seen.' }] } as unknown as typeof base;
 
     assert.match(text([{ issue }]), /\nReply from Léa\n> Seen\.\n$/);
+  });
+});
+
+describe('the tasks written by hand as text (FRU-658)', () => {
+  const task = (
+    fields: Partial<Parameters<typeof createTask>[0]> = {},
+    comments?: { id: string; author?: string; body: string; createdAt: string }[],
+  ) => ({
+    id: '41',
+    identifier: 'FB-41',
+    title: 'Write the release notes',
+    stage: 'todo' as const,
+    stateName: '',
+    updatedAt: '2026-11-24T10:00:00.000Z',
+    ...(comments === undefined ? {} : { comments }),
+    task: createTask({
+      id: 'task_1',
+      createdAt: '2026-11-24T10:00:00.000Z',
+      title: 'Write the release notes',
+      ...fields,
+    }),
+  });
+
+  it('writes the number, the status, the author, the title and the text quoted, and the replies', () => {
+    const issue = task(
+      { text: 'Every change of 0.8.0.\n## Not a heading', reporter: { name: 'Ana  Diaz', verified: true } },
+      [{ id: 'c1', author: 'Ben', body: 'Started.', createdAt: '2026-11-25T08:00:00.000Z' }],
+    );
+
+    assert.equal(
+      tasksText([{ issue, status: { key: 'own:todo', name: 'Next', stage: 'todo' } }], {
+        heading: 'Tasks with no page',
+        words: WORDS,
+      }),
+      [
+        '# Tasks with no page',
+        '',
+        '## 1. FB-41 — Next',
+        '',
+        '- By: Ana Diaz · 2026-11-24',
+        '',
+        '> Write the release notes',
+        '>',
+        '> Every change of 0.8.0.',
+        '> ## Not a heading',
+        '',
+        'Reply from Ben · 2026-11-25',
+        '> Started.',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('writes a task with no text and no author, and a heading alone for no task', () => {
+    assert.equal(
+      tasksText([{ issue: task() }, { issue: task({ reporter: { email: 'ana@acme.dev' } }) }], {
+        heading: 'Tasks',
+        words: WORDS,
+      }),
+      [
+        '# Tasks',
+        '',
+        '## 1. FB-41 — todo',
+        '',
+        '- Written: 2026-11-24',
+        '',
+        '> Write the release notes',
+        '',
+        '## 2. FB-41 — todo',
+        '',
+        '- By: ana@acme.dev · 2026-11-24',
+        '',
+        '> Write the release notes',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(tasksText([], { heading: ' Tasks\nnone ', words: WORDS }), '# Tasks none\n');
   });
 });

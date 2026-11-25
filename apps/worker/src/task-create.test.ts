@@ -243,6 +243,11 @@ describe('a task written by hand (FRU-657)', () => {
     );
     const text = await tool('notes_as_text', { site });
     assert.equal(text.isError ?? false, false);
+    // FRU-658: the tasks written by hand come after the pages, under a heading of their own.
+    assert.match(
+      text.structuredContent.text,
+      /# Tasks with no page\n\n## 1\. FB-\d+ — new\n\n- (By|Written): .*\n\n> For the agent\n>\n> Fix the footer\.\n/,
+    );
     // A task is in no thread of a page: the tools of a note answer that it is none.
     const reply = await tool('reply_to_note', { id: made.body.id, body: 'On it.' });
     assert.equal(reply.isError, true);
