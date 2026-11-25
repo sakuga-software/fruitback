@@ -772,7 +772,7 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(title(1)).toBeFocused();
 
-  // A closed list keeps j to choose an option: the focus stays on it (review of #942).
+  // A closed list keeps j to choose an option: the focus stays on it (raised in review, FRU-685).
   const status = page.getByRole('button', { name: /Any status/ });
   await status.focus();
   await page.keyboard.press('j');
@@ -832,7 +832,7 @@ test('« Send again » is off while it is on its way', async ({ page }) => {
   const again = row(page, 'The order form').getByRole('button', { name: 'Send again' });
   await again.click();
   await expect(again).toBeDisabled();
-  // The word beside it says it is on its way (review of #942).
+  // The word beside it says it is on its way (raised in review, FRU-685).
   await expect(row(page, 'The order form').getByText('Sending…', { exact: true })).toBeVisible();
 });
 

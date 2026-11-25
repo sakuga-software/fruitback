@@ -292,7 +292,7 @@ export function PlaceCell({
           <ConnectorMark kind={place.kind} />
         </span>
         <span className="sr-only">{name}</span>
-        {/* On its way again: the word says so, beside the arrow that is off (review of #942). */}
+        {/* On its way again: the word says so, beside the arrow that is off (raised in review, FRU-685). */}
         <span
           aria-hidden="true"
           className={`truncate font-medium ${sending ? 'text-muted' : 'text-accent-strong'}`}
