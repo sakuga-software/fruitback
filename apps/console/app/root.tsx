@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { type Left, call, checkTab, onLeft, onReachability, onSignedOut } from './api';
+import { followAppearance } from './appearance';
 import '@fontsource-variable/inter';
 import './app.css';
 import { ready, t } from './i18n';
@@ -38,6 +39,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         {/* The address of the worker of this instance, before the bundle reads it (FRU-222): `instance.ts`. */}
         <script src="/config.js"></script>
+        {/* The appearance a person chose (FRU-694), on <html> before the first paint: `app/appearance.ts`. */}
+        <script src="/appearance.js"></script>
         <Meta />
         <Links />
       </head>
@@ -71,6 +74,8 @@ export default function Root() {
   useEffect(() => {
     document.documentElement.lang = tag;
   }, [tag]);
+  // The appearance chosen (FRU-694) follows the system under « System », and the other tabs.
+  useEffect(() => followAppearance(), []);
 
   const gone = useGone();
 
