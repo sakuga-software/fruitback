@@ -228,7 +228,9 @@ test('the room of a screen is as wide as the column beside the bar, with the pad
     // FRU-686: the title of Notes is in its head of 48 px, from the edge of the room: 20 px in.
     // My account is a page of the shell of the settings (FRU-692): its title is under the bar of the
     // shell, after its navigation. `console-account.spec.ts` holds it.
-    if (screen === 'notes') expectAt(await box(page.locator('main h1')), { x: 252, y: 14 }, 'the title of notes');
+    // FRU-691: Members has the same head.
+    if (screen === 'notes' || screen === 'members')
+      expectAt(await box(page.locator('main h1')), { x: 252, y: 14 }, `the title of ${screen}`);
     else if (screen !== 'account')
       expectAt(await box(page.locator('main h1')), { x: 280, y: 40 }, `the title of ${screen}`);
   }

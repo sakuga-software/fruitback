@@ -17,9 +17,8 @@ const PAGES = [
   '/w/w1/sites/s1',
   '/w/w1/sites/s1/statuses',
   // FRU-686: Notes has the head of 48 px of its mockup, « Notes » at 14 px beside its tabs:
-  // console-notes.spec.ts measures it.
+  // console-notes.spec.ts measures it. FRU-691: Members has it too, console-members.spec.ts.
   '/w/w1/connectors',
-  '/w/w1/members',
   '/admin',
   '/admin/workspaces',
   '/admin/users',

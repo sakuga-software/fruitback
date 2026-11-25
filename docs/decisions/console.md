@@ -95,44 +95,59 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
 - **The members and the invitations come from the worker's routes of the organization plugin**
   (FRU-104): `members.tsx` lists the members to whoever may read them, and the invitations that
-  wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
+  wait to an owner or an admin, who resends, cancels and changes a role there. A guest sees their own row only, as
   the worker answers them nothing more. **The front door looks for an invitation first**
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
   not on the setup that makes a workspace of their own.
-  **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
-  (FRU-247): a form named « Invite someone » with each field under its label, and the table of the
-  people (760 px at the least, which scrolls in its frame on a phone). **The form is in a dialog**
-  (FRU-565, Mathieu), where the mockup draws it on one line above the table: « Invite », the action
-  of the head of the page, opens the `Dialog` of the kit, one field a line, focus in « Email ». Escape,
-  « Cancel » and the close button close it, and what is typed stays. A refusal is said under its
-  fields, and the dialog stays open; a sent invitation closes it, and the block of its link is on the
-  page, where « Resend » puts its own.
-  **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
-  never an hour (« Today », « Yesterday », « 3 days ago », then the day; « Not seen yet » for who
-  was not seen since it came), read beside the members: the table does not wait for it, and a day
-  that arrives moves nothing of a row (the room of « Not seen yet » is kept), and the days of a read
-  made before, late, are dropped. Who
-  else reads the screen, or a worker that refuses the days, gets the day somebody joined (« Joined »).
-  **The guest of one site** (FRU-250, Q3): « Guest, one site » is the first role of the form when
-  the workspace has a site, and the list « Site » (the hosts of its sites) shows for that role only;
-  the invitation sends `sites: [id]`, and a « Resend » the sites of the invitation. « Sites » names
-  the site of a guest and of an invitation of a guest, « Every site » for the other roles. **The form
-  opens on « Member »**, where the mockup draws « Guest, one site » chosen: the list of the sites
-  arrives after the screen, and a form that opened on a guest would grow a field under a press, and
-  would send a role nobody chose. A site the worker refuses (removed meanwhile) is said, and the list
-  is read again. **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour).
-  **No legend of the roles** under the table (FRU-437, Mathieu), though the mockup draws one: the
-  name of a role says enough, and the legend took room under every table. **Kept, though the mockup
-  draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
-  (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
-  every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
-  kept ». What is asked under a row stays in what is seen of a table that scrolls. **A read made
-  again keeps the rows that are shown** (FRU-271): « Loading… » in their place took the table away
-  for the time of the read, so what is under it jumped and no action of a row was there to press.
-  `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
-  the keyboard, the contrasts and axe.
-  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Pending invitations »,
-  each under its heading with its count, as the mockup draws one table for both. The table stopped
+  **The screen is the mockup « Membres » of the redesign** (FRU-691, `maquette-membres.html` attached
+  to the ticket; before, screen 12 of the mockup of 2026-10-13, FRU-247). **The rules, in short:**
+  - A screen of the bar, at `/w/<id>/members`, not a page of the shell of the settings: the mockup
+    draws it so, and the entry « Members » of the shell leads here.
+  - A head of 48 px from one edge of the screen to the other, « Members » at 14 px and « Invite » at its
+    right (`MembersHead`, as the head of Notes). No sentence under the title.
+  - Two tabs, « Members » and « Invitations », each with its count, and the search at the right (240
+    px, « / » gives it the focus). A tab is a `LineTab` of the kit, a button that says whether it is
+    pressed, as the tabs of Notes. A member and a guest have the tab « Members » alone.
+  - One dense table a tab (`MembersList`), from one edge to the other, heads of 32 px, **rows of 36
+    px, never on two lines**: what is longer is cut with « … ». The columns of the members are
+    Name (the initial of 24 px, the name, « (you) »), Email, Role, Sites (« Every site » with the globe,
+    or the tile and the host of the site of a guest), Last active, Joined and « … »; the ones of the
+    invitations are Email, Role, Sites, Message (« Invitation sent » or « kept »), Invited, Expires and
+    « … ». The table keeps 880 px and scrolls in its frame on a phone.
+  - **The role is a list in its row** for an owner or an admin: « Member » and « Admin », the roles of
+    `update-member-role` less « Owner », and « Guest » kept for a guest. An owner row and one's own row
+    are words: the worker refuses an admin the change of an owner, and a workspace changes its owner
+    from the administration of the instance (FRU-283). A guest made a member or an admin reads every
+    site, so that change asks twice. A refusal is said under the row.
+  - « … » holds « Remove from workspace » for a member, and « Resend invitation », « Copy invite link »
+    (when no message left, FRU-269) and « Cancel invitation » for an invitation. A removal and a
+    cancel ask twice under their row (`Confirmation`), and « Keep it » gives focus back to « … ».
+  - **« Invite people »**, a dialog of 480 px (`Dialog` with `size="form"` and `framed`): « Emails »
+    takes several addresses, cut at a comma, a semicolon, a space or a line (`invite-addresses.ts`);
+    the role as three cards (`RadioCards`), each with what it does; « Sites », every site for a member
+    or an admin, the list of the sites for a guest; in its foot « Copy invite link », « Cancel » and
+    « Send N invites », which counts the valid addresses by the rule of the worker, each once. What is
+    no address is said under the field and stays in it. The invitations go one after the other; the
+    ones the worker refused stay in the field, each said with its cause, and the dialog closes when
+    nothing is left. Focus is kept inside, Escape and the close button close it, and focus goes back
+    to « Invite ».
+  - **Not copied from the mockup**: a colour per person (the initial is on `avatar`, the one token of
+    a person), « Now » and « 2 h ago » (the worker keeps a day, never an hour, FRU-249), a picture in
+    the fields.
+
+  Kept from before: **the form opens on « Member »**, where a guest needs the sites, which arrive after
+  the screen; « Guest » is offered when the workspace has a site (« Add a site first » else), and a
+  site the worker refuses (removed meanwhile) is said, and the list read again. **« Last active » is
+  for an owner or an admin** (FRU-249, Q7): a day of UTC and never an hour (« Today », « Yesterday »,
+  « 3 days ago », then the day; « Not seen yet » for who was not seen since it came), read beside the
+  members: the table does not wait for it, its column is there from the start, and the days of a read
+  made before, late, are dropped. A worker that refuses the days leaves the column empty. The block
+  that gives the link of an invitation is under the tabs, one sentence an address. A worker with no
+  mailer sent nothing, so its rows say « Invitation kept ». **A read made again keeps the rows that
+  are shown** (FRU-271). No legend of the roles (FRU-437). `e2e/console-members.spec.ts` reads the
+  values and the boxes of the mockup at 1440 px, 390 and 320 px, the keyboard, the contrasts and axe.
+  **Two lists, in pages of 50, and a search** (FRU-496): « Members » and « Invitations », each in its
+  tab with its count (FRU-691). The table stopped
   at a hundred members and a hundred invitations and said nothing: a 101ᵗʰ member could not be
   found nor removed. The worker gives the members a page at a time (`limit`, `offset`, `total`) and
   searches them (`q`, the name or the address); it gives every invitation that waits, which the
@@ -141,6 +156,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   list longer than a page. The search is not in the address. A member removed is read again with
   its page: the next member moves into it. `e2e/console-members-many.spec.ts` holds it, on a
   workspace of 501 members and 300 invitations.
+
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
