@@ -165,7 +165,8 @@ is their one source; the console and the extension copy them, and `app/tokens.te
 block, so each utility reads `var(--color-…)`: a surface with a dark scheme (the extension) sets the
 tokens again in its own file, under `prefers-color-scheme: dark`, and `app/shared-theme.test.ts`
 holds the theme to that shape. The tokens of one surface alone go in a file of that surface,
-imported after the shared theme.
+imported after the shared theme: for the extension, `apps/extension/src/theme.css` (FRU-679), with
+its dark scheme.
 
 ## The tokens of the first boards (2026-10-07)
 

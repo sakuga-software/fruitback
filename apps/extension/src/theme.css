@@ -1,0 +1,144 @@
+/*
+  The Tailwind theme of the extension (FRU-679): the shared theme of Fruitback
+  (packages/shared/tailwind/theme.css, FRU-677), then the tokens that the extension alone has, then
+  its dark scheme. A sheet of the extension writes the name of a token and never a value.
+
+  The shared theme already names five tokens of the extension with the same value: --color-line,
+  --color-accent-strong, --color-ink, --color-ink-soft (the secondary text) and the five statuses
+  with their edge (--color-status-*). The extension takes those, and its dark scheme sets them again.
+
+  The greys, the statuses, the shadows and the radii are those of the widget
+  (packages/widget/src/theme.ts), which are the zinc of the console since FRU-334, and so is the
+  accent since FRU-372: the red #dd2c27 of the console and of the widget, one accent everywhere.
+  src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
+  background.
+
+  No preflight: the pages of the extension are drawn on the defaults of the browser, and the reset of
+  Tailwind would change them. entrypoints/popup/style.css imports this file, and every page of the
+  extension loads that sheet first. The other sheets read it with @reference, which writes nothing.
+*/
+@import 'tailwindcss/theme.css' layer(theme);
+@import '@fruitback/shared/tailwind/theme.css' theme(static);
+
+@theme static {
+  --color-surface: #fff;
+  /* A quiet block, and the background of the page of the extension. */
+  --color-surface-raised: #fafafa;
+  --color-surface-sunken: #f4f4f5;
+  /* A mono block, and the row that is open. A cream until FRU-334, the raised grey now. */
+  --color-surface-warm: #fafafa;
+  --color-text: #18181b;
+  /* The muted text of the console: 5.28:1 on the surface, 4.80:1 on the sunken surface. */
+  --color-muted: #6b6b74;
+  /* The rule between the rows of a table. */
+  --color-line-row: #f4f4f5;
+  /* The edge of a field: the field border of the console, 3.42:1 on the surface. */
+  --color-line-strong: #8a8a93;
+  /*
+    The edge of a secondary button and of a key. 2.56:1 on the surface: the label of the button says
+    what it is, so the edge is not the only cue. A field takes --color-line-strong.
+  */
+  --color-line-control: #a1a1aa;
+  /* The search field of the page, and a switch that is off. */
+  --color-line-soft: #d4d4d8;
+  /* The red of the console and of the widget (FRU-372): white on it 4.70:1, on the strong one 6.47:1. */
+  --color-accent: #dd2c27;
+  --color-on-accent: #fff;
+  /* The chip of the widget (its --fruitback-color-chip), darker than the chip of the console. */
+  --color-chip-dark: #3f3f46;
+  --color-on-chip-dark: #fff;
+  /* The capture capsule and the Save button are --color-ink, in both schemes. */
+  --color-on-ink-muted: #d4d4d8;
+  --color-success: #15803d;
+  /* The edge of « Looks fixed », and the dot that says a session is attached: 3.30:1 on the surface. */
+  --color-success-line: #16a34a;
+  /*
+    A problem and its remedy: the tint of the accent, kept because it says a problem in the colour
+    of the extension (FRU-334 moves the row that is chosen to --color-surface-sunken).
+  */
+  --color-alert-surface: #fef2f2;
+  --color-alert-line: #fca5a5;
+  --color-alert-text: #b91c1c;
+  /* The line between two notes of « To check » (FRU-300, FRU-606). */
+  --color-ready-divider: #e4e4e7;
+  --color-selection: #fecaca;
+  /* The tile of a site that is on. */
+  --color-tile-on: #2f4f3a;
+  --color-on-tile: #fff;
+  /* The dot of the account, and the tile of a site nobody added (FRU-293). */
+  --color-avatar-surface: #e4e4e7;
+  --color-on-avatar: #3f3f46;
+  /* The words of a problem, under its title. */
+  --color-alert-body: #3f3f46;
+  /* The ring of a drop, and the number on done and closed: white. */
+  --color-on-status: #fff;
+  /* The number on new, to do and in progress, the three light fills (FRU-334): black. */
+  --color-on-status-new: #18181b;
+  --color-on-status-todo: #18181b;
+  --color-on-status-progress: #18181b;
+  /* A note whose element is gone: a neutral grey, no longer the brown of « closed » (FRU-334). */
+  --color-unplaced: #71717a;
+  /* The knob of a switch, on the accent and on the grey of off. */
+  --color-knob: #fff;
+  /* The tab that is chosen; the popup; the side panel. */
+  --shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);
+  --shadow-popup: 0 8px 28px rgba(24, 24, 27, 0.14);
+  --shadow-panel: -8px 0 24px rgba(24, 24, 27, 0.06);
+  /* The drop of a status in a list, and the knob of the switch of a table. */
+  --shadow-drop: 0 2px 6px rgba(24, 24, 27, 0.22);
+  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --radius-control: 6px;
+  --radius-field: 8px;
+  /* A main action and a tile. */
+  --radius-action: 10px;
+  /* The high action, an alert, a card of the page. */
+  --radius-card: 12px;
+  --radius-panel: 14px;
+  --radius-pill: 999px;
+  /* The system font of the extension: system-ui first, where the shared theme starts with -apple-system. */
+  --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/*
+  No mock-up draws a dark scheme. This one is derived: the zinc scale of the widget from its other
+  end (900, 800, 700), and the dark accent of the widget (FRU-372): a red lighter than the accent,
+  under dark text, every pair measured by the test. The brown fills of before (#431407, #2a1d14) are
+  the greys of the scale now (FRU-334): a problem keeps its line and its title in the red.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #18181b;
+    --color-surface-raised: #27272a;
+    --color-surface-sunken: #2e2e33;
+    --color-surface-warm: #1f1f23;
+    --color-text: #f4f4f5;
+    --color-muted: #a1a1aa;
+    --color-ink-soft: #d4d4d8;
+    --color-line: #3f3f46;
+    --color-line-row: #27272a;
+    --color-line-strong: #8a8a93;
+    --color-line-control: #71717a;
+    --color-line-soft: #52525b;
+    /*
+      No red holds white text at 4.5:1 and is also readable as a link on a dark surface: #dd2c27 is
+      3.44:1 on #18181b. The dark accent of the widget, a lighter fill with dark text on it.
+    */
+    --color-accent: #ec6a65;
+    --color-accent-strong: #f08a85;
+    --color-on-accent: #18181b;
+    --color-chip-dark: #52525b;
+    --color-success: #4ade80;
+    --color-success-line: #4ade80;
+    --color-alert-surface: #27272a;
+    --color-alert-line: #991b1b;
+    --color-alert-text: #f08a85;
+    --color-ready-divider: #3f3f46;
+    --color-selection: #7f1d1d;
+    --color-avatar-surface: #3f3f46;
+    --color-on-avatar: #f4f4f5;
+    --color-alert-body: #d4d4d8;
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-popup: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --shadow-panel: -8px 0 24px rgba(0, 0, 0, 0.4);
+  }
+}
