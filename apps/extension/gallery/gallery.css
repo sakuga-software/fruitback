@@ -1,41 +1,38 @@
 /*
   The frame of the gallery (FRU-523), around the screens. Every rule is under `.gallery-`: the sheets
   of the extension come first, and nothing here can change what a screen looks like.
+
+  Tailwind writes the rules (@apply, FRU-679) on the theme of the extension, read with @reference.
+  A story of the widget loads no sheet of the extension: a colour of the frame keeps its fallback.
 */
+@reference '../src/theme.css';
+
 body.gallery-all {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  background: var(--color-surface-sunken, #f4f4f5);
+  @apply min-w-0 m-0 p-0;
+  /* With @reference, Tailwind writes var(--color-surface-sunken, #f4f4f5): the same fallback. */
+  @apply bg-surface-sunken;
 }
 
 .gallery-frame {
-  overflow: hidden;
-  border-radius: 12px;
+  @apply overflow-hidden rounded-[12px];
   box-shadow:
     0 0 0 1px var(--color-line-soft, rgb(0 0 0 / 8%)),
     0 8px 24px rgb(0 0 0 / 8%);
 }
 
 .gallery-frame-popup {
-  width: 380px;
-  background: var(--color-surface);
+  @apply w-[380px] bg-surface;
 }
 
 .gallery-frame-welcome {
-  width: 900px;
-  min-height: 700px;
-  background: var(--color-surface-raised);
+  @apply w-[900px] min-h-[700px] bg-surface-raised;
 }
 
 .gallery-frame-panel {
-  width: 400px;
-  height: 900px;
-  overflow-y: auto;
-  background: var(--color-surface);
+  @apply w-[400px] h-[900px] overflow-y-auto bg-surface;
 }
 
 /* The panel fills its window: here its window is the frame. */
 .gallery-frame-panel .side-panel {
-  min-height: 100%;
+  @apply min-h-full;
 }
