@@ -1,14 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import type { Note } from '@fruitback/shared';
-import { noteFixture } from '@fruitback/shared/note.fixture';
-import type { handleRequest } from './app.ts';
 import { mutatedModule } from './conformance.fixture.ts';
-import { WORKER, type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import type { World } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresNoteStore } from './notes-postgres.ts';
-import { createPairing, redeemPairing } from './session.ts';
 import { VISITOR_HEADER, visitorDigestOf } from './visitor-key.ts';
+import { type Handle, KEY_A, KEY_B, aVisitorSite } from './visitor-site.fixture.ts';
 
 /**
  * A visitor with no account is known by the key of their browser (FRU-700): their notes are `mine`
@@ -18,84 +14,7 @@ import { VISITOR_HEADER, visitorDigestOf } from './visitor-key.ts';
  * it: an `Origin`, the id of the site, and the key of the browser in `X-Fruitback-Visitor`.
  */
 
-type Handle = typeof handleRequest;
-
-const open = worlds();
-const ORIGIN = 'https://acme.dev';
-const PAGE = 'https://acme.dev/pricing';
-
-/** Two keys as the widget makes them: 32 bytes in base64url. */
-const KEY_A = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-const KEY_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
-
-async function sessionOf(world: World, account: string, workspace: string): Promise<string> {
-  const { code } = await createPairing(world.sessions, { subject: account, workspace });
-  const redeemed = await redeemPairing(world.sessions, code, world.env.FRUITBACK_IDENTITY_SECRET as string);
-  assert.ok(redeemed.ok);
-
-  return redeemed.session.accessToken;
-}
-
-/** A site that everyone reads and anyone writes on, and a member, Bob, of its workspace. */
-async function aSite(handle?: Handle) {
-  const world = await open();
-  const store = createPostgresNoteStore(world.database);
-  const alice = await signInTo(world, 'alice@acme.dev');
-  const workspace = await workspaceIn(world, alice.token, 'Acme');
-  const site = (await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'everyone', writers: 'anyone' }))
-    .id;
-  const bob = await signInTo(world, 'bob@acme.dev');
-  await memberOf(world, workspace, bob.id, 'member');
-  const bobToken = await sessionOf(world, bob.id, workspace);
-
-  /** A call of the page: the key of the browser when given, a session of the extension when given. */
-  const call = (method: string, path: string, who: { key?: string; token?: string } = {}, body?: unknown) => {
-    const headers = {
-      ...(who.key === undefined ? {} : { [VISITOR_HEADER]: who.key }),
-      ...(who.token === undefined ? {} : { Authorization: `Bearer ${who.token}` }),
-    };
-    if (handle === undefined) {
-      return callOn(
-        world,
-        method,
-        path,
-        { origin: ORIGIN, headers, ...(body === undefined ? {} : { body }) },
-        { store },
-      );
-    }
-
-    return handle(
-      new Request(`${WORKER}${path}`, {
-        method,
-        headers: { Origin: ORIGIN, ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
-      world.env,
-      { clientIp: '198.18.2.1', ...world.context, store },
-    );
-  };
-
-  const noteOf = (id: string, text = 'The button is too small.'): Note =>
-    noteFixture({ id, text, page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
-
-  const send = async (note: Note | Note[], who: { key?: string; token?: string } = {}) => {
-    const sent = await call('POST', '/feedback', who, note);
-    assert.equal(sent.status < 300, true, await sent.clone().text());
-  };
-
-  /** The pins of `PAGE` as this reader reads them, by the id the widget gave each note. */
-  const read = async (who: { key?: string; token?: string } = {}) => {
-    const answer = await call('GET', `/feedback?url=${encodeURIComponent(PAGE)}&client=${site}`, who);
-    assert.equal(answer.status, 200, await answer.clone().text());
-    const { issues } = (await answer.json()) as { issues: Record<string, any>[] };
-
-    return new Map(issues.map((issue) => [issue.note.id as string, issue]));
-  };
-  const mine = async (who: { key?: string; token?: string } = {}) =>
-    [...(await read(who))].flatMap(([id, issue]) => (issue.mine === true ? [id] : [])).sort();
-
-  return { world, store, workspace, site, bobToken, send, read, mine, noteOf };
-}
+const aSite = (handle?: Handle) => aVisitorSite(handle === undefined ? {} : { handle });
 
 const visitorColumn = async (world: World) =>
   rowsOf(world.database, 'SELECT note_id, author_kind, author_visitor FROM note_index ORDER BY note_id');
@@ -160,6 +79,16 @@ describe('a visitor known by the key of their browser (FRU-700)', () => {
     assert.equal(pin?.withdrawable, undefined);
   });
 
+  it("marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session", async () => {
+    for (const stage of ['done', 'closed']) {
+      const { send, mine, moveTo, noteOf } = await aSite();
+      const issue = await send(noteOf('vk_a'), { key: KEY_A });
+      await moveTo(issue, stage);
+
+      assert.deepEqual(await mine({ key: KEY_A }), [], stage);
+    }
+  });
+
   it('changes nothing for a member: their notes are theirs by their account, whatever key comes with it', async () => {
     const { world, bobToken, send, mine, noteOf } = await aSite();
     // The member sends with a key too: their note is theirs by their account, and keeps no digest.
@@ -220,6 +149,17 @@ describe('the guards of the key of a browser, each planted out (FRU-700)', () =>
         await send(noteOf('vk_bad'), { key: 'not-a-key' });
 
         return (await mine({ key: 'not-a-key' })).length === 0;
+      },
+    },
+    {
+      guard: "a note done is not a visitor's",
+      file: 'app.ts',
+      from: "reader.by === 'account' || open.has(note)",
+      to: 'true',
+      holds: async ({ send, mine, moveTo, noteOf }) => {
+        await moveTo(await send(noteOf('vk_a'), { key: KEY_A }), 'done');
+
+        return (await mine({ key: KEY_A })).length === 0;
       },
     },
     {

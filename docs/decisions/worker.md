@@ -1713,6 +1713,9 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   of the key for this site. A session wins over a key sent with it. It answers `by: 'account'` or
   `by: 'browser'`, and the read offers an edit or a withdrawal to an account only until FRU-701 and
   FRU-702.
+- **A visitor's note is `mine` while it is open** (`EDITABLE_STAGES`). `mine` on a note done asks its
+  author for a verdict (`checkOffered`, and the tab « To check » of the list), and the route of a
+  verdict takes a session (FRU-294): a visitor would be asked for what the worker refuses.
 - **Only `app.ts` imports `visitorDigestOf`**, and hands it to the routes as `visitorOf` of
   `CallerChecks`. A copy of `visitor-key.ts` with a guard taken out then reaches every route, and
   `visitor-key.test.ts` plants each guard out that way.

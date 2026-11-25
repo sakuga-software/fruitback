@@ -1953,8 +1953,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   and the extension carries a session: the worker knows those readers another way.
 - **The worker decides who it is; the widget shows it.** A note the read says is `mine`, read with no
   `identified`, carries « You · this browser » after the word of its state (`byBrowser` of the
-  overlay, `.fruitback-thread-you`). Such a reader is offered no verdict (FRU-603): the route of a
-  verdict takes a session.
+  overlay, `.fruitback-thread-you`), in the heading that wraps: at 320 px it goes to a line of its own.
+  The worker says `mine` to a visitor on an open note only, so such a reader is never asked for a
+  verdict (FRU-603), which takes a session.
 - **The key names nobody.** It only tells the notes of this browser from the others. SECURITY.md says
   what it opens, and docs/privacy.md what is kept of it.
 

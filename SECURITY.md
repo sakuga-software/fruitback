@@ -2510,8 +2510,10 @@ them by a key that their browser holds, and by nothing else.
   for a note of a visitor only. Never the key. The same key gives another digest on another site, so
   a digest read from the database opens nothing elsewhere.
   test:`keeps a digest that names the site, never the key`.
-- What it opens. Only the notes that this browser left on this site, and today only the mark
-  `mine` on them in `GET /feedback`. No edit and no withdrawal (`editable` and `withdrawable` stay
+- What it opens. Only the notes that this browser left on this site, while they are open (`new`,
+  `todo`, `progress`), and today only the mark `mine` on them in `GET /feedback`. A note done asks
+  its author for a verdict, which takes a session, so it is nobody's on a browser.
+  test:`marks a note of this browser as nobody's once the team marked it done or closed: a verdict takes a session`. No edit and no withdrawal (`editable` and `withdrawable` stay
   for a session). test:`offers a visitor no edit and no withdrawal yet, on a note that is mine`.
 - What it does not. A key that is absent, or not of the shape the widget makes, is no key: no digest
   is kept with the note, and a read gets no `mine`. A note of another browser is never `mine`.

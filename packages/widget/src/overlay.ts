@@ -163,8 +163,8 @@ export type OverlayOptions = {
   move?: (issue: NoteIssue) => Promise<boolean | 'busy' | undefined>;
   /**
    * Whether the worker knows this reader by the key of their browser (FRU-700), and not by a session:
-   * a note `mine` then carries « You · this browser » in its head, and no verdict is offered, which
-   * takes a session. Left out: the reader is known by a session, or not at all.
+   * a note `mine` then carries « You · this browser » in its head. Left out: the reader is known by a
+   * session, or not at all.
    */
   byBrowser?: () => boolean;
   /**
@@ -990,7 +990,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     )?.focus();
   };
   const checkFor = (issue: NoteIssue): CheckFooter | undefined =>
-    options.check === undefined || DRAFTS.has(issue) || options.byBrowser?.() === true
+    options.check === undefined || DRAFTS.has(issue)
       ? undefined
       : {
           seam: options.check,
@@ -1630,7 +1630,9 @@ function buildThread(
     // On the page only: a thread in the list of the page has its place in the column (FRU-312).
     ...(movable ? [handleButton(document, t)] : []),
     element(document, 'div', 'fruitback-thread-heading', [
-      element(document, 'span', 'fruitback-thread-stage', [drop, state, ...youChip(document, issue, t, byBrowser)]),
+      element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+      // FRU-700: after the state, in the heading that wraps, so a narrow thread puts it on a line of its own.
+      ...youChip(document, issue, t, byBrowser),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
     ]),
@@ -1645,6 +1647,8 @@ function buildThread(
   // An attribute and not `:has()`: a browser with no `:has()` drops the rule, and the cross would
   // fall to a second line again.
   if (movable) head.dataset.fruitbackMovable = '';
+  // FRU-700: the state keeps its width, so the chip stands right after it. An attribute, as above.
+  if (head.querySelector('.fruitback-thread-you') !== null) head.dataset.fruitbackYou = '';
 
   thread.append(
     head,
