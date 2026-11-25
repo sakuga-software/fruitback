@@ -605,7 +605,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   FRU-299. `src/side-panel.ts` holds the parts, with no `browser`.
 - **The click on the icon keeps the popup.** The background sets
   `setPanelBehavior({ openPanelOnActionClick: false })` at install and at each update. The panel
-  opens from « Show all notes in a sidebar » of the popup, and later from the preference « Open
+  opens from « Open sidebar » of the popup (FRU-695), and later from the preference « Open
   notes in the sidebar » (FRU-302).
 - **`openPanel` is called in the click, before any `await`.** Both browsers open a panel only in a
   gesture of the person; an `await` first drops it. On Chrome it opens the global panel of the
@@ -840,16 +840,16 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 
 ### The rules, in short
 
-- **On screen 3, an entry of the menu « ⋯ » of the site** (FRU-599, Mathieu, 2026-11-05): « Hide the
+- **On screen 3, an entry of the menu of the site** (FRU-599, Mathieu, 2026-11-05; in the foot since FRU-695): « Hide the
   widget on this site », then « Show the widget on this site » while it is hidden. **On the screen of
   a rule, a square button of one icon beside « Change »** (FRU-590): « Hide Fruitback on this page »,
   an eye, an eye with a slash while pressed; its name stays the same, and `aria-pressed` says the
   state. Hidden, the widget leaves every tab of that **origin**; the rule stays on, keeps its access,
   and the other origins of a wildcard keep the widget. Shown again, it comes back with no prompt and
   no reload.
-- **No switch on screen 3** (FRU-599): until FRU-590 there were two, the site's and this one, and
-  on a site of a workspace they read as the same thing. « Stop reviewing this site » of the menu
-  turns the rule off, in every browser of the account (FRU-72); hiding the widget is here, in this
+- **One switch on screen 3, the site's** (FRU-599, FRU-695): until FRU-590 there were two, the site's
+  and this one, and on a site of a workspace they read as the same thing. The switch of the card turns
+  the rule off, in every browser of the account (FRU-72); hiding the widget is in the menu, in this
   browser.
 - **Kept per origin in `chrome.storage.local`, under `hiddenOrigins`**, a list of origins
   (`src/page-visibility.ts`). It is no credential and no rule: it is not in the copy of the rules in
@@ -1281,24 +1281,38 @@ Web Store (it installs from there, so its id is the same), and Safari.
   account's (FRU-238) names its `workspaces`, each with the role held there, and each site says which
   it is of. A site of a workspace the answer does not list is dropped; counts that are not five whole
   numbers are dropped.
-- **Screen 3 (FRU-298, FRU-599), a site turned on here, by its own origin: a launcher**, as the
-  board P1 of FRU-598 draws it. The site, « On · {workspace} », a mark that says it is on (an
-  antenna, `role="img"`, « Fruitback is on for this site ») and the menu « ⋯ » of the kit
-  (`menuButton`: `role="menu"`, the arrows, Home, End, Escape). The menu holds « Hide the widget on
-  this site » (FRU-444), « Stop reviewing this site » (the rule off, with « Your notes are kept »:
-  the access stays, so the words claim no more), « Change where notes go » once the worker gives a
-  role the lists, and « All settings for this site ». Then « Sent to », the mark of the provider, the
-  provider, its team and its project cut with « … », and a pencil for a role that may change it
-  (FRU-530), which opens « Where notes go » (below). Then « Leave a note », the tall button of the kit, with « or press Alt Shift F on the
-  page » from `commands.getAll()` (no line without a shortcut; the signs of Chrome on macOS, `⌥⇧F`,
-  are one key each). Last, « Show all notes in a sidebar », with « {n} open notes » (New, To do and
-  In progress of the site, « No open note » at 0, « 99+ » above 99) and « {n} to check » (`toCheck`,
-  an account's only, hidden at 0) under it, plural by `Intl.PluralRules`; it opens the side panel on
-  the tab, in the click (FRU-296). The popup is as high as what it holds. A wildcard of previews
-  keeps the screen of before: a turn off there turns off every site the rule covers. Off, the site,
-  « ⋯ » and « Turn on ».
+- **Screen 3 (FRU-298, FRU-599, FRU-695), a site turned on here, by its own origin**, as the mock-up
+  of 2026-11-25 draws it (`popup-mockup.html` of FRU-695), at the radius and the heights of the
+  console: a card of 8, a control of 6, a field of 32, « Leave a note » of 40, a line of 34. The head of
+  48 names the workspace after the mark (a chip; once the worker lists the workspaces of an account and
+  the console is known, a menu of them, each opening its notes in the console: the popup is about the
+  site of the tab, whose workspace is fixed). Then the site in a card: the tile, the host, « On ·
+  {workspace} · {n} open notes » (« No open note » at 0, « 99+ » above 99) after a green dot that says
+  it is on (`role="img"`, « Fruitback is on for this site »), and the switch « Fruitback on this site »,
+  which turns the rule off (« Your notes are kept »: the access stays) and on. Then « Sent to », the
+  mark of the provider, the provider and its place cut with « … », and a chevron: for a role that may
+  change it, it opens « Where notes go » (below); for another, the screen locked (FRU-600); none when
+  neither. The chevron is the button, and its target covers the field. Then « Leave a note », with the
+  keys of `commands.getAll()` inside it (`aria-hidden`, said by `aria-keyshortcuts`: its name stays its
+  words; none without a shortcut). Then « On this page » across the popup, below. The foot of 44 at the
+  bottom: « Console » for an account (the person and « Sign out » for a pairing, FRU-319), the guide,
+  and the menu of the site (`menuButton` of the kit, opening upwards): « Hide the widget on this site »
+  (FRU-444) and « All settings for this site ». The popup is 380 × 580; off or hidden, as high as what
+  it holds. A wildcard of previews keeps the screen of before: a turn off there turns off every site the
+  rule covers. Off, the card and « Turn on ». The other screens keep the head of the kit (52 px).
+- **« On this page » (FRU-695) asks the widget of the tab, as the side panel does** (FRU-299): the
+  command `notes`, no worker and no cache, the same notes as the pins. A widget still reading is asked
+  again 4 times, 600 ms apart; then the popup says why it has none, in the words of the panel. A note is
+  one line of 34: the round of its stage (`stageRing`, the colour a team chose), its stage in words for
+  a screen reader, the note cut by the sheet (whole in the DOM and in `title`), and its age as the
+  mock-up writes it (« 40m », « 3h », « 2d », « 1w », a date past four weeks; `Intl.NumberFormat`
+  narrow units, so « 40min » and « 2j » in French). Six lines at most, then « {n} more in the
+  sidebar ». A click sends `focus-note`, which scrolls to the pin and opens its thread, and the popup
+  goes; a page that does not answer keeps the popup and says so. « Open sidebar » opens the side panel
+  in the click (FRU-296), and « {n} to check » (`toCheck`, an account's only, hidden at 0) sits beside
+  it. Hidden on this page, the section is left out: the page has no widget to read.
 - **« Where notes go » is a screen of the popup (FRU-600)**, as the board P1b of FRU-598 draws it:
-  the pencil and the entry of « ⋯ » open it, and Back goes to screen 3 with nothing saved. One card
+  the chevron of « Sent to » opens it (FRU-695), and Back goes to screen 3 with nothing saved. One card
   per place, in a `radiogroup`: Fruitback (« No tracker, the notes stay here ») and each source the
   worker lists (« Connected · {place} »). The chosen card shows its lists (the team or the
   repository, then the project). Save stays disabled until the place is whole; a refusal of the
@@ -1307,12 +1321,11 @@ Web Store (it installs from there, so its id is the same), and Safari.
   4 s; a pointer or the focus on it holds the time. « Notes already sent stay where they are. »:
   the worker moves no note. A role with no right to change it sees the screen locked, with the
   place, « Only an owner or an admin of {workspace} can change where the notes of this site go. »
-  and « Copy a message for an admin »; the entry of « ⋯ » then reads « Where notes go ».
+  and « Copy a message for an admin »; the chevron of « Sent to » is then named « Where notes go ».
 - **What the worker says of the site is added after the screen is drawn**: the switch does not wait
   for the worker. The lines come from `GET /session/sites` (`offerFor`), as screen 2 reads them; a
-  worker that does not answer leaves them out rather than zeros. The counts of the page are no longer
-  in the popup: they live in the side panel (FRU-299). The command `counts` stays in the bridge, and
-  the popup no longer asks it.
+  worker that does not answer leaves them out rather than zeros. The notes of the page are the widget's
+  (`notes`, FRU-695, above). The command `counts` stays in the bridge, and the popup no longer asks it.
 - **The popup asks the widget of its tab, and only that one** (`tab-command.ts`): `tabs.sendMessage`
   to the isolated world, which takes a command from a page of this extension only (no `sender.tab`,
   this extension's id), and posts it to the main world, where the widget the extension mounted
@@ -2572,7 +2585,7 @@ when one answers. Node prints a warning about the type of `e2e/bench.ts`, and ru
   a notarised download: no archive goes to a store as for Chrome and Firefox.
 - **No side panel on Safari.** `entrypoints/sidepanel/` is excluded from the Safari build
   (`manifest.exclude`), so its manifest has neither `side_panel` nor the `sidePanel` permission. The
-  panel falls back as it does on a browser with no panel: « Show all notes in a sidebar » of the
+  panel falls back as it does on a browser with no panel: « Open sidebar » of the
   popup and the button of the widget open the list of the page (`openPanelOrPage`,
   `openPanelForTab`), and « Open notes in the sidebar » is not drawn in the preferences.
 - **The manifest tells Safari its minimum, 16.4** (`browser_specific_settings.safari`, set by the hook

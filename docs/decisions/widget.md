@@ -425,8 +425,16 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     « Note 2, in progress: the note », with the number.
   - **The dock is one capsule** (FRU-303, mock-up of 2026-10-20), 24 px from the corner, on the
     surface, with the border, the round ends and the shadow of the mock-up. In it, in this order:
-    the chip of the detached notes (« 1 detached », in the brown of « closed »), the list, the gear,
-    and the launch button. Held by `e2e/dock.spec.ts` on computed styles, with the animations off.
+    the chip of the detached notes (« 1 detached », in the brown of « closed »), the list, the counts
+    of the page by status (FRU-696), the gear, and the launch button. Held by `e2e/dock.spec.ts` on
+    computed styles, with the animations off.
+    - **The counts by status** (FRU-696, mock-up of 2026-11-25): the round of each stage that has a
+      pin on the page (`createStageRing`) and how many, in the order of the stages, 12 px of the
+      muted ink. Not a control: a drawing named « 2 New, 1 In progress » (`role="img"`). A draft has
+      no stage and no count; a page with no pin has none at all. The overlay puts them after the list
+      (`createOverlay({ dock })`), and keeps them as it draws its pins. The capsule keeps its round
+      ends and its targets of 44 px (FRU-303): the mock-up draws a rectangle of 32 px controls, which
+      would take the targets under 44 px.
     - **Every control in it is 44 px**, and draws the shape of the mock-up inside a transparent
       border: 36 px for the list, the gear, the chip and the way out of a capture, 40 px for the
       launch button. The capsule is then the 52 px of the mock-up, and no target is under 44 px.
@@ -469,10 +477,28 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 - **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
   held by `e2e/thread.spec.ts` on computed styles.
-  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
-    to the store, the cross), the note (its text, who and when, the lines of mono), the replies.
-    344 px wide (FRU-304), a border of 1 px, 14 px of corner and the shadow of the thread. The
-    colour of the status is the drop beside its word.
+  - **The mock-up of 2026-11-25 (FRU-696)**: a head of 40 px behind a rule, then the conversation,
+    then « Technical details » folded, then the field to reply on one line. 360 px wide, a border of
+    1 px, the corner of 10 px of a modal of the console (`radius-md`) and the shadow of the thread;
+    the radii of the widget (6, 8, 10) are those of the console. 12 px around each part.
+    - **The head**: the handle (below), the status in a chip of 24 px (the edge and the corner of a
+      control, the round of its stage as the list draws it, `createStageRing`, then its word), the way
+      out to the ticket, the menu of the author and the cross, each 26 px drawn and 44 px to press.
+      **The status is read only**: no route of the worker and no message of the protocol change a
+      status from a page; the chevron of the mock-up waits for FRU-718.
+    - **The way out is the mark of its tracker, the identifier and the sign of a new tab**
+      (« DEV-004 »): the mark of Linear (simple-icons, CC0) or of GitHub (Phosphor) when `trackerOf`
+      reads the address, none otherwise. Its name is « DEV-004, in a new tab ».
+    - **The conversation**: the note is the first message, then each reply, all of one shape: the
+      initial of who wrote in a round of 22 px (white on the chip), the name in the ink, what the
+      worker knows of them after a dot, the age in the muted ink (the day in its title), and the text
+      aligned under the name. No « Replies » title: the list keeps its name for a screen reader.
+    - **« Technical details »**, folded under the conversation, a native `details`: its summary is a
+      button for the keyboard and says whether it is open. It holds the lines of mono (below). It is
+      open when the host shows the selectors (`showSelectors`, the setting « Show CSS selectors »),
+      and a thread built again keeps it as the person left it, with the focus on its summary.
+    - **The field to reply is one line**, in a row of 34 px with the edge of a field and « Send » of
+      26 px inside it; it grows with the text to four lines (`field-sizing`), Enter sends.
   - **It opens around its element, never on it** (FRU-421, proposal D of 2026-10-23): under the
     element, above it (clear of the drop), on its end side, then on its start side, 14 px off its
     frame. It takes the first side that keeps it whole in the window and covers no other drop, else
@@ -498,11 +524,11 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   - **The age of the status is not in the head** (FRU-419). It is in the title of the word of the
     status, « In Progress depuis le 23/10/2026 », from the last change the store reports
     (`updatedAt`). The age of the note stays under the note, in its byline.
-  - **The lines of mono show with the selectors only** (FRU-349, FRU-419): the selector the note
-    carries, then « <HeroBanner> · src/components/Hero.tsx:42 » from its `source`. Both follow the
-    `showSelectors` option and the setting « Show CSS selectors » of the extension; before FRU-419
-    the source showed always. A reviewer reads the note: these lines are for a developer. 12 px of
-    mono, in the muted ink, with no box, and selectable.
+  - **The lines of mono are folded under « Technical details »** (FRU-349, FRU-419, FRU-696): the
+    selector the note carries, then « <HeroBanner> · src/components/Hero.tsx:42 » from its `source`.
+    The `showSelectors` option and the setting « Show CSS selectors » of the extension open the fold;
+    before FRU-696 they showed or hid the lines. A reviewer reads the note: these lines are for a
+    developer. 12 px of mono, in the muted ink, with no box, and selectable.
   - **The bubble moves by its handle** (FRU-420), the grip of Phosphor (`dots-six-vertical-bold`)
     at the start of the head, 28 px drawn and 44 px to press. Only the handle moves it, so the text
     stays selectable everywhere else. A pointer drags it (Pointer Events and `setPointerCapture`;
@@ -521,14 +547,11 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note »:
     the mock-up names it « Close », and two crosses of the widget can be on screen. The cross is
     28 px drawn and 44 px to press.
-  - **The link is the identifier and an arrow, « ACM-142 → »**, in a chip of the sunken surface, 44 px
-    to press. The widget does not know which store is behind the worker (FRU-31), so it does not
-    write « in Linear ». A store with no address of an issue has no chip.
-  - **« Replies »**, in 11 px capitals, above the replies. **No reply, no section** (FRU-419):
-    neither the title nor a sentence that says there is none. The field to reply stays, and its
-    placeholder says enough. The first reply brings the title and the list back. Each reply has
-    the initial of who wrote it in a round of 24 px, then « **Léa** · 1 day ago » in 11 px, then its
-    text in 13 px.
+  - **The link is the identifier** (FRU-696, above), 44 px to press. The widget does not name the
+    store in words (FRU-31): the mark says it when the address is a Linear's or a GitHub's. A store
+    with no address of an issue has no link.
+  - **No reply, no section** (FRU-419): no sentence that says there is none. The field to reply
+    stays, and its placeholder says enough. The first reply brings the list back.
   - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
     « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
   - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a

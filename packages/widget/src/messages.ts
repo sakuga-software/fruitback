@@ -312,9 +312,11 @@ export const ENGLISH = {
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found. The position is approximate.',
   'thread.uncertain': 'Element found by its position, not by its identity. The page may have changed under the pin.',
-  // The identifier and an arrow, in a chip (FRU-256, FRU-304): the widget does not know the name of
-  // the store behind the worker. A message all the same, so that a language can put a word around it.
-  'thread.link': '{identifier} →',
+  // The name of the way out to the ticket (FRU-696): its identifier, then that it opens a new tab. The
+  // mark of its tracker and the sign of a new tab are drawings.
+  'thread.link': '{identifier}, in a new tab',
+  // The fold under the conversation of a thread (FRU-696): the selector, the component and the file.
+  'thread.technical': 'Technical details',
   // FRU-332: the files of a sent note, as its tracker keeps them. The widget shows no file.
   'thread.attachments': { one: '{count} attachment', other: '{count} attachments' },
   'thread.attachmentsIn': 'in {identifier}',

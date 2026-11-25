@@ -45,6 +45,11 @@ const WANTED: Record<string, string> = {
   stackPlus: 'stack-plus-bold',
   // « ⋯ », the menu of the author in the head of a thread (FRU-605).
   more: 'dots-three-bold',
+  // The head and the fold of a thread (FRU-696): the way out to the ticket, and « Technical details ».
+  external: 'arrow-square-out-bold',
+  caret: 'caret-right-bold',
+  code: 'code-bold',
+  github: 'github-logo-fill',
 };
 
 type IconifyInfo = {

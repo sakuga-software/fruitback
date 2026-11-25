@@ -499,47 +499,148 @@ body.popup-page {
 }
 
 /*
-  3 · Site on (FRU-298, FRU-599): a launcher. 18 px above, 20 around, 16 between the blocks. The site
-  with its state and its menu « ⋯ », « Sent to », « Leave a note » and its keys, then the side panel
-  with what waits. The popup is as high as what it holds: no frame half empty.
+  3 · Site on (FRU-298, FRU-599, FRU-695), as the mock-up of 2026-11-25 draws it: the radius and the
+  heights of the console (a card of 8, a control of 6; a field of 32, « Leave a note » of 40, a line
+  of 34). 12 px around and between the blocks. The site in a card with its switch, « Sent to »,
+  « Leave a note » with its keys, then « On this page » across the popup, and the foot at the bottom.
+  380 × 580, as every screen; off or hidden, the popup is as high as what it holds.
 */
-.popup.popup-site-on {
+.popup.popup-site-on[data-state] {
   @apply min-h-0;
 }
 
 .popup-screen-3 .popup-body {
-  @apply gap-[16px] pt-[18px] px-[20px] pb-[20px];
+  @apply flex-none gap-[12px] p-[12px];
 }
 
-.popup .site-row {
-  @apply flex items-center gap-[12px];
+/*
+  The head of screen 3 (FRU-695): 48 px, the workspace after the mark, the dot of the account of 24.
+  The other screens keep the head of the kit, as their mock-up of 2026-10-20 measures it.
+*/
+.popup-screen-3 .popup-head {
+  @apply h-[48px] gap-[8px] pr-[6px] pl-[12px];
 }
 
-.popup .site-row .kit-site {
-  @apply flex-auto min-w-0;
+.popup-screen-3 .popup-head:has(.popup-workspace) .kit-brand {
+  @apply me-0;
 }
 
+.popup-screen-3 .popup-head .kit-avatar {
+  @apply ms-auto;
+}
+
+.popup-screen-3 .popup-head .kit-avatar-dot {
+  @apply size-[24px] text-[11px];
+}
+
+.popup .popup-workspace {
+  @apply ms-[6px] box-border inline-flex h-[26px] max-w-[180px] min-w-0 items-center gap-[6px] rounded-control bg-surface-sunken px-[6px] text-[12px] leading-none font-medium text-text;
+}
+
+.popup .popup-workspace-menu {
+  @apply min-w-0;
+}
+
+.popup .popup-workspace-menu .kit-menu-trigger.popup-workspace {
+  @apply w-auto border-0 py-0;
+  min-height: 26px;
+}
+
+.popup .popup-workspace-menu .kit-menu-list {
+  @apply right-auto left-0;
+}
+
+.popup .popup-workspace-face {
+  @apply inline-flex min-w-0 items-center gap-[6px];
+}
+
+.popup .popup-workspace-tile {
+  @apply flex size-[14px] flex-none items-center justify-center rounded-[4px] bg-text text-[8px] font-bold text-surface;
+}
+
+.popup .popup-workspace-tile::before {
+  content: attr(data-initial);
+}
+
+.popup .popup-workspace-name {
+  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
+}
+
+.popup .popup-workspace-caret {
+  @apply size-[12px] flex-none;
+}
+
+/* An icon of the popup (FRU-599): 18 px, in the colour of its words. */
 .popup .popup-icon {
-  @apply w-[18px] h-[18px];
+  @apply h-[18px] w-[18px];
 }
 
-/* The site is on: a mark of the size of « ⋯ », in the green of a site that works. */
-.popup .site-on-mark {
-  @apply flex-none box-border flex items-center justify-center w-[32px] h-[32px] border border-success-line rounded-action text-success;
+/* The site, in a card: the tile of 28, the host, the state under it, the switch at the end. */
+.popup .site-card {
+  @apply flex items-center gap-[10px] rounded-field border border-line px-[12px] py-[10px];
 }
 
-/* The menu « ⋯ » of the kit (FRU-599): over the screen, under its button, at the end of the line. */
+.popup .site-card .kit-site {
+  @apply min-w-0 flex-auto gap-[10px];
+}
+
+.popup .site-card .kit-tile {
+  @apply size-[28px] rounded-control text-[15px];
+}
+
+.popup .site-card .kit-site-words {
+  @apply gap-[4px];
+}
+
+.popup h1.kit-site-host {
+  @apply text-[13px] leading-[1.4] font-semibold;
+  letter-spacing: 0;
+}
+
+.popup .site-state-line {
+  @apply flex min-w-0 items-center gap-[6px];
+}
+
+.popup .site-state-line .kit-site-state {
+  @apply min-w-0 overflow-hidden text-[12px] leading-[1.4] text-ellipsis whitespace-nowrap text-muted;
+}
+
+.popup .site-on-dot {
+  @apply size-[6px] flex-none rounded-pill bg-line-strong;
+}
+
+.popup .site-on-dot[role='img'] {
+  @apply bg-success-line;
+}
+
+.popup .site-card .kit-switch[aria-checked='true'] {
+  @apply bg-success-line;
+}
+
+/* The menu of the site (FRU-599), in the foot since FRU-695: it opens upwards, over the notes. */
 .popup .kit-menu {
   @apply relative flex-none;
 }
 
 .popup .kit-menu-trigger {
-  @apply box-border flex items-center justify-center w-[32px] min-h-[32px] h-[32px] p-0 rounded-action;
+  @apply box-border flex h-[28px] min-h-[28px] w-[28px] items-center justify-center rounded-control p-0;
+}
+
+.popup .popup-foot .kit-menu-trigger {
+  @apply border-transparent bg-transparent text-ink-soft;
+}
+
+.popup .popup-foot .kit-menu-trigger:hover {
+  @apply bg-surface-sunken;
 }
 
 .popup .kit-menu-list {
-  @apply absolute z-2 top-[calc(100%+6px)] right-0 flex flex-col w-[260px] p-[6px] border border-line rounded-card bg-surface;
+  @apply absolute top-[calc(100%+6px)] right-0 z-2 flex w-[260px] flex-col rounded-field border border-line bg-surface p-[6px];
   box-shadow: var(--shadow-popup);
+}
+
+.popup .popup-foot .kit-menu-list {
+  @apply top-auto bottom-[calc(100%+6px)];
 }
 
 .popup .kit-menu-list[hidden] {
@@ -547,13 +648,13 @@ body.popup-page {
 }
 
 .popup .kit-menu-item {
-  @apply flex flex-col gap-[2px] min-h-[44px] py-[8px] px-[10px];
+  @apply flex min-h-[44px] flex-col gap-[2px] px-[10px] py-[8px];
   border: none;
-  @apply rounded-field;
+  @apply rounded-control;
   background: none;
   @apply text-text;
   font: inherit;
-  @apply text-left cursor-pointer;
+  @apply cursor-pointer text-left;
 }
 
 .popup .kit-menu-item[hidden] {
@@ -570,16 +671,19 @@ body.popup-page {
 }
 
 .popup .kit-menu-detail {
-  @apply text-muted text-[12px] leading-[1.4];
+  @apply text-[12px] leading-[1.4] text-muted;
 }
 
-/* « Sent to »: the mark, the provider and its place on one line, cut with « … », and the pencil. */
+/*
+  « Sent to »: a field of 32 px, the mark, the provider and its place on one line cut with « … », and
+  the chevron. The chevron is the button, and its target covers the field.
+*/
 .popup .site-destination:not(:empty) {
-  @apply flex items-center gap-[8px] min-h-[44px] box-border pt-[6px] pr-[6px] pb-[6px] pl-[12px] border border-line rounded-action bg-surface-raised;
+  @apply relative box-border flex h-[32px] items-center gap-[8px] rounded-control border border-line px-[10px];
 }
 
 .popup .site-destination:has(> .kit-dl) {
-  @apply block p-0;
+  @apply block h-auto p-0;
   border: none;
   background: none;
 }
@@ -589,15 +693,33 @@ body.popup-page {
 }
 
 .popup .destination-label {
-  @apply flex-none text-muted text-[12px];
+  @apply flex-none text-[12px] text-muted;
 }
 
 .popup .site-destination .destination-place {
-  @apply flex-auto min-w-0 overflow-hidden text-[13px] font-semibold whitespace-nowrap text-ellipsis;
+  @apply min-w-0 flex-auto overflow-hidden text-[13px] font-medium text-ellipsis whitespace-nowrap;
+}
+
+.popup .site-destination .source-mark {
+  @apply size-[14px];
 }
 
 .popup .destination-change {
-  @apply flex-none box-border flex items-center justify-center w-[32px] min-h-[32px] h-[32px] ml-auto p-0 rounded-field;
+  @apply ms-auto flex size-[20px] flex-none cursor-pointer items-center justify-center rounded-control bg-transparent p-0 text-muted;
+  border: 0;
+}
+
+.popup .destination-change::after {
+  content: '';
+  @apply absolute inset-0 rounded-control;
+}
+
+.popup .site-destination:has(.destination-change:hover) {
+  @apply border-line-strong;
+}
+
+.popup .destination-change .popup-icon {
+  @apply size-[14px];
 }
 
 .popup .hidden-line {
@@ -613,67 +735,152 @@ body.popup-page {
   @apply flex flex-col gap-[8px];
 }
 
-/* The side panel, and what waits in it: a row of the height of a target, the counts under its name. */
-.popup .panel-row {
-  @apply flex items-center gap-[12px] w-full min-h-[60px] py-[12px] px-[14px] border border-line-control rounded-card bg-surface text-text;
-  font: inherit;
-  @apply text-left cursor-pointer;
+/* « Leave a note » (FRU-695): 40 px, the corner of a control, the keys inside it after the words. */
+.popup button.kit-primary.leave-note {
+  @apply h-[40px] gap-[8px] rounded-control text-[14px] font-semibold;
 }
 
-.popup .panel-row:hover:not(:disabled) {
-  @apply border-ink;
+.popup button.kit-primary.leave-note .kit-mark {
+  @apply size-[14px];
 }
 
-.popup .panel-row:disabled {
-  @apply opacity-50 cursor-default;
+/* The keys in the colour of the words: the 0.85 of the mock-up takes white on the accent under 4.5:1. */
+.popup .leave-keys {
+  @apply ms-[6px] text-[11px] font-medium;
 }
 
-.popup .panel-row-tile {
-  @apply flex-none flex items-center justify-center w-[36px] h-[36px] rounded-action bg-surface-sunken;
+/*
+  « On this page » (FRU-695): a head of 32 px under a rule, then a line of 34 px per note, the round of
+  its stage, the note cut with « … » and its age. Across the popup: 12 px of margin, 12 inside.
+*/
+.popup .page-notes {
+  @apply flex flex-col border-t border-t-line;
 }
 
-.popup .panel-row-tile .popup-icon {
-  @apply w-[22px] h-[22px];
+.popup .page-notes-head {
+  @apply flex h-[32px] items-center gap-[8px] pr-[12px] pl-[24px];
 }
 
-.popup .panel-row-words {
-  @apply flex flex-auto flex-col gap-[2px] min-w-0;
+.popup .page-notes-title {
+  @apply m-0 flex items-center gap-[6px] text-[12px] leading-none font-semibold text-muted;
 }
 
-.popup .panel-row-title {
-  @apply text-[14px] font-[650];
+.popup .page-notes-count {
+  @apply tabular-nums;
 }
 
-.popup .panel-counts {
-  @apply flex items-center gap-[6px] text-muted text-[12px];
+.popup .page-notes-check {
+  @apply inline-flex items-center gap-[6px] text-[12px] text-muted;
 }
 
-.popup .panel-counts:empty {
+.popup .page-notes-check:empty {
   @apply hidden;
 }
 
-.popup .panel-counts-dot {
-  @apply w-[7px] h-[7px] rounded-pill bg-status-done;
+.popup .page-notes-check-dot {
+  @apply size-[7px] rounded-pill bg-status-done;
 }
 
-.popup .panel-row-caret {
-  @apply flex-none text-muted;
+.popup button.page-notes-panel {
+  @apply ms-auto inline-flex h-[28px] cursor-pointer items-center gap-[4px] rounded-control bg-transparent px-[6px] text-[12px] font-medium text-muted;
+  border: 0;
+  font-family: inherit;
+}
+
+.popup button.page-notes-panel:hover:not(:disabled) {
+  @apply bg-surface-sunken text-text;
+}
+
+.popup .page-notes-panel .popup-icon {
+  @apply size-[13px];
+}
+
+.popup .page-notes-list {
+  @apply m-0 flex list-none flex-col px-[12px] py-0;
+}
+
+.popup .page-notes-list:empty {
+  @apply hidden;
+}
+
+.popup button.page-note,
+.popup button.page-notes-more {
+  @apply box-border flex h-[34px] w-full cursor-pointer items-center gap-[10px] rounded-control bg-transparent px-[12px] text-left text-[13px] text-text;
+  border: 0;
+  font-family: inherit;
+}
+
+.popup button.page-note:hover,
+.popup button.page-notes-more:hover {
+  @apply bg-surface-sunken;
+}
+
+.popup .page-note .kit-stage-ring {
+  @apply size-[14px] flex-none;
+}
+
+.popup .page-note-text {
+  @apply min-w-0 flex-auto overflow-hidden font-medium text-ellipsis whitespace-nowrap;
+}
+
+.popup .page-note-age {
+  @apply flex-none text-[12px] text-muted tabular-nums;
+}
+
+.popup button.page-notes-more {
+  @apply font-medium text-muted;
+}
+
+.popup .page-notes-said {
+  @apply m-0 px-[24px] py-[8px] text-[13px] text-muted;
+}
+
+.popup .page-notes-said[hidden] {
+  @apply hidden;
+}
+
+/* The foot of screen 3 (FRU-695): 44 px at the bottom, « Console » or the person, the guide, the menu. */
+.popup .popup-foot-bar {
+  @apply mt-auto box-border flex h-[44px] items-center gap-[4px] px-[8px] py-0;
+}
+
+.popup .popup-foot-start {
+  @apply flex min-w-0 flex-auto items-center gap-[8px];
+}
+
+.popup .popup-foot-who {
+  @apply flex min-w-0 items-center gap-[10px] ps-[4px] text-[12px];
+}
+
+.popup .popup-foot-who .who {
+  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
+}
+
+/* « Sign out » keeps its line: a long name gives way, cut with « … ». */
+.popup .popup-foot-who button.link-button {
+  @apply flex-none whitespace-nowrap;
+}
+
+.popup .popup-foot-button {
+  @apply box-border inline-flex h-[28px] flex-none items-center gap-[6px] rounded-control px-[10px] text-[13px] font-medium whitespace-nowrap text-ink-soft no-underline;
+}
+
+.popup .popup-foot .popup-foot-button:hover {
+  @apply bg-surface-sunken text-text;
+}
+
+.popup .popup-foot-icon {
+  @apply w-[28px] justify-center px-0;
+}
+
+.popup .popup-foot-button .popup-icon,
+.popup .popup-foot .kit-menu-trigger .popup-icon {
+  @apply size-[14px];
 }
 
 /* The square of « Hide Fruitback on this page » of the screen of a rule (FRU-590). */
 .popup .icon-button {
   @apply flex-none py-0 px-[12px];
-}
-
-/* The host as the title of screen 3: the size of the host of the kit, not of a title. */
-.popup h1.kit-site-host {
-  @apply text-[15px] font-[650] leading-[1.4];
-  letter-spacing: 0;
-}
-
-/* 12 px under the button, as the mock-up has it: 20 of the column less 12. */
-.popup .shortcut-line {
-  @apply m-0 text-ink-soft text-[13px] text-center;
 }
 
 .popup .action-block .kit-secondary {
