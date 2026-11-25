@@ -38,6 +38,7 @@ import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
 import { siteOfId } from '../note-id';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
+import { viewOf } from '../saved-views';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -53,7 +54,11 @@ const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
  */
 export default function Notes() {
   useLocale();
-  const { workspace, me } = useWorkspace();
+  const { workspace, me, viewCounted } = useWorkspace();
+  // FRU-697: the bar counts a view from the read of its filter. A ref: a new function each render of
+  // the frame must not read the list again.
+  const reportView = useRef(viewCounted);
+  reportView.current = viewCounted;
   // FRU-685: the groups folded, by person and workspace.
   const { folded, fold } = useFoldedGroups(me.account.id, workspace.id);
   const [params, setParams] = useSearchParams();
@@ -181,7 +186,12 @@ export default function Notes() {
     setReading(false);
     if (!answer.ok || !Array.isArray(answer.data?.notes)) return setShown('failed');
     const { total, counts } = answer.data;
-    if (total !== undefined && counts !== undefined) counted.current = { filter, total, counts };
+    if (total !== undefined && counts !== undefined) {
+      counted.current = { filter, total, counts };
+      // The filters of a view and no other: the total is the count of that view (FRU-697).
+      const view = viewOf(filters);
+      if (view !== undefined) reportView.current(view.id, total);
+    }
     const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
     if (whole === undefined) return setShown('failed');
     const answered = { ...answer.data, notes: answer.data.notes, ...whole };

@@ -280,18 +280,21 @@ test('the bar is as high as the window and stays while the screen scrolls; under
 }) => {
   await stubWorker(page);
   // A window lower than « My account »: the document scrolls. At 1100 px its cards are one column
-  // (FRU-692), about 860 px high; at 1440 px they are two, and 537 px high with these stubs.
-  await page.setViewportSize({ width: 1100, height: 400 });
+  // (FRU-692), about 860 px high; at 1440 px they are two, and 537 px high with these stubs. The window
+  // is as high as the whole bar, its views of FRU-697 with it (about 410 px), so the bar itself does
+  // not scroll.
+  const high = 440;
+  await page.setViewportSize({ width: 1100, height: high });
   await open(page, 'account');
-  expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(400 + 200);
+  expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(high + 200);
 
   await page.evaluate(() => window.scrollTo(0, 200));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
-  expect.soft(await box(rail(page)), 'the bar after a scroll of 200 px').toMatchObject({ x: 0, y: 0, height: 400 });
+  expect.soft(await box(rail(page)), 'the bar after a scroll of 200 px').toMatchObject({ x: 0, y: 0, height: high });
   // The screen moved, and the person is still at the bottom of the window.
   expect.soft((await box(page.locator('main'))).y).toBe(-200);
   const foot = await box(person(page));
-  expect.soft(foot.y + foot.height).toBeCloseTo(400 - 8, 0);
+  expect.soft(foot.y + foot.height).toBeCloseTo(high - 8, 0);
   expect.soft(await sideScroll(page)).toBe(0);
 
   // Above the screen, on a phone, the bar is part of the page: it scrolls away with it.
@@ -365,6 +368,8 @@ test('a section under the pointer takes the hover, and the keyboard walks the ba
     switcher(page),
     rail(page).getByRole('link', { name: 'Search notes' }),
     ...SECTIONS.map((name) => sections(page).getByRole('link', { name, exact: true })),
+    // FRU-697: the views, under the sections.
+    rail(page).getByRole('navigation', { name: 'Views' }).getByRole('link', { name: 'Assigned to me' }),
     rail(page).getByRole('link', { name: /^What's new/ }),
     rail(page).getByRole('link', { name: 'Install the extension (beta)' }),
     rail(page).getByRole('link', { name: 'Help and docs' }),

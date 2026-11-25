@@ -1446,6 +1446,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker.':
     'Vous rejoignez en tant qu’invité : vous voyez et laissez des notes sur ce site seulement. Les invités sont gratuits et ne voient jamais l’outil de suivi.',
   Instance: 'Instance',
+  // The views of the bar (FRU-697).
+  Views: 'Vues',
   Administration: 'Administration',
   'My workspaces': 'Mes espaces de travail',
   'Fruitback Cloud': 'Fruitback Cloud',
