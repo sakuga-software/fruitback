@@ -95,6 +95,36 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
     assert.equal((await threadOf(mounted(), {})).querySelector('.fruitback-thread-you'), null);
   });
 
+  it('offers a visitor known by their browser « Edit the text », no move, and says where the new text goes (FRU-701)', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    const headers = pageFetch(
+      readOf(aNote({ mine: true, editable: true, url: 'https://linear.app/acme/issue/ACM-7' })),
+    );
+    const root = await threadOf(page, {});
+
+    const items = [...root.querySelectorAll('.fruitback-thread-more-item')].map((item) => item.textContent);
+    assert.deepEqual(items, ['Edit the text', 'Copy link to the note']);
+    assert.equal(
+      root.querySelector('.fruitback-thread-you-may')?.textContent,
+      'You can edit it until a member picks it up.',
+    );
+    (root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
+    assert.equal(root.querySelector('.fruitback-thread-edit-sent')?.textContent, 'Edited text is sent to Linear too');
+    assert.equal(headers[0]?.[VISITOR_HEADER], 'K'.repeat(43));
+  });
+
+  it('keeps the words and the move of a member: the read names them by a session', async () => {
+    pageFetch(readOf(aNote({ mine: true, editable: true, url: 'https://linear.app/acme/issue/ACM-7' }), true));
+    const root = await threadOf(mounted(), {});
+
+    const items = [...root.querySelectorAll('.fruitback-thread-more-item')].map((item) => item.textContent);
+    assert.deepEqual(items, ['Edit the note', 'Copy link to the note', 'Move the note']);
+    assert.equal(root.querySelector('.fruitback-thread-you-may'), null);
+    (root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
+    assert.equal(root.querySelector('.fruitback-thread-edit-sent'), null);
+  });
+
   it('makes no key, and sends none, for a mount whose host names the reporter or carries the calls', async () => {
     const page = mounted();
     const sent: TransportRequest[] = [];

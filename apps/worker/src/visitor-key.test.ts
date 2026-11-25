@@ -69,13 +69,13 @@ describe('a visitor known by the key of their browser (FRU-700)', () => {
     assert.deepEqual(await mine({ key: KEY_B }), []);
   });
 
-  it('offers a visitor no edit and no withdrawal yet, on a note that is mine', async () => {
+  it('offers a visitor an edit and no withdrawal yet, on a note that is mine (FRU-701)', async () => {
     const { send, read, noteOf } = await aSite();
     await send(noteOf('vk_a'), { key: KEY_A });
 
     const pin = (await read({ key: KEY_A })).get('vk_a');
     assert.equal(pin?.mine, true);
-    assert.equal(pin?.editable, undefined);
+    assert.equal(pin?.editable, true);
     assert.equal(pin?.withdrawable, undefined);
   });
 
@@ -163,14 +163,14 @@ describe('the guards of the key of a browser, each planted out (FRU-700)', () =>
       },
     },
     {
-      guard: 'a visitor is offered no edit yet',
+      guard: 'a visitor is offered no withdrawal yet',
       file: 'feedback-routes.ts',
       from: "own.size > 0 && reader.by === 'account'",
       to: 'own.size > 0',
       holds: async ({ send, read, noteOf }) => {
         await send(noteOf('vk_a'), { key: KEY_A });
 
-        return (await read({ key: KEY_A })).get('vk_a')?.editable === undefined;
+        return (await read({ key: KEY_A })).get('vk_a')?.withdrawable === undefined;
       },
     },
   ];

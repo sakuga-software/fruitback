@@ -138,10 +138,12 @@ export async function getFeedback(
     const own = reader.notes;
     // FRU-475: the reader may edit a note of theirs that is still open (FRU-605), on a site with one
     // place whose store takes an edit. The route decides again; this only says where to offer it.
-    // A visitor known by their browser edits nothing yet (FRU-701).
+    // FRU-701: a visitor known by their browser too, where the site lets its visitors edit.
     const byAccount = own.size > 0 && reader.by === 'account';
-    const editsHere = byAccount && places.length < 2 && (await takesEdits(store, route.client, route.policy));
-    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again.
+    const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.policy, 'edit'));
+    const editsHere = mayEdit && places.length < 2 && (await takesEdits(store, route.client, route.policy));
+    // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. A visitor
+    // known by their browser withdraws nothing yet (FRU-702).
     const withdrawalsHere = byAccount && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(

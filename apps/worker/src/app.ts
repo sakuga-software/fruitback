@@ -40,7 +40,7 @@ import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import { placedAt, routingFailure } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
-import { visitorAuthor, visitorDigestOf } from './visitor-key.ts';
+import { visitorAuthor, visitorDigestOf, visitorMay } from './visitor-key.ts';
 
 import {
   accountStoreFor,
@@ -609,6 +609,7 @@ async function routed(
     attributionFor,
     chosenPlace,
     visitorOf: visitorDigestOf,
+    visitorMay,
     done,
   };
 

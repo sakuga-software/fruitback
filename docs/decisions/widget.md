@@ -1956,6 +1956,11 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   overlay, `.fruitback-thread-you`), in the heading that wraps: at 320 px it goes to a line of its own.
   The worker says `mine` to a visitor on an open note only, so such a reader is never asked for a
   verdict (FRU-603), which takes a session.
+- **A visitor edits the text, with the words of the mock-up** (FRU-701): « Edit the text » in « ⋯ »,
+  « You can edit it until a member picks it up. » under the note, and in the field « Edited text is
+  sent to Linear too », the tracker read from the address of the issue (`trackerOf`). A note kept by
+  the worker says nothing of a tracker. **No « Move the note »**: the route of a move takes a session.
+  A member keeps « Edit the note » and the move, and sees none of these lines.
 - **The key names nobody.** It only tells the notes of this browser from the others. SECURITY.md says
   what it opens, and docs/privacy.md what is kept of it.
 
