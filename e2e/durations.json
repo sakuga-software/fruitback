@@ -69,6 +69,7 @@
   "console-task-order.spec.ts": 6.3,
   "console-task-panel.spec.ts": 14.1,
   "console-titles.spec.ts": 11.7,
+  "console-views.spec.ts": 10,
   "console-workspace-logo.spec.ts": 7.1,
   "console-workspace-settings.spec.ts": 18.9,
   "context-menu.spec.ts": 7.4,
