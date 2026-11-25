@@ -58,14 +58,11 @@ test('off by default; turned on, it calls an address that receives at the moment
 }) => {
   const worker = await workerWith(page);
   await page.setViewportSize({ width: 1440, height: 900 });
+  // The section is in the tab « Advanced » of the page of the site (FRU-689), not on « Overview ».
   await page.goto(`${CONSOLE}/w/w1/sites/s1`);
-  // The section is folded under « Advanced » (FRU-538): a keyboard opens it.
-  const advanced = page.locator('details#advanced');
-  await expect(advanced).not.toHaveAttribute('open');
-  await expect(section(page)).toBeHidden();
-  await advanced.locator('summary').focus();
-  await page.keyboard.press('Enter');
-  await expect(advanced).toHaveAttribute('open');
+  await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
+  await expect(section(page)).toHaveCount(0);
+  await page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Advanced' }).click();
   const agent = section(page);
   const toggle = agent.getByRole('switch', { name: /Start an agent when a note arrives/ });
   await expect(toggle).not.toBeChecked();
@@ -93,7 +90,7 @@ test('off by default; turned on, it calls an address that receives at the moment
   await expect(agent.getByRole('status')).toHaveText('Saved.');
   expect(worker.written).toEqual([{ connector: 'c2', moment: 'moved-to-todo', enabled: true }]);
 
-  // Read again: what was saved is what is drawn. The address of the section opens « Advanced ».
+  // Read again: what was saved is what is drawn. The address of the section opens the tab « Advanced ».
   await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   await expect(section(page).getByRole('switch', { name: /Start an agent when a note arrives/ })).toBeChecked();
   await expect(section(page).getByRole('radio', { name: 'A person of the team moves a note to To do' })).toBeChecked();
@@ -131,8 +128,10 @@ test('a member does not see the section, and the page asks nothing of the trigge
   const worker = await workerWith(page, { role: 'member' });
   await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
-  // No « Advanced » either: every section in it is for an owner or an admin (FRU-538).
-  await expect(page.locator('details#advanced')).toHaveCount(0);
+  // No tab « Advanced » either: every section in it is for an owner or an admin (FRU-538, FRU-689).
+  await expect(
+    page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Advanced' }),
+  ).toHaveCount(0);
   await expect(section(page)).toHaveCount(0);
   expect(worker.asked).toBe(0);
 });

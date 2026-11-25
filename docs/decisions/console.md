@@ -607,8 +607,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **The table unfolds nothing under a row** (FRU-433, Mathieu). **A site has a page of its own**,
   `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from its row, its host and its menu:
   « Open its page » and « See the notes », for every role; « Statuses » and « Remove », for who manages
-  the sites. « Remove » leads to its section of the page (`#remove`). A new site opens its page at
-  `#install`. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) on
+  the sites. « Remove » leads to the tab « Advanced » of the page (`/advanced#remove`). A new site
+  opens its page at its tab « Install » (FRU-689). « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) on
   the page the second; once the site is gone, the table comes back with focus on its search, or on
   the field of the card when it was the last one. **No item changes who sees the notes of a site, nor
   who writes them** from the table: the form that adds a site asks it, in the card of a workspace with
@@ -631,21 +631,40 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the bar, the rows of 36 px and their columns, a press on a row, the search, the pages, the form and
   its dialog, the menu, the roles, 390 px and axe; `e2e/console-table-heads.spec.ts` holds every head
   and every text of a row on one line, in French, at four widths.
-- **The page of a site** (FRU-433, `routes/site.tsx`) has the crumbs « Sites › site » of the page
-  of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
-  sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
-  « Install », for every role; where its notes go (`site-places.tsx`) for who manages the sites and
-  sees the tracker; « Advanced », folded by default (FRU-538), which holds « Statuses », a link to
-  the page of the statuses (FRU-371), which is too large to be a section, and whose crumbs lead back
-  here, « Start an agent » and the preview builds (`domains.tsx`); « Remove this site ». The page
-  shows first who sees and who writes, the install and where the notes go: the rest is set once.
-  A member and a guest read the first two only, and have no « Advanced ». **It reads the list of the sites**, as
-  the page of the statuses does: the worker has no route for one site, and no route of the worker
-  is new. A site that is not in the list says « This site is not in the workspace any more. », and
-  a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
-  scrolls to its section once the site is drawn, and a hash of a section under « Advanced »
-  (`#statuses`, `#agent`, `#previews`) opens it first. `e2e/console-site-page.spec.ts` holds the
-  sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
+- **The page of a site is in tabs** (FRU-433, then FRU-689 and the mockup « Un site »). One frame,
+  `routes/site-frame.tsx`, reads the site once (`GET …/sites/<id>`, FRU-497) and draws, for every
+  tab: the head of 48 px of the redesign (the crumbs « Sites › site », the site as the title,
+  « Open site » in a new tab and « See its N notes »), then the row of the tabs (`parts/site-tabs.tsx`,
+  44 px, an icon and the words of each). **Each tab is a route**, so the tab on screen is in the
+  address, a reload and the way back keep it, and a move between tabs asks the worker nothing:
+  « Overview » (`…/sites/<site>`), « Install » (`/install`), « Destinations » (`/destinations`, an
+  owner or an admin who sees the tracker), « Statuses » (`/statuses`, an owner or an admin),
+  « Access » (`/access`, every role, FRU-703) and « Advanced » (`/advanced`, an owner or an admin:
+  « Start an agent », the preview builds and « Remove this site »). A member and a guest have no tab
+  of an owner; reached by its address, one says why in a sentence and asks the worker nothing. A tab
+  that changes the site hands the frame what the worker kept, so « Overview » shows it at once. A
+  hash of the page of before (`#install`, `#destinations`, `#statuses`, `#advanced`, `#agent`,
+  `#previews`, `#remove`) opens its tab, and a section inside a tab keeps its hash and is scrolled to.
+  A site that is not in the workspace says so, and a read that failed is the alert with « Try again ».
+  **« Overview »** draws, on the left, three figures, the card « Site » and where the notes go; on
+  the right, from 1100 px, the card « Install » in a column of 420 px. **No figure the worker does not
+  give**: « Notes » with the bar of its statuses, « Open » (the new notes, and how many are to do or
+  in progress), and « Delivered » for whoever sees the tracker: the share of the notes that no address
+  still waits for (`undelivered`, FRU-122), of every note, since the worker counts none by day yet.
+  The card « Site » is a row of 44 px for each setting (an icon, its name, its value), with
+  « Change » to the tab that changes it, for an owner or an admin: « Access » for who reads, who
+  writes and the e-mail of FRU-604; « Install » for how the notes came, for every role. Where the
+  notes go is a row of 48 px for each place, the logo of its tracker, « Default » on the first, and a
+  menu: « Make it the default », « Remove ». « Add » leads to « Destinations ». The card « Install »
+  has the script and the extension in a segment; the script is on ink (`Snippet` of the kit, tone
+  `ink`: the page and the ink swapped, so a dark theme draws it light), with the address of this
+  console, which is the instance's in production, and « Copy ». **The worker records no visit of the
+  script**: the card says « Notes came » once a note came by the script or the extension, with when the
+  last note came, and « Not seen yet » before, never « Installed ». The ticket of the follow-up asks
+  the worker for the last time the script was seen, the oldest open note, and the deliveries of 30
+  days. `e2e/console-site-page.spec.ts` holds the head, the tabs in the address, the figures, the
+  rows, the menu of a place, the card « Install », the roles, the hashes of before, the two failures,
+  390 px in English and in French, and axe.
   **The address of the site is a link to it** (FRU-575, Mathieu), in a new tab with no referrer, so
   the console stays where it is; a screen reader hears « (opens in a new tab) ». **Where the notes go
   reads top down** (FRU-576, Mathieu): the title is « Where the notes go », as « Install » names no
@@ -675,7 +694,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the way from the settings, the list and its warning, a key made, shown once, copied and gone, the
   refusals, the writes, the revocation, a member, and 390 px in French, with axe.
 - **« Start an agent » is a section of the page of a site** (FRU-468, `parts/site-agent.tsx`, the
-  board `design/agent-triggers/`), after « Statuses », for an owner or an admin; a member and a guest
+  board `design/agent-triggers/`), first in the tab « Advanced » (FRU-689), for an owner or an admin; a member and a guest
   do not see it, and the page asks them nothing of the trigger. Off by default: the switch alone.
   On: « Call », an address that receives of the workspace (a `rest` connector; a tracker is not
   offered), « When » (a note of a known person, or a note moved to To do by a person), and what the
@@ -685,9 +704,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   lists them with « Call of an agent » beside the notes. `e2e/console-agent-trigger.spec.ts` holds it,
   with axe and 390 px in French.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
-  from « Statuses » in the menu of a card and on the page of a site, for an owner or an admin. It is the board
-  `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the
-  room above the title, so **the title of every page of a frame is at one place** (FRU-405): 40 px
+  from « Statuses » in the menu of a row and from its tab on the page of a site (FRU-689), for an
+  owner or an admin. It is the board
+  `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Since FRU-689 it is a
+  tab of the page of the site, under its head of 48 px. Elsewhere, **the title of every page of a frame is at one place** (FRU-405): 40 px
   under the top of the screen, at the left of its padding, 28 px. `e2e/console-titles.spec.ts` reads
   it on the eleven pages of a workspace and of the administration, at 1440, 1492 and 390 px. Two things of the kit
   came with it: `Field` takes `error` (the sentence a field is described by, `aria-invalid`) and
@@ -1522,10 +1542,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The rules, in short
 
-- **The page of a site has two tabs, « Overview » and « Access »** (`parts/site-tabs.tsx`, the
-  `SubNav` of the kit), until FRU-689 gives the page its own tabs. « Overview » is what the page
-  showed; its form « Change » of who sees the notes went to the tab, and a link « Change the access »
-  leads there for an owner or an admin. The route is `…/sites/<site>/access`.
+- **« Access » is a tab of the page of a site** (`parts/site-tabs.tsx`; FRU-689 gave the page its
+  other tabs, above). Its form « Change » of who sees the notes went to the tab, and « Change » on
+  the rows of « Overview » leads there for an owner or an admin. The route is
+  `…/sites/<site>/access`; the frame of the page reads the site, and « Save » hands it what the worker
+  kept.
 - **The tab follows the mockup « Onglet Access »** of FRU-699: « Public access » (four levels),
   « What a visitor can do » (a table of seven actions in two columns), « How a visitor is
   recognised », and « What a visitor sees » on the right from 1100 px. **Left out**: the card

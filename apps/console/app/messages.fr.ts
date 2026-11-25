@@ -623,8 +623,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No destination matches this search.': 'Aucune destination ne correspond à cette recherche.',
   'Search the destinations': 'Chercher une destination',
   'Show {more} more ({left} left)': 'En afficher {more} de plus ({left} restantes)',
-  'Its address, where its notes go, and how to install Fruitback on it.':
-    'Son adresse, où vont ses notes, et comment y installer Fruitback.',
   'The site did not load': 'Le site n’a pas chargé',
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
@@ -640,12 +638,42 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'See its note': 'Voir sa note',
   'See its {count} notes': 'Voir ses {count} notes',
   'Open its page': 'Ouvrir sa page',
+  // FRU-689: the page of a site in tabs, its figures, its rows and its card « Install ».
+  Destinations: 'Destinations',
+  'Open site': 'Ouvrir le site',
+  'Open site (opens in a new tab)': 'Ouvrir le site (s’ouvre dans un nouvel onglet)',
+  '{count} to do or in progress': '{count} à faire ou en cours',
+  Delivered: 'Livrées',
+  '{share} %': '{share} %',
+  'Nothing waiting to be sent': 'Rien en attente d’envoi',
+  'No tracker for this site': 'Aucun outil de suivi pour ce site',
+  'No note yet': 'Aucune note pour l’instant',
+  'Change who sees the notes of {site}': 'Modifier qui voit les notes de {site}',
+  'Change who can leave a note on {site}': 'Modifier qui peut laisser une note sur {site}',
+  'Change the e-mail when a note of {site} is done': 'Modifier l’e-mail quand une note de {site} est faite',
+  'Change how Fruitback is on {site}': 'Modifier comment Fruitback est sur {site}',
+  'Extension and script': 'Extension et script',
+  'Actions of {place}': 'Actions de {place}',
+  'Notes came': 'Notes reçues',
+  'How to put Fruitback on {site}': 'Comment mettre Fruitback sur {site}',
+  'No note came through the script yet.': 'Aucune note n’est encore venue par le script.',
+  'No note came through the extension yet.': 'Aucune note n’est encore venue par l’extension.',
+  'Notes came through the script.': 'Des notes sont venues par le script.',
+  'Notes came through the extension.': 'Des notes sont venues par l’extension.',
+  'Notes came through the script. The last note of the site came {when}.':
+    'Des notes sont venues par le script. La dernière note du site est venue {when}.',
+  'Notes came through the extension. The last note of the site came {when}.':
+    'Des notes sont venues par l’extension. La dernière note du site est venue {when}.',
+  'Paste the script on the site, or connect the browser of each person who reviews it.':
+    'Collez le script sur le site, ou connectez le navigateur de chaque personne qui le relit.',
+  'Only an owner or an admin of the workspace sets where the notes of a site go.':
+    'Seul un propriétaire ou un admin de l’espace choisit où vont les notes d’un site.',
+  'Only an owner or an admin of the workspace sets these for a site.':
+    'Seul un propriétaire ou un admin de l’espace règle ceci pour un site.',
   // FRU-703: the tab « Access » of a site.
   'Sections of the site': 'Sections du site',
   Overview: 'Aperçu',
   Access: 'Accès',
-  'Change the access': 'Modifier l’accès',
-  'Change the access of {site}': 'Modifier l’accès de {site}',
   'Save the access of {site}': 'Enregistrer l’accès de {site}',
   'Who sees the notes of the site, who leaves them, and what a visitor may do.':
     'Qui voit les notes du site, qui les laisse, et ce qu’un visiteur peut faire.',
@@ -708,7 +736,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only an owner or an admin of the workspace changes who sees the notes.':
     'Seul un propriétaire ou un admin de l’espace de travail change qui voit les notes.',
   'Who sees the notes did not change. Try again.': 'Qui voit les notes n’a pas changé. Réessayez.',
-  'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
     'Le widget s’arrête sur ce site, et les notes que Fruitback garde pour lui sont supprimées.',
@@ -1018,7 +1045,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Last note': 'Dernière note',
   Statuses: 'Statuts',
   'None yet': 'Aucune pour l’instant',
-  'Extension, script': 'Extension, script',
   'Waiting for the first note': 'En attente de la première note',
   '1 not delivered yet': '1 pas encore livrée',
   '{count} not delivered yet': '{count} pas encore livrées',
@@ -1931,7 +1957,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open it in this browser: this page comes back to the question. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur : cette page revient à la question. Le lien fonctionne une fois, pendant quinze minutes.',
   Advanced: 'Avancé',
-  'Statuses, starting an agent, preview deploys': 'Statuts, lancement d’un agent, previews',
   'Each pin shows how a note in that status looks on the page. The 3 is an example number.':
     'Chaque repère montre à quoi ressemble une note de ce statut sur la page. Le 3 est un numéro d’exemple.',
   'More teams of {source}…': 'Plus d’équipes de {source}…',

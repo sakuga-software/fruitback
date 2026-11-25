@@ -262,7 +262,7 @@ test('the section « Agents » leads to the keys, the addresses that receive, an
     );
   const sites = agents.getByRole('list', { name: 'Start an agent, by site' });
   await expect(sites.getByRole('link')).toHaveText(['Start an agent on staging.acme.dev']);
-  await expect(sites.getByRole('link')).toHaveAttribute('href', '/w/w1/sites/s1#agent');
+  await expect(sites.getByRole('link')).toHaveAttribute('href', '/w/w1/sites/s1/advanced#agent');
 
   // A member reads why there is no way, and the section asks the worker nothing.
   await page.unrouteAll();

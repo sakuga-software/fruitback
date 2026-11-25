@@ -72,7 +72,8 @@ const panel = (page: Page) => page.getByRole('region', { name: `Where the notes 
 const byName = (page: Page) => panel(page).locator('form[data-repository-by-name]');
 
 async function openPlaces(page: Page): Promise<void> {
-  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  // FRU-689: the places are set in the tab « Destinations » of the site.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1/destinations`);
   await expect(panel(page)).toBeVisible();
 }
 

@@ -15,7 +15,7 @@ const SCREENS: Readonly<Record<string, string>> = {
   // The box of Notes is `NotesFailed`, which Admin notes draws too (FRU-614).
   'parts/note-parts.tsx': 'The notes did not load',
   'routes/sites.tsx': 'The sites did not load',
-  'routes/site.tsx': 'The site did not load',
+  'routes/site-frame.tsx': 'The site did not load',
   'routes/members.tsx': 'The members did not load',
   'routes/site-statuses.tsx': 'The statuses did not load',
 };

@@ -6,6 +6,7 @@ import {
   LEVEL_ACCESS,
   accessBody,
   accessOf,
+  draftAfter,
   levelOf,
   sameAccess,
   visitorReplies,
@@ -96,5 +97,22 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
     assert.equal(visitorReplies(CONTRIBUTE), true);
     assert.equal(visitorReplies(withLevel(CONTRIBUTE, 'read-only')), false);
     assert.equal(visitorReplies({ ...CONTRIBUTE, visibility: 'members' }), false);
+  });
+});
+
+describe('the draft of the tab « Access » when the frame holds another site (FRU-689)', () => {
+  const kept: Site = { ...SITE, visibility: 'members', writers: 'members' };
+
+  it('keeps a draft that somebody changed and did not save, when the same site is read again', () => {
+    const changed: Access = { ...accessOf(SITE), notifyDone: true };
+    assert.notDeepEqual(changed, accessOf(kept));
+    assert.deepEqual(draftAfter(changed, SITE, kept), changed);
+  });
+
+  it('follows the site when nobody changed the draft, and starts again on another site', () => {
+    assert.deepEqual(draftAfter(accessOf(SITE), SITE, kept), accessOf(kept));
+    const changed: Access = { ...accessOf(SITE), notifyDone: true };
+    const other: Site = { ...kept, id: 's2' };
+    assert.deepEqual(draftAfter(changed, SITE, other), accessOf(other));
   });
 });

@@ -150,12 +150,12 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
   await workerWith(page);
   await open(page);
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
-  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('preview.client.fr');
-  // The site in the crumbs leads back to its page (FRU-433).
-  await expect(
-    page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'https://preview.client.fr' }),
-  ).toHaveAttribute('href', '/w/w1/sites/s1');
+  // FRU-689: the statuses are a tab of the page of the site, whose title is the site, and « Overview »
+  // leads back to its page (FRU-433).
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('preview.client.fr');
+  const tabs = page.getByRole('navigation', { name: 'Sections of the site' });
+  await expect(tabs.getByRole('link', { name: 'Statuses' })).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/w/w1/sites/s1');
   await expect(list(page).locator('> li')).toHaveCount(7);
   const keys = await list(page)
     .locator('> li')
@@ -609,7 +609,10 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
   await workerWith(page, { locale: 'fr', notes: NOTES });
   await open(page);
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuts');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('preview.client.fr');
+  await expect(
+    page.getByRole('navigation', { name: 'Sections du site' }).getByRole('link', { name: 'Statuts' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(item(page, 'new')).toContainText('Couleur de la phase');
   await expect(item(page, 'new')).toContainText('· 3 notes');
   await expect(item(page, 'todo')).toContainText('· Aucune note');
@@ -634,7 +637,9 @@ test('only an owner or an admin sets the statuses, and the menu of a site leads 
   await page.getByRole('button', { name: 'More for preview.client.fr' }).click();
   await page.getByRole('menuitem', { name: 'Statuses' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/statuses`);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
+  await expect(
+    page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Statuses' }),
+  ).toHaveAttribute('aria-current', 'page');
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await workerWith(page, { role: 'member' });

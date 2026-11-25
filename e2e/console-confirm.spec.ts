@@ -60,8 +60,9 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
 const screens = [
   {
     name: 'a site',
-    // The page of the site asks (FRU-433): its button « Remove » is what has focus before, and takes it back.
-    path: '/w/w1/sites/s1',
+    // The page of the site asks (FRU-433), in its tab « Advanced » (FRU-689): its button « Remove » is
+    // what has focus before, and takes it back.
+    path: '/w/w1/sites/s1/advanced',
     back: (page: Page, locale: Locale) => page.getByRole('button', { name: WORDS[locale].remove, exact: true }),
     ask: (page: Page, locale: Locale) => page.getByRole('button', { name: WORDS[locale].remove, exact: true }).click(),
     askWithKeys: (page: Page) => page.keyboard.press('Enter'),

@@ -235,6 +235,10 @@ function answerLong(pathname: string, route: Route): Promise<void> | undefined {
 const PAGES: readonly (readonly [string, string | undefined])[] = [
   ['/w/w1/sites', `preview-0-${LONG_HOST}`],
   ['/w/w1/sites/s1', undefined],
+  // FRU-689: the tabs of the page of a site.
+  ['/w/w1/sites/s1/install', undefined],
+  ['/w/w1/sites/s1/destinations', undefined],
+  ['/w/w1/sites/s1/advanced', undefined],
   ['/w/w1/sites/s1/statuses', "Waiting for the client's legal team to approve the new wording 0"],
   ['/w/w1/notes', LONG_TEXT.slice(0, 40)],
   ['/w/w1/connectors', undefined],

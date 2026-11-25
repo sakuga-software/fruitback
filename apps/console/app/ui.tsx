@@ -3029,14 +3029,31 @@ export function AutoGrid({ min = 180, children }: { min?: 180 | 230; children: R
   );
 }
 
-/** Code to copy, as it is typed. Its box takes focus, so a keyboard scrolls a long line. */
-export function Snippet({ label, className = '', children }: { label: string; className?: string; children: string }) {
+/**
+ * Code to copy, as it is typed. Its box takes focus, so a keyboard scrolls a long line. « ink »: the
+ * page and the ink swapped, as the card « Install » of a site draws it (FRU-689); in a dark theme the
+ * box is the light one, at the contrast of the text of the page.
+ */
+export function Snippet({
+  label,
+  tone = 'subtle',
+  className = '',
+  children,
+}: {
+  label: string;
+  tone?: 'subtle' | 'ink';
+  className?: string;
+  children: string;
+}) {
+  const colours = tone === 'ink' ? 'border-ink bg-ink text-page' : 'border-line bg-subtle text-ink';
+
   return (
     <pre
       role="region"
       aria-label={label}
       tabIndex={0}
-      className={`kit-snippet overflow-x-auto whitespace-pre-wrap break-all py-[10px] px-[12px] border border-line rounded-control bg-subtle text-ink font-mono text-(length:--text-tiny) leading-[1.55] ${className}`}
+      data-tone={tone}
+      className={`kit-snippet overflow-x-auto whitespace-pre-wrap break-all py-[10px] px-[12px] border rounded-control ${colours} font-mono text-(length:--text-tiny) leading-[1.55] ${className}`}
     >
       {children}
     </pre>

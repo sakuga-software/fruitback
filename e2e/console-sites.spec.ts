@@ -817,11 +817,12 @@ test('the sites come 25 to a page, and a search or a new site shows its page (FR
   await expect(pages).toHaveCount(0);
   await expect(page).not.toHaveURL(/[?&]page=/);
 
-  // A new site opens its own page, at its installation (FRU-433); back on the table, it is the last one.
+  // A new site opens its own page, at its tab « Install » (FRU-433, FRU-689); back on the table, it is
+  // the last one.
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await page.getByRole('textbox', { name: 'Site address' }).fill('new.acme.dev');
   await page.getByRole('button', { name: 'Add site', exact: true }).click();
-  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/n1#install`);
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/n1/install`);
   await expect(page.getByRole('region', { name: 'Install on new.acme.dev' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(search(page)).toHaveValue('');
@@ -1107,14 +1108,16 @@ test('« Add a site » opens a dialog, Escape closes it, and a refusal keeps wha
   await expect(form).toHaveCount(0);
   expect(worker.sent.length).toBe(before);
 
-  // Added: the page of the site opens, at how to put Fruitback on it (FRU-433).
+  // Added: the page of the site opens, at how to put Fruitback on it (FRU-433), its tab « Install »
+  // (FRU-689); « Overview » says who sees its notes.
   worker.refuses = undefined;
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Install on docs.acme.dev' })).toBeVisible();
-  await expect(page.getByText('Members of Acme', { exact: true })).toBeVisible();
   await expect(form).toHaveCount(0);
+  await page.getByRole('navigation', { name: 'Sections of the site' }).getByRole('link', { name: 'Overview' }).click();
+  await expect(page.getByRole('region', { name: 'Site', exact: true }).getByText('Members only')).toHaveCount(2);
   expect(worker.sent.at(-1)).toEqual({
     method: 'POST',
     pathname: '/console/workspaces/w1/sites',
@@ -1350,10 +1353,11 @@ test('removing a site asks twice, and the table it comes back to has focus on it
   const worker = await workerWith(page);
   await open(page);
 
-  // « Remove » of the menu is the first time; the page of the site asks the second (FRU-433).
+  // « Remove » of the menu is the first time; the tab « Advanced » of the site asks the second (FRU-433,
+  // FRU-689).
   await more(page, 'staging.acme.dev').click();
   await page.getByRole('menuitem', { name: 'Remove' }).click();
-  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1#remove`);
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/advanced#remove`);
   const group = page.getByRole('group', { name: 'Remove staging.acme.dev' });
   await expect(group.getByText(/The widget stops on staging\.acme\.dev,/)).toBeVisible();
   await expect(group.getByRole('button', { name: 'Keep it' })).toBeFocused();
