@@ -327,18 +327,18 @@ it changes who is shown the feedback and never who may fetch it.
   `#ec6a65` under dark text: `#dd2c27` is 3.44:1 as a link on `#18181b`, under the 4.5:1 of text.
   Mathieu chose one accent everywhere on 2026-10-21, after the orange `#c2410c` of FRU-292.
 - **The tokens of the screens to come are declared now**, so that a screen takes a value and never
-  writes one: `--surface-warm`, `--line-row`, `--line-control`, `--line-soft`, `--ink`,
-  `--on-ink-muted`, `--success-line`, the three of an alert, the line of « To check » (two more until FRU-606),
-  `--selection`, `--tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
-  `--radius-panel` (14 px), `--font-sans` and `--font-mono`.
-- **The edge of a field is `--line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
+  writes one: `--color-surface-warm`, `--color-line-row`, `--color-line-control`, `--color-line-soft`, `--color-ink`,
+  `--color-on-ink-muted`, `--color-success-line`, the three of an alert, the line of « To check » (two more until FRU-606),
+  `--color-selection`, `--color-tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
+  `--radius-panel` (14 px), `--font-ui` (`--font-sans` until FRU-679) and `--font-mono`.
+- **The edge of a field is `--color-line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
   The lighter `#a1a1aa` is 2.56:1 on white, under the 3:1 a field needs. It stays as
-  `--line-control`, the edge of a secondary button and of a key, whose label says what it is.
+  `--color-line-control`, the edge of a secondary button and of a key, whose label says what it is.
 - **The muted text is `#6b6b74`**, the console's: 5.28:1 on white, 4.80:1 on the sunken surface.
 - **A drop is written black on new, to do and in progress, white on done and closed, and has an
-  edge** (FRU-334): `--on-stage-new`, `--on-stage-todo`, `--on-stage-progress` and
-  `--stage-edge` are copies of the widget, and the edge, 3.42:1 on white, is what draws a light
-  drop. The detached notes of the panel take `--unplaced`, a grey, where they took the brown of
+  edge** (FRU-334): `--color-on-status-new`, `--color-on-status-todo`, `--color-on-status-progress` and
+  `--color-status-edge` are copies of the widget (`--on-stage-*` and `--stage-edge` until FRU-679), and the edge, 3.42:1 on white, is what draws a light
+  drop. The detached notes of the panel take `--color-unplaced`, a grey, where they took the brown of
   « closed ».
 - **Less brown** (FRU-334): the creams of the mono block and of « Ready to check » are the raised
   grey, and the chosen row of the page is on the sunken surface under its bar of the accent. A
@@ -350,14 +350,26 @@ it changes who is shown the feedback and never who may fetch it.
   accent under dark text (`#fb923c`, 7.83:1 with `#18181b` on it). The brown fills of a problem and
   of « Ready to check » are greys of the scale now, under a line and a title in the orange.
   Mathieu validates it on the captures of the PR.
-- **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
-  stylesheet of an extension page cannot import the widget, so the values are copied.
+- **`src/theme.css` holds the tokens (FRU-679), and every page loads it first** through
+  `entrypoints/popup/style.css`. It is the Tailwind theme of the extension: the shared theme of
+  Fruitback (`packages/shared/tailwind/theme.css`, FRU-677), then the tokens of the extension alone
+  (`--color-surface`, `--color-alert-*`, `--radius-action`…), then its dark scheme, which sets the
+  `--color-*` again. A token that the shared theme names with the same value is the shared one
+  (`line`, `accent-strong`, `ink`, `ink-soft`, the statuses `status-*`). A stylesheet of an
+  extension page cannot import the widget, so the values are copied.
   `src/design-tokens.test.ts` compares each shared one with the widget in both schemes, checks each
   accent against its own value, and measures each pair that the pages paint: 4.5:1 for text, 3:1
   for the edge of a field and a drawing. A grey that differs between the two surfaces fails it.
-- **No rule of either stylesheet writes a colour**: it names a token. The one exception is the drop
-  of the mark, in the accent of the light scheme. test:`writes no colour outside the tokens, but
+- **No rule of a stylesheet writes a colour**: it names a token. The one exception is the drop
+  of the mark, in the accent of the light scheme. test:`writes no colour outside the theme, but
   the drop of the mark`.
+- **Tailwind, with no preflight and no layer for the rules** (FRU-679). `@tailwindcss/vite` builds
+  the sheets, in `wxt.config.ts` and in the gallery. The reset of Tailwind would change every page,
+  so only its theme is imported. A sheet writes its rules with `@apply` on the theme, which it reads
+  with `@reference` (that writes nothing), and keeps each rule out of any cascade layer: the sheets
+  win over each other by their selectors and their order, as before, and a layered rule would lose
+  to every rule in no layer. A measure of one part is written as drawn (`h-[46px]`), never with the
+  spacing of Tailwind, which is in `rem` and would follow the font size of the browser.
 - **An action is a pill**, as on the boards (test:`draws an action as a pill`). A label that may take several lines (`button.long`)
   takes the corner of a field: a pill of two lines is a lozenge.
 - **The drop of the mark is beside the name**, in the accent of the extension in both schemes, as
@@ -382,7 +394,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 
 - **One source for the parts the popup, the side panel and the page share.** `src/kit.ts` builds
   them, with no `browser`, so `kit.test.ts` reads each on happy-dom; `src/kit.css` gives their
-  measures on the tokens. The popup and the options page link `kit.css` after `popup/style.css`.
+  measures on the tokens, with `@apply` (FRU-679). The popup and the options page link `kit.css`
+  after `popup/style.css`.
 - **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px and its rule of 1 px, 53 in all, as the mock-up draws it; the drop and
   « Fruitback », the button of the account of 44 px), the main button (46 px; 56 px with the drop
   for the action of a site; 48 px in the panel), the second button (44 px), the text button
@@ -394,7 +407,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   the focus ring. The tabs have the keyboard of a tab list: the chosen tab is the one stop, and the
   arrows, Home and End move and choose.
 - **No rule of `kit.css` writes a colour.** test:`writes no colour in its sheet: each one is a token`.
-- **A switch that is off is drawn in `--line-strong` (3.49:1), not in the lighter grey of the
+- **A switch that is off is drawn in `--color-line-strong` (3.49:1), not in the lighter grey of the
   mock-up (1.48:1)**: its track is what says that the control is there (WCAG 1.4.11).
 - **The current popup takes the kit** for its main and second buttons, its switch and the drops of
   the notes of the page. Its screens do not change: the four screens of the mock-up are FRU-297
@@ -2564,7 +2577,12 @@ when one answers. Node prints a warning about the type of `e2e/bench.ts`, and ru
   `openPanelForTab`), and « Open notes in the sidebar » is not drawn in the preferences.
 - **The manifest tells Safari its minimum, 16.4** (`browser_specific_settings.safari`, set by the hook
   `build:manifestGenerated` from `src/browser-family.ts`), and not the keys of Firefox. The app asks
-  for macOS 11, the oldest macOS Safari 16.4 came out for.
+  for macOS 12: Safari 16.4 came out for macOS 11 too, but Xcode 27.2 builds for 12.0 at the least,
+  and App Store Connect takes a build of the current Xcode only.
+- **The background sets and clears its alarms through `promisedAlarms`** (`src/alarms.ts`), never
+  `browser.alarms` directly. In Safari `alarms.create` answers `undefined`, not a promise: a `.catch`
+  chained on it threw at the start of the background, Safari loaded no background, and the popup
+  waited for an answer that never came. `alarms.test.ts` holds the background to it.
 - **The words that name a browser follow the build** (`src/browser-family.ts`): the shortcut row says
   « Change it in Safari Settings, Extensions. » (Safari has no `commands.openShortcutSettings` and no
   page an extension may open), the popup names « Safari Settings, Extensions » for another copy, and
@@ -2596,7 +2614,8 @@ which lists the keys of the manifest Safari does not know. Safari 26.5.2 is on t
 | `runtime.getContexts`                                           | No.                                                                                                                                                                                                                              | Already optional (`openPopup` of the background asks without it).                                                           |
 | `action.openPopup`                                              | 16.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
 | `storage.sync`                                                  | 14, but Safari does not sync it: it acts as `storage.local`.                                                                                                                                                                     | « Keep my rules in the account of this browser » is not drawn on Safari: it would promise a copy that never leaves the Mac. |
-| `alarms`, `storage.local`, `tabs`, `windows`, `i18n`            | 14.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
+| `alarms`                                                        | 14. `alarms.create` answers `undefined`, not a promise (measured in Safari 26 on 2026-11-24).                                                                                                                                    | Every call goes through `promisedAlarms`.                                                                                   |
+| `storage.local`, `tabs`, `windows`, `i18n`                      | 14.                                                                                                                                                                                                                              | Unchanged.                                                                                                                  |
 
 ### What was measured, and what was not (2026-10-28)
 
@@ -2612,6 +2631,20 @@ which lists the keys of the manifest Safari does not know. Safari 26.5.2 is on t
   quits; this Mac has no signing identity. Playwright's WebKit loads no extension, and `safaridriver`
   was not tried. So nothing above that says « Safari does » was seen in Safari: the table is what
   `browser-compat-data` says.
+
+### What was measured in Safari (2026-11-24)
+
+Xcode 27.2, Safari 26, the Cloud build (`WXT_FRUITBACK_CLOUD`), unsigned, with « Allow unsigned
+extensions ».
+
+- **The converter of Xcode 27.2 writes `project.xcproj`**, a JSON, where Xcode 26.6 wrote
+  `project.pbxproj`. It makes the same three mistakes; `fixXcodeProject` corrects both forms, and
+  `projectFileOf` finds the one that is there. `xcodebuild` builds the app, version 0.7.0, macOS 12.
+- **The sign-in to the Cloud works**: the console approves, and the popup claims the session.
+- **« Turn on » loaded forever** before `promisedAlarms`: the background did not start (above).
+  After it, a site turns on and takes notes.
+- **Not measured yet**: Safari's own prompt for the access to a site (the site was allowed in Safari
+  Settings first), a capture with `activeTab` alone, and whether Safari ignores `excludeMatches`.
 
 ### Signing and publishing: the steps for the owner of the Apple account
 
@@ -2640,6 +2673,152 @@ Then, for each version:
 
 A job of CI that signs and uploads (`xcodebuild archive` and `xcrun altool` or the App Store Connect
 API, with a certificate and a key in secrets) is a later ticket: a new workflow, so a critical PR.
+
+## The macOS app (FRU-669)
+
+A framing: nothing of it is built yet. It answers the questions of FRU-669 with what was measured on
+2026-11-24, and cuts the work into tickets. The Safari extension it carries is
+in [Safari](#safari-fru-380), above.
+
+### One app, two faces
+
+#### The rules, in short
+
+- **One app.** Safari takes a web extension only inside a macOS app, so that app exists anyway. It
+  is also the face in the menu bar: an icon, a global shortcut, a capture and a note on anything of
+  the Mac. One signature, one install, one sign-in.
+- **One sign-in for both faces.** The app signs in as the extension does: the console approves it
+  (`/session/connect`). The session lives in an App Group container that the app and its extension
+  share; the extension reads it with `runtime.sendNativeMessage`, which reaches the handler of the
+  `.appex`. Chrome and Firefox keep the extension alone.
+- **Two distributions, one source** (decided by Mathieu on 2026-11-23: « Les deux »). The Mac App
+  Store build runs in the sandbox; the notarised download (Developer ID) does not, and reads more of
+  the context (below). One target, two configurations: the sandbox entitlement is the difference.
+- **Swift for the shell, the composer of the widget for the note** (decided on 2026-11-23). SwiftUI
+  and AppKit draw the menu, the shortcut, the choice of an area and the capture. The panel of the
+  note is a `WKWebView` that loads the composer of `packages/widget`, so a note is written in the
+  same field, with the same words and the same « never lose what was typed », as on a page. What
+  differs on the Mac arrives through a seam of the widget, never in the widget itself.
+- **A destination is chosen before a note is sent** (decided by Mathieu on 2026-11-25). There is no
+  setting « this Mac sends to ». The panel of the note has a destination field: a workspace, then
+  one of its sites, which carries the tracker (Linear, GitHub, GitLab, Slack, or Fruitback). « Send »
+  stays disabled until a destination is chosen. The last destination is the first of the list, not
+  a choice made for the person.
+- **A note of the Mac is not a note of a page.** It has no selector, no React component and often no
+  URL. It is a new kind of the contract, not a `fruitback.note` with a false anchor (below).
+
+#### What was measured (2026-11-24, macOS 27.2.1, Xcode 27.2)
+
+Two probes, each a fresh `.app` started with `open`, so each is its own responsible process with no
+permission of the terminal: one with the sandbox entitlement, one without. The front app was iTerm2,
+with 14 windows on screen.
+
+| Read                                                       | No sandbox, no permission       | Sandbox, no permission             |
+| ---------------------------------------------------------- | ------------------------------- | ---------------------------------- |
+| The front app: name, bundle id, version (`NSWorkspace`)    | Yes                             | Yes                                |
+| The owner of each window (`CGWindowListCopyWindowInfo`)    | 14 of 14                        | 14 of 14                           |
+| The title of each window (`kCGWindowName`)                 | 0 of 14                         | 0 of 14                            |
+| `CGPreflightScreenCaptureAccess()`                         | `false`                         | `false`                            |
+| `AXIsProcessTrusted()`                                     | `false`                         | `false`                            |
+| The focused window of the front app (`AXUIElementCopy...`) | `-25211`, `kAXErrorAPIDisabled` | `-25204`, `kAXErrorCannotComplete` |
+
+So the title of a window needs « Screen Recording », in or out of the sandbox, and the accessibility
+API answers nothing before « Accessibility » is given. **Not measured**: a sandboxed app that was
+given « Accessibility ». Apple's documentation says the sandbox refuses the accessibility API to
+another app; the probe of that case needs a person to tick the box in System Settings.
+
+The SDK of Xcode 27.2, compiled for each deployment target (`swiftc -typecheck`):
+
+| API                                                 | macOS 12.0 | macOS 14.0 | macOS 15.0      |
+| --------------------------------------------------- | ---------- | ---------- | --------------- |
+| `CGWindowListCreateImage`                           | builds     | deprecated | **unavailable** |
+| `SCShareableContent`, `SCStream`, `SCContentFilter` | from 12.3  | yes        | yes             |
+| `SCScreenshotManager.captureImage` (one image)      | no         | yes        | yes             |
+| `SCContentSharingPicker` (the picker of macOS)      | no         | yes        | yes             |
+
+#### What each distribution reads
+
+| Context of a note                             | App Store (sandbox)           | Download (Developer ID)                     | Needs            |
+| --------------------------------------------- | ----------------------------- | ------------------------------------------- | ---------------- |
+| The capture of an area, a window or a screen  | Yes                           | Yes                                         | Screen Recording |
+| The app: name, bundle id, version             | Yes                           | Yes                                         | Nothing          |
+| The title of the window                       | Yes                           | Yes                                         | Screen Recording |
+| The screen: size, scale, light or dark, macOS | Yes                           | Yes                                         | Nothing          |
+| The selected text, the focused element        | No (documented, not measured) | Yes                                         | Accessibility    |
+| The address of the tab of a browser           | No                            | Yes, by the accessibility API of the window | Accessibility    |
+
+On a web page, the extension already gives more than the app: a selector, a component, a pin. The
+app does not compete with it. When the front app is a browser with the extension on that site, the
+menu says « Leave a note on this page » and hands over to the extension.
+
+### The menu-bar face
+
+#### The rules, in short
+
+- **macOS 14 for the menu-bar face.** The app builds for macOS 12 (the Safari extension needs no
+  more). The capture uses `SCScreenshotManager` and `SCContentSharingPicker`, which start at
+  macOS 14: below it, the extension works and the icon says that the capture needs macOS 14. No
+  second path of capture on `SCStream` for 12.3 to 13 until somebody asks for it.
+- **Nothing is captured before the shortcut or the click.** No capture in the background, no capture
+  on a timer.
+- **The capture is shown before it is sent.** The panel shows the image; the person can crop it and
+  mask an area (a filled rectangle drawn into the pixels, not a layer over them). « Send without the
+  picture » is always there.
+- **A permission refused is a sentence, never a dead button.** No « Screen Recording »: the note can
+  still be sent, with the app and the screen, without a picture or a window title; the panel says
+  what is missing and opens System Settings. No « Accessibility »: no selected text, no address,
+  said the same way.
+- **The menu lists my notes of the Mac**, newest first, with their status (`GET /session/notes`),
+  and « Looks fixed » and « Still wrong » on a done one, as in the thread of the widget.
+
+### The contract of a note of the Mac
+
+#### The rules, in short
+
+- **A new kind, `fruitback.screen-note`, version 1.** `fruitback.note` version 3 requires an `http`
+  page and an anchor ([contract.md](contract.md)); a note of the Mac has neither. A new version 4
+  would make every reader of before refuse every web note; a new kind makes them refuse only the
+  notes of the Mac, as `not-found`, which is what they are to them.
+- **Its fields**, each optional except the first four: `id`, `createdAt`, `text`, `site` (the
+  destination chosen); `app` (`name`, `bundleId`, `version`); `window` (`title`); `url`, when the
+  front app is a browser and the address was read; `selection`, the selected text, cut at
+  `NOTE_MAX_LENGTH`; `area` (`x`, `y`, `width`, `height`, in points of the screen); `screen`
+  (`width`, `height`, `scale`, `appearance`); `os` (`version`); `screenshot`, filled by the worker as
+  for a web note.
+- **The worker routes it by its `site`**, the same way as a web note: the destination of a site is
+  where its notes go, and the console lists it with the notes of that site, with « Mac » for its
+  page. It never becomes a pin: no page shows it.
+- **The text of a note of the Mac in a tracker** follows `markdown-description.ts`: the app, the
+  window, the address if any, the screen, then the picture.
+
+### Privacy
+
+- A capture shows what is on the screen, other apps included. The panel shows it before it is sent,
+  and the person can crop it, mask it, or drop it.
+- The selected text and the address of a tab leave only in the download build, and only with
+  « Accessibility » given; the panel shows them as fields the person can clear before « Send ».
+- `SECURITY.md` and `docs/privacy.md` change in the ticket that sends the first note of the Mac, in
+  the same commit.
+
+### The tickets
+
+1. **The App Group session**: the app signs in with `/session/connect`, keeps the session in the App
+   Group, and the Safari extension reads it with `sendNativeMessage`. One sign-in for both.
+2. **The contract**: `fruitback.screen-note` version 1 in `packages/shared`, its schema, its
+   fixture, its Markdown description, and `contract.md`.
+3. **The worker**: `POST /session/screen-notes`, routed by `site`, its picture uploaded as for a web
+   note; the console lists it with the notes of its site. `SECURITY.md` and `docs/privacy.md`
+   change in the same commit: this ticket sends the first note of the Mac.
+4. **The menu bar**: `NSStatusItem`, the global shortcut, the choice of an area, a window or a
+   screen (`SCContentSharingPicker`), the capture (`SCScreenshotManager`), macOS 14.
+5. **The panel**: a `WKWebView` with the composer of `packages/widget` through a seam, the
+   destination field (required), the picture with crop and mask, the context fields.
+6. **The permissions**: Screen Recording and Accessibility asked when first needed, and the
+   sentences of a refusal.
+7. **My notes in the menu**: the list, the status, « Looks fixed » and « Still wrong ».
+8. **The download build**: Developer ID, notarisation, and the accessibility context (selected text,
+   the address of a browser). Measure first: a sandboxed probe given « Accessibility ». These two
+   fields leave the Mac for the first time: `SECURITY.md` and `docs/privacy.md` change in the same commit.
 
 ## Releasing the extension (FRU-329)
 

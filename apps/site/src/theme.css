@@ -1,0 +1,90 @@
+/*
+  The tokens of fruitback.com (FRU-681), beside the shared theme of Fruitback
+  (packages/shared/tailwind/theme.css). The site keeps the warm greys of the first boards and of the
+  mock-up of the landing (FRU-387, FRU-417), not the neutral greys of the console: each value is the one
+  the hand-written sheets had, so the pages look the same. design/README.md has the table.
+
+  `site-*` is common to the landing and the guides, `landing-*` and `docs-*` belong to one sheet. A sheet
+  writes the name of a token and never a value: css.test.ts fails on a colour written in a source.
+*/
+/*
+  Every length is in px, as the sheets were written: the scale of p-6, gap-4, w-29.5 is 4 px. Inline, so
+  the built sheet says 24px where a source says p-6.
+*/
+@theme inline {
+  --spacing: 4px;
+}
+
+@theme {
+  --color-site-ink: #1c1917;
+  --color-site-body: #44403c;
+  --color-site-line: #e7e5e4;
+  /* The edge of a field or an outline button: 3.4:1 on the page. */
+  --color-site-edge: #8f8883;
+  --color-site-surface: #ffffff;
+  --color-site-chip: #f5f5f4;
+  --color-site-accent: #dd2c27;
+
+  /*
+    The landing. Muted text is #57534e, not the #78716c of the mock-up: that one is 4.4:1 on #fffdf9,
+    under what text needs.
+  */
+  --color-landing-page: #fffdf9;
+  --color-landing-head: rgba(255, 253, 249, 0.94);
+  --color-landing-muted: #57534e;
+  --color-landing-warm: #faf7f2;
+  --color-landing-stone: #f3f1ee;
+  --color-landing-ok: #4e7d2a;
+  /* The browser frame of the hero: its bar, its lights, the two buttons of the page in it. */
+  --color-landing-bar: #faf9f7;
+  --color-landing-demo-green: #2f4f3a;
+  --color-landing-demo-faint: #c3ccc5;
+  --color-landing-picture: #f6f3ee;
+  /* What is written on the night cards and on the one-liner. */
+  --color-landing-on-night: #fafaf9;
+  --color-landing-night-muted: #d6d3d1;
+  --color-landing-night-faint: #a8a29e;
+  --color-landing-on-night-ok: #8fc06a;
+  --color-landing-on-night-accent: #f87171;
+  /* The red band: its colour under the picture, the fade over it, and its outline button. */
+  --color-landing-cta: #c8211d;
+  --color-landing-cta-clear: rgba(176, 26, 23, 0);
+  --color-landing-cta-shade: rgba(176, 26, 23, 0.55);
+  --color-landing-cta-shade-small: rgba(176, 26, 23, 0.75);
+  --color-landing-cta-edge: rgba(255, 255, 255, 0.8);
+  --color-landing-cta-hover: rgba(255, 255, 255, 0.12);
+
+  --font-landing: -apple-system, system-ui, sans-serif;
+
+  --shadow-landing-frame: 0 14px 40px rgba(28, 25, 23, 0.08);
+  --shadow-landing-pin: 0 3px 10px rgba(28, 25, 23, 0.28);
+  --shadow-landing-note: 0 10px 30px rgba(0, 0, 0, 0.14);
+  --shadow-landing-drop: 0 2px 6px rgba(28, 25, 23, 0.2);
+  --shadow-landing-popup: 0 30px 60px -24px rgba(120, 22, 18, 0.45);
+  --drop-shadow-landing-pin: 0 22px 26px rgba(120, 22, 18, 0.24);
+
+  /*
+    The guides, after the board « Fruitback Docs » of FRU-417. Each text colour holds 4.5:1 at least on
+    the surface it sits on, the Rouge palette of the code blocks included (docs-site.test.ts computes
+    each one).
+  */
+  --color-docs-page: #faf9f5;
+  --color-docs-inset: #fafaf9;
+  --color-docs-muted: #736c67;
+  --color-docs-code-surface: #1c1917;
+  --color-docs-code-text: #e7e5e4;
+  --color-docs-copy-edge: #78716c;
+  /*
+    The Rouge palette on #1c1917: comments #a8a29e 6.9:1, strings #a5d6a7 10.6:1, keywords #f9a8a8 9.3:1,
+    names #fcd38d 12.4:1, numbers and builtins #93c5fd 9.7:1, tags #86efac 12.5:1.
+  */
+  --color-docs-code-comment: #a8a29e;
+  --color-docs-code-string: #a5d6a7;
+  --color-docs-code-keyword: #f9a8a8;
+  --color-docs-code-name: #fcd38d;
+  --color-docs-code-number: #93c5fd;
+  --color-docs-code-tag: #86efac;
+
+  --shadow-docs-ring: 0 0 0 1px var(--color-site-line);
+  --shadow-docs-current: 0 0 0 1px var(--color-site-line), 0 1px 2px rgba(28, 25, 23, 0.06);
+}

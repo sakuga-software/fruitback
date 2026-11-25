@@ -2,6 +2,10 @@ apps/
 packages/
 pnpm-lock.yaml
 
+# apps/site builds these from its Tailwind sources, minified, and css.test.ts holds them to it (FRU-681).
+docs/assets/landing.css
+docs/assets/docs.css
+
 # The design export is a bundle, not source to format (design/README.md).
 design/
 

@@ -7,15 +7,19 @@ import { describe, it } from 'node:test';
  *
  * **Shared tokens, one accent per surface.** The greys, the statuses, the shadows and the radii are
  * those of the widget, the zinc of the console since FRU-334, and a stylesheet of an extension page
- * cannot import `packages/widget/src/theme.ts`, so `entrypoints/popup/style.css` copies them. The
- * widget is the one source of the statuses: the console copies them too, and
- * `apps/console/app/tokens.test.ts` compares its copy. This file reads both
- * texts and compares each shared token, in the light scheme and in the dark scheme. The accent is
- * shared since FRU-372: the red #dd2c27 of the console and of the widget, after the orange #c2410c
- * of FRU-292. Then the test measures each pair of text and background that the pages paint.
+ * cannot import `packages/widget/src/theme.ts`, so the theme of the extension copies them: the
+ * shared Tailwind theme of Fruitback (`packages/shared/tailwind/theme.css`) for the tokens it names,
+ * then `src/theme.css` for the others and for the dark scheme (FRU-679). The widget is the one source
+ * of the statuses: the console copies them too, and `apps/console/app/tokens.test.ts` compares its
+ * copy. This file reads both texts and compares each shared token, in the light scheme and in the
+ * dark scheme. The accent is shared since FRU-372: the red #dd2c27 of the console and of the widget,
+ * after the orange #c2410c of FRU-292. Then the test measures each pair of text and background that
+ * the pages paint.
  */
 
 const sheet = readFileSync(new URL('../entrypoints/popup/style.css', import.meta.url), 'utf8');
+const themeSheet = readFileSync(new URL('./theme.css', import.meta.url), 'utf8');
+const sharedTheme = readFileSync(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url), 'utf8');
 const optionsSheet = readFileSync(new URL('../entrypoints/options/style.css', import.meta.url), 'utf8');
 const kitSheet = readFileSync(new URL('./kit.css', import.meta.url), 'utf8');
 const widget = readFileSync(new URL('../../../packages/widget/src/theme.ts', import.meta.url), 'utf8');
@@ -23,7 +27,7 @@ const panelSheet = readFileSync(new URL('../entrypoints/sidepanel/style.css', im
 const welcomeSheet = readFileSync(new URL('../entrypoints/welcome/style.css', import.meta.url), 'utf8');
 const WIDGET_SOURCES = new URL('../../../packages/widget/src/', import.meta.url);
 
-/** The token of the widget that each shared property of the stylesheet copies. */
+/** The token of the widget that each shared colour of the theme copies: `surface` is `--color-surface`. */
 const COPIES = {
   surface: 'color-surface',
   'surface-raised': 'color-surface-raised',
@@ -31,25 +35,25 @@ const COPIES = {
   'surface-warm': 'color-surface-warm',
   text: 'color-text',
   muted: 'color-text-muted',
-  subtle: 'color-text-subtle',
+  'ink-soft': 'color-text-subtle',
   line: 'color-border',
   'line-strong': 'color-border-strong',
-  chip: 'color-chip',
-  'on-chip': 'color-on-chip',
+  'chip-dark': 'color-chip',
+  'on-chip-dark': 'color-on-chip',
   ink: 'color-ink',
   'on-ink-muted': 'color-on-ink-muted',
   success: 'color-success',
   unplaced: 'color-unplaced',
-  'on-stage': 'color-on-stage',
-  'on-stage-new': 'color-on-stage-new',
-  'on-stage-todo': 'color-on-stage-todo',
-  'on-stage-progress': 'color-on-stage-progress',
-  'stage-edge': 'color-stage-edge',
-  'stage-new': 'stage-new',
-  'stage-todo': 'stage-todo',
-  'stage-progress': 'stage-progress',
-  'stage-done': 'stage-done',
-  'stage-closed': 'stage-closed',
+  'on-status': 'color-on-stage',
+  'on-status-new': 'color-on-stage-new',
+  'on-status-todo': 'color-on-stage-todo',
+  'on-status-progress': 'color-on-stage-progress',
+  'status-edge': 'color-stage-edge',
+  'status-new': 'stage-new',
+  'status-todo': 'stage-todo',
+  'status-progress': 'stage-progress',
+  'status-done': 'stage-done',
+  'status-closed': 'stage-closed',
   // One accent everywhere since FRU-372: the red of the console and of the widget, in both schemes.
   accent: 'color-accent',
   'accent-strong': 'color-accent-strong',
@@ -129,16 +133,24 @@ function ratio(first: string, second: string): number {
   return ((lighter ?? 0) + 0.05) / ((darker ?? 0) + 0.05);
 }
 
-const ours = schemes(sheet, '');
+/** The light scheme of the extension is the shared theme, then its own; its dark block sets both again. */
+function extension(read: (block: string, prefix: string) => Scheme, prefix: string): { light: Scheme; dark: Scheme } {
+  const own = schemes(themeSheet, prefix, read);
+  const light = { ...read(sharedTheme, prefix), ...own.light };
+
+  return { light, dark: { ...light, ...own.dark } };
+}
+
+const ours = extension(declared, 'color-');
 const theirs = schemes(widget, 'fruitback-');
-const ourShapes = schemes(sheet, '', values);
+const ourShapes = extension(values, '');
 const theirShapes = schemes(widget, 'fruitback-', values);
 
 /** Each pair that the popup and the options page paint. Text needs 4.5:1, the edge of a field 3:1. */
 const PAIRS = [
   { foreground: 'text', background: 'surface', minimum: 4.5, where: 'the text of both pages' },
   { foreground: 'muted', background: 'surface', minimum: 4.5, where: 'the origin, a state, a chevron' },
-  { foreground: 'subtle', background: 'surface', minimum: 4.5, where: 'the secondary text, the terms of a list' },
+  { foreground: 'ink-soft', background: 'surface', minimum: 4.5, where: 'the secondary text, the terms of a list' },
   { foreground: 'on-accent', background: 'accent', minimum: 4.5, where: 'the label of an action' },
   { foreground: 'on-accent', background: 'accent-strong', minimum: 4.5, where: 'an action under the pointer' },
   { foreground: 'accent', background: 'surface', minimum: 4.5, where: 'a link, and « Change »' },
@@ -148,15 +160,20 @@ const PAIRS = [
   // The pairs the screens of the mock-up paint, held here before a screen uses them (FRU-293 and after).
   { foreground: 'text', background: 'surface-raised', minimum: 4.5, where: 'text on the page of the extension' },
   { foreground: 'muted', background: 'surface-raised', minimum: 4.5, where: 'a hint on the page of the extension' },
-  { foreground: 'subtle', background: 'surface-raised', minimum: 4.5, where: 'an intro on the page of the extension' },
+  {
+    foreground: 'ink-soft',
+    background: 'surface-raised',
+    minimum: 4.5,
+    where: 'an intro on the page of the extension',
+  },
   { foreground: 'accent', background: 'surface-raised', minimum: 4.5, where: 'a link on the page of the extension' },
   { foreground: 'line-strong', background: 'surface-raised', minimum: 3, where: 'a field of the page' },
   { foreground: 'text', background: 'surface-sunken', minimum: 4.5, where: 'a thing that is chosen' },
   { foreground: 'muted', background: 'surface-sunken', minimum: 4.5, where: 'a hint on a thing that is chosen' },
-  { foreground: 'subtle', background: 'surface-sunken', minimum: 4.5, where: 'a tab that is not chosen' },
+  { foreground: 'ink-soft', background: 'surface-sunken', minimum: 4.5, where: 'a tab that is not chosen' },
   { foreground: 'text', background: 'surface-warm', minimum: 4.5, where: 'a mono block' },
-  { foreground: 'subtle', background: 'surface-warm', minimum: 4.5, where: 'the row that is open' },
-  { foreground: 'on-chip', background: 'chip', minimum: 4.5, where: 'the initial of the account' },
+  { foreground: 'ink-soft', background: 'surface-warm', minimum: 4.5, where: 'the row that is open' },
+  { foreground: 'on-chip-dark', background: 'chip-dark', minimum: 4.5, where: 'the initial of the account' },
   { foreground: 'on-ink-muted', background: 'ink', minimum: 4.5, where: 'the hint of the capture capsule' },
   { foreground: 'success', background: 'surface', minimum: 4.5, where: 'a word that says it worked' },
   { foreground: 'success-line', background: 'surface', minimum: 3, where: 'the edge of « Looks fixed »' },
@@ -178,21 +195,21 @@ const PAIRS = [
   { foreground: 'line-strong', background: 'surface-raised', minimum: 3, where: 'a switch of the page that is off' },
   // The number of a drop: black on the three light fills, white on done and closed (FRU-334).
   ...(['new', 'todo', 'progress'] as const).map((stage) => ({
-    foreground: `on-stage-${stage}`,
-    background: `stage-${stage}`,
+    foreground: `on-status-${stage}`,
+    background: `status-${stage}`,
     minimum: 4.5,
     where: `the number of a drop (${stage})`,
   })),
   ...(['done', 'closed'] as const).map((stage) => ({
-    foreground: 'on-stage',
-    background: `stage-${stage}`,
+    foreground: 'on-status',
+    background: `status-${stage}`,
     minimum: 4.5,
     where: `the number of a drop (${stage})`,
   })),
   // A drawing, not text: 1.4.11 asks for 3:1. A status is also named in words. The light fills are
   // under 3:1 on white, so every drop is drawn with an edge, and the edge is what holds (FRU-334).
   ...(['surface', 'surface-raised', 'surface-sunken'] as const).map((background) => ({
-    foreground: 'stage-edge',
+    foreground: 'status-edge',
     background,
     minimum: 3,
     where: 'the edge of the drop of a status',
@@ -253,10 +270,11 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
     ]);
   });
 
-  it('writes no colour outside the tokens, but the drop of the mark', () => {
-    const body = sheet.slice(sheet.indexOf('\nbody {'));
+  it('writes no colour outside the theme, but the drop of the mark', () => {
+    // The whole sheet of the popup: its tokens are in src/theme.css since FRU-679.
+    assert.doesNotMatch(sheet, /--color-[a-z-]+:/);
     const written = [
-      ...`${body}\n${optionsSheet}\n${kitSheet}`.matchAll(/#[0-9a-f]{3,8}\b|%23[0-9a-f]{3,8}\b|rgba?\(/gi),
+      ...`${sheet}\n${optionsSheet}\n${kitSheet}`.matchAll(/#[0-9a-f]{3,8}\b|%23[0-9a-f]{3,8}\b|rgba?\(/gi),
     ].map(([colour]) => colour.toLowerCase());
 
     // The drop beside the name: the accent of the light scheme, in both schemes.
@@ -281,6 +299,7 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
       .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
       .map((name) => [`widget/${name}`, readFileSync(new URL(name, WIDGET_SOURCES), 'utf8')] as const);
     const sources = new Map<string, string>([
+      ['theme.css', themeSheet],
       ['popup/style.css', sheet],
       ['options/style.css', optionsSheet],
       ['sidepanel/style.css', panelSheet],
@@ -299,8 +318,9 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
   });
 
   it('draws an action as a pill', () => {
-    assert.match(sheet, /--radius-pill:\s*999px;/);
-    assert.match(sheet, /\nbutton \{[^}]*border-radius:\s*var\(--radius-pill\);/);
+    assert.match(themeSheet, /--radius-pill:\s*999px;/);
+    // `rounded-pill` is `border-radius: var(--radius-pill)` (FRU-679).
+    assert.match(sheet, /\nbutton \{[^}]*@apply [^;}]*\brounded-pill\b/);
   });
 });
 

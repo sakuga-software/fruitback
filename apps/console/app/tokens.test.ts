@@ -12,6 +12,8 @@ import { readFileSync, readdirSync } from 'node:fs';
  */
 const APP = new URL('./', import.meta.url);
 const css = readFileSync(new URL('app.css', APP), 'utf8');
+/** The Tailwind theme the console shares with the extension, the widget and the docs (FRU-677). */
+const theme = readFileSync(new URL('../../../packages/shared/tailwind/theme.css', import.meta.url), 'utf8');
 
 /** Every source of the console that draws something: the screens, their parts, the kit. */
 function drawn(): Map<string, string> {
@@ -24,9 +26,11 @@ function drawn(): Map<string, string> {
   return new Map(names.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 }
 
-/** The value of a custom property of `app.css`. */
+/** The value of a custom property of `app.css` or of the shared theme. */
 function token(name: string): string | undefined {
-  return new RegExp(`^\\s*${name}:\\s*([^;]+);`, 'm').exec(css)?.[1];
+  const declared = new RegExp(`^\\s*${name}:\\s*([^;]+);`, 'm');
+
+  return declared.exec(css)?.[1] ?? declared.exec(theme)?.[1];
 }
 
 /** The palette of before the mockup: the warm greys, the green of the first boards. */
@@ -116,7 +120,7 @@ describe('the tokens of the console (FRU-232)', () => {
   });
 
   it('holds no colour of the palette of before, in any file of the console', () => {
-    const files = new Map([...drawn(), ['app.css', css]]);
+    const files = new Map([...drawn(), ['app.css', css], ['shared/tailwind/theme.css', theme]]);
     const found = (sources: Map<string, string>) =>
       [...sources].flatMap(([name, source]) =>
         BEFORE.filter((colour) => source.toLowerCase().includes(colour)).map((colour) => `${name}: ${colour}`),
