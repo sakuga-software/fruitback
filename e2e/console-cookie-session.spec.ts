@@ -1,6 +1,7 @@
 import { type BrowserContext, type Page, expect, test } from '@playwright/test';
 import { CONSOLE, SESSION_COOKIE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { WORKER_ORIGIN } from './pin.ts';
+import { openMyAccount } from './console-workspace.ts';
 
 /**
  * The console signs in with the cookie of a session of better-auth (FRU-148), from the sign-in
@@ -43,7 +44,7 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
  * nothing is sent, and the page stays. Measured on `main` at 30c62f8, where this spec failed for it.
  */
 async function openAccount(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'My account' }).click();
+  await openMyAccount(page);
   // The row of this browser: the worker names it by its user agent (FRU-249).
   await expect(
     page.getByRole('region', { name: 'Where you are signed in' }).getByText('This browser', { exact: true }),

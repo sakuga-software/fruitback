@@ -630,9 +630,9 @@ function Invited({ email, message }: { email: string; message: Message }) {
   const link = invitationLink();
 
   return (
-    <div role="status" className="mb-[24px] rounded-frame border border-line bg-subtle px-[22px] py-[20px] text-small">
+    <div role="status" className="mb-[24px] rounded-card border border-line bg-subtle px-[22px] py-[20px] text-small">
       <p>{t(INVITED[message], { email })}</p>
-      <p className="mt-[10px] rounded-button border border-line bg-surface px-[12px] py-[8px] font-mono text-hint break-all">
+      <p className="mt-[10px] rounded-control border border-line bg-surface px-[12px] py-[8px] font-mono text-hint break-all">
         {link}
       </p>
       <p className="mt-[10px] text-hint text-muted">

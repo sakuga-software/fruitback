@@ -52,7 +52,7 @@ test('the name of the only workspace leads to its settings, which rename it', as
   const worker = await workerWith(page, [ACME]);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/sites`);
-  const head = rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' });
+  const head = rail(page).getByRole('link', { name: 'Acme Workspace settings' });
   await head.click();
   await expect(page).toHaveURL(/\/w\/w1\/settings$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Workspace settings' })).toBeVisible();
@@ -75,11 +75,11 @@ test('the name of the only workspace leads to its settings, which rename it', as
   await expect(page.getByRole('status').filter({ hasText: 'The name is saved.' })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   // The rail shows the new name at once, and keeps it on the next screen.
-  await expect(rail(page).getByRole('link', { name: /^Acme Labs Cloud workspace/ })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: /^Acme Labs Workspace settings/ })).toBeVisible();
   expect(worker.renames).toEqual([{ name: 'Acme Labs' }, { name: 'Acme Labs' }]);
   await rail(page).getByRole('link', { name: 'Sites', exact: true }).click();
   await expect(page).toHaveURL(/\/w\/w1\/sites$/);
-  await expect(rail(page).getByRole('link', { name: /^Acme Labs Cloud workspace/ })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: /^Acme Labs Workspace settings/ })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
@@ -130,7 +130,7 @@ test('« Settings » is an entry of the rail for an owner and an admin, under «
     await workerWith(page, [{ ...ACME, role }]);
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const entries = rail(page).getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-    await expect(entries, role).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'Settings', 'My account']);
+    await expect(entries, role).toHaveText(['Notes', 'Sites', 'Connectors', 'Members', 'Settings']);
     await rail(page).getByRole('link', { name: 'Settings', exact: true }).click();
     await expect(page).toHaveURL(/\/w\/w1\/settings$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Workspace settings' })).toBeVisible();
@@ -145,16 +145,16 @@ test('« Settings » is an entry of the rail for an owner and an admin, under «
     await workerWith(page, [{ ...ACME, role }]);
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const entries = rail(page).getByRole('navigation', { name: 'Workspace' }).getByRole('link');
-    await expect(entries, role).toHaveText(['Sites', 'Notes', 'Connectors', 'Members', 'My account']);
-    await rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }).click();
+    await expect(entries, role).toHaveText(['Notes', 'Sites', 'Connectors', 'Members']);
+    await rail(page).getByRole('link', { name: 'Acme Workspace settings' }).click();
     await expect(page).toHaveURL(/\/w\/w1\/settings$/);
     // The name stays the one on screen on the page « AI » of the settings (FRU-544).
     await page.getByRole('main').getByRole('link', { name: 'AI', exact: true }).click();
     await expect(page).toHaveURL(/\/w\/w1\/settings\/ai$/);
-    await expect(
-      rail(page).getByRole('link', { name: 'Acme Cloud workspace Workspace settings' }),
-      role,
-    ).toHaveAttribute('aria-current', 'page');
+    await expect(rail(page).getByRole('link', { name: 'Acme Workspace settings' }), role).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   }
 });
 
@@ -269,9 +269,7 @@ test('at 390 px in French nothing scrolls sideways', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${CONSOLE}/w/w1/settings`);
   await expect(page.getByRole('heading', { level: 1, name: 'Réglages de l’espace de travail' })).toBeVisible();
-  await expect(
-    rail(page).getByRole('link', { name: 'Acme Espace de travail Cloud Réglages de l’espace de travail' }),
-  ).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Acme Réglages de l’espace de travail' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Enregistrer' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
   const results = await new AxeBuilder({ page }).analyze();

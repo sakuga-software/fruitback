@@ -114,7 +114,66 @@ is the name of the project, not a list of screens: there is no board for the sid
 landing page. Those take the language of the boards above. The list of every note of the
 page (FRU-129) was built that way, on the tokens of the widget.
 
-## The tokens of the console (the mockup of 2026-10-13)
+## The tokens of the console (slate, FRU-683, 2026-11-25)
+
+The console takes the slate theme of the redesign « Refonte UI console et extension » (FRU-683):
+a slate grey on a white page, one radius, three heights of a control, Inter at 13 px. It replaced
+the neutral greys of the mockup « Fruitback, simpler flow » of 2026-10-13 (FRU-230, FRU-232), whose
+structure the screens keep until their ticket of the redesign draws them again. Every value is
+named once, and a screen writes the name: `app/tokens.test.ts` fails on a colour written as a value
+in a screen or in the kit, and `app/theme.test.ts` on a radius or a height of a control.
+
+The tokens of the console alone are in `apps/console/app/theme.css`, imported by `app.css` after
+the shared theme `packages/shared/tailwind/theme.css` (FRU-677): they set some of its tokens again
+for the console, and the extension, the widget and the docs keep the shared values. The variables
+that HeroUI reads (`muted`, `surface`, `accent`, `field-radius`) stay in `app.css`, and read the
+tokens. **Each token is a CSS variable on `:root`** (`@theme static` writes all of them, used or
+not), and each utility reads it through `var()`: a setting of the appearance (FRU-694) sets a
+token on `<html>` and the console follows at once.
+
+| Token                                                           | Value                                                            | What it is for                                                   |
+| --------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ink`, `ink-soft`, `muted`                                      | `#0f172a`, `#334155`, `#5b6779`                                  | text, a value that is locked, the secondary text and placeholder |
+| `page`, `surface`, `sidebar`, `subtle`                          | `#ffffff`, `#ffffff`, `#f1f4f8`, `#f7f9fb`                       | the page, a card, the sidebar, a panel or the band of a group    |
+| `hover`, `selected`, `chip`                                     | `#e8edf3`, `#e2e8f0`, `#e8edf3`                                  | under the pointer, chosen, the fill of a chip                    |
+| `line`, `control`                                               | `#e3e8ef`, `#7b8797`                                             | a rule or a frame, the border of a field and of a control        |
+| `accent`, `accent-strong`                                       | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer     |
+| `done`                                                          | `#166534`                                                        | « Connected », « Active », a step done                           |
+| `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge` | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop         |
+| `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent` | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail, until the sidebar of FRU-684 replaces it          |
+| `on-ink`                                                        | `#ffffff`                                                        | what is written on ink: the rail, a banner, a success drop       |
+| `avatar`                                                        | `#334155`                                                        | the round initial of a person                                    |
+| `text-title`, `-title-setup`, `-conclusion`                     | `20px/1.25`, `24px/1.2`, `18px/1.3`                              | a title, weight 700                                              |
+| `text-section`, `-step`, `-lead`                                | `15px/1.4`, `14px/20px`, `14px/1.5`                              | a section, a step, the sentence under a title                    |
+| `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`     | `13px/1.5`, `13px/1.45`, `13px/1.4`, `12px/1.45`, `13px`, `11px` | text: 13 px is the base                                          |
+| `h-control-sm`, `-md`, `-lg`                                    | `24px`, `28px`, `32px`                                           | a chip or a small icon; a button or a field; a control of a page |
+| `rounded-control`, `-card`, `-modal`                            | `6px`, `8px`, `10px`                                             | a button, a field, a select, a search, a chip, a menu; a card    |
+| `rounded-inner`, `-pill`, `-drop`                               | `4px`, `999px`, `50% 50% 50% 0`                                  | a box to tick or a swatch; a switch or an avatar; the drop       |
+| `shadow-frame`, `-pin`, `-thumb`                                | see `theme.css`                                                  | the preview, a drop, the thumb of a switch                       |
+| `ease-settle`, `--duration-fast`                                | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                        |
+| Font                                                            | Inter (`@fontsource-variable/inter`, served by the console)      | weights 400, 600 and 700 only                                    |
+
+**HeroUI takes the radius of a control.** It derives every radius from the scale of Tailwind
+(a button is `rounded-3xl`, a menu item `rounded-2xl`, a box to tick `rounded-md`): `theme.css` sets
+each step of that scale to `--radius-control`, and `app.css` gives a modal `--radius-modal` and an
+alert `--radius-card`. A screen names `control`, `card`, `modal`, `inner`, `pill`, `drop`,
+`full` or `none`, never a step of the scale nor a value.
+
+**Measured** (`app/theme.test.ts` computes each pair): the secondary text `#5b6779` is 5.74:1 on
+the page, 5.20:1 on the sidebar, 5.44:1 on `subtle`, 4.87:1 under the pointer and 4.65:1 on the
+selection: AA everywhere, and under the 4.79:1 the ticket wrote only on the selection. Ink is
+17.85:1 to 14.48:1, `ink-soft` 10.35:1 to 8.40:1, `accent-strong` 6.47:1 to 5.25:1 on the same
+grounds, and `done` 7.13:1 to 5.78:1; white on the accent 4.70:1, on an avatar 10.35:1. The border of a control `#7b8797` is
+3.65:1 on white and 3.31:1 on the sidebar, over the 3:1 of WCAG 1.4.11. The faint grey `#8592a3` of
+the mockup of the notes is 3.16:1 on white: the console does not write a text in it.
+
+**A red word is `accent-strong`, and `done` is darker.** On the slate tints the accent is under
+4.5:1 (4.46:1 on `subtle`, 4.00:1 under the pointer, 3.82:1 on the selection), and the green of
+before was 4.07:1 on the selection. A word in red in a row or on a tint (« Suspended », « Not
+delivered yet », an urgent priority) is `text-accent-strong`; the accent fills the main button,
+the focus ring and an alert on white.
+
+### The values of 2026-10-13, before the slate theme
 
 The console takes the tokens of the mockup « Fruitback, simpler flow » of 2026-10-13 (FRU-230,
 FRU-232): a neutral grey on a white page, and five colours of status. Mathieu drew the mockup; the
@@ -125,25 +184,25 @@ written as a value in a screen or in the kit. The Tailwind theme (`@theme`) is
 docs import; the variables that HeroUI reads (`muted`, `surface`, `accent`, `rounded-field`) stay in
 `apps/console/app/app.css`.
 
-| Token                                                            | Value                                                            | What it is for                                               |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
-| `ink`, `ink-soft`, `muted`                                       | `#18181b`, `#52525b`, `#6b6b74`                                  | text, a value that is locked, a hint and a placeholder       |
-| `page`, `surface`, `subtle`, `chip`                              | `#ffffff`, `#ffffff`, `#fafafa`, `#f4f4f5`                       | the page, a card, a panel or an empty state, a selection     |
-| `line`, `control`                                                | `#e4e4e7`, `#8a8a93`                                             | a rule or a frame, the border of a field and of a control    |
-| `accent`, `accent-strong`                                        | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer |
-| `done`                                                           | `#15803d`                                                        | « Connected », a step that is done                           |
-| `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge`  | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop     |
-| `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent`  | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail of a workspace (FRU-234)                       |
-| `on-ink` | `#ffffff` | what is written on ink: the rail, a banner, the check of a success drop (FRU-508) |
-| `avatar`                                                         | `#3f3f46`                                                        | the round initial of a person                                |
-| `text-title`, `-title-setup`, `-conclusion`                      | `28px/1.15`, `30px/1.15`, `22px/1.25`                            | a title, weight 700                                          |
-| `text-section`, `-step`, `-lead`                                 | `18px`, `17px/26px`, `16px/1.5`                                  | a section, a step, the sentence under a title                |
-| `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`      | `15px/1.5`, `14px/1.5`, `14px/1.45`, `13px/1.5`, `13px`, `12px`  | text                                                         |
-| `h-control`, `-control-panel`, `-control-chip`, `-control-small` | `44px`, `40px`, `36px`, `32px`                                   | the height of a control                                      |
-| `rounded-button`, `-field`, `-box`, `-frame`                     | `6px`, `8px`, `10px`, `14px`                                     | a control, a field, an option card, a table or a panel       |
-| `shadow-frame`, `-pin`, `-thumb`                                 | see `theme.css`                                                  | the preview, a drop, the thumb of a switch                   |
-| `ease-settle`, `--duration-fast`                                 | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                    |
-| Font                                                             | the system font (`-apple-system, BlinkMacSystemFont`)            | weights 400, 600 and 700 only                                |
+| Token                                                            | Value                                                            | What it is for                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `ink`, `ink-soft`, `muted`                                       | `#18181b`, `#52525b`, `#6b6b74`                                  | text, a value that is locked, a hint and a placeholder                            |
+| `page`, `surface`, `subtle`, `chip`                              | `#ffffff`, `#ffffff`, `#fafafa`, `#f4f4f5`                       | the page, a card, a panel or an empty state, a selection                          |
+| `line`, `control`                                                | `#e4e4e7`, `#8a8a93`                                             | a rule or a frame, the border of a field and of a control                         |
+| `accent`, `accent-strong`                                        | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer                      |
+| `done`                                                           | `#15803d`                                                        | « Connected », a step that is done                                                |
+| `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge`  | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop                          |
+| `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent`  | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail of a workspace (FRU-234)                                            |
+| `on-ink`                                                         | `#ffffff`                                                        | what is written on ink: the rail, a banner, the check of a success drop (FRU-508) |
+| `avatar`                                                         | `#3f3f46`                                                        | the round initial of a person                                                     |
+| `text-title`, `-title-setup`, `-conclusion`                      | `28px/1.15`, `30px/1.15`, `22px/1.25`                            | a title, weight 700                                                               |
+| `text-section`, `-step`, `-lead`                                 | `18px`, `17px/26px`, `16px/1.5`                                  | a section, a step, the sentence under a title                                     |
+| `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`      | `15px/1.5`, `14px/1.5`, `14px/1.45`, `13px/1.5`, `13px`, `12px`  | text                                                                              |
+| `h-control`, `-control-panel`, `-control-chip`, `-control-small` | `44px`, `40px`, `36px`, `32px`                                   | the height of a control                                                           |
+| `rounded-button`, `-field`, `-box`, `-frame`                     | `6px`, `8px`, `10px`, `14px`                                     | a control, a field, an option card, a table or a panel                            |
+| `shadow-frame`, `-pin`, `-thumb`                                 | see `theme.css`                                                  | the preview, a drop, the thumb of a switch                                        |
+| `ease-settle`, `--duration-fast`                                 | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                                         |
+| Font                                                             | the system font (`-apple-system, BlinkMacSystemFont`)            | weights 400, 600 and 700 only                                                     |
 
 **Measured, on the pairs the console draws** (`e2e/console-kit.spec.ts` measures every text of the
 kit): muted on white 5.28:1, on `subtle` 5.05:1, on `chip` 4.80:1; white on the accent 4.70:1, and
@@ -177,17 +236,17 @@ mock-up of the landing (FRU-387, FRU-417), not the neutral greys of the console.
 builds `docs/assets/landing.css` and `docs.css` with the CLI of Tailwind, and `css.test.ts` fails on a
 colour written as a value in a sheet.
 
-| Token                                                            | Value                                                   | What it is for                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
-| `site-ink`, `site-body`                                          | `#1c1917`, `#44403c`                                    | text, on both                                     |
-| `site-line`, `site-edge`                                         | `#e7e5e4`, `#8f8883`                                    | a rule, the border of a field or an outline       |
-| `site-surface`, `site-chip`, `site-accent`                       | `#ffffff`, `#f5f5f4`, `#dd2c27`                         | a card, a hovered link, the main button and focus |
-| `landing-page`, `landing-muted`, `landing-warm`, `landing-stone` | `#fffdf9`, `#57534e`, `#faf7f2`, `#f3f1ee`              | the landing: its page, a hint, two bands          |
-| `landing-on-night`, `-night-muted`, `-night-faint`               | `#fafaf9`, `#d6d3d1`, `#a8a29e`                         | text on the dark cards and the one-liner          |
-| `landing-cta`, `-cta-*`                                          | `#c8211d`, and the fade and the outline of the red band | the red band                                      |
-| `docs-page`, `docs-inset`, `docs-muted`                          | `#faf9f5`, `#fafaf9`, `#736c67`                         | the guides: the page, a callout, a hint           |
-| `docs-code-surface`, `-code-text`, `-code-comment` to `-code-tag` | `#1c1917`, `#e7e5e4`, the Rouge palette                | a code block, each colour at 4.5:1 or more        |
-| `shadow-landing-*`, `drop-shadow-landing-pin`, `shadow-docs-*`   | see `theme.css`                                         | the frame, a pin, a note, the popup               |
+| Token                                                             | Value                                                   | What it is for                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| `site-ink`, `site-body`                                           | `#1c1917`, `#44403c`                                    | text, on both                                     |
+| `site-line`, `site-edge`                                          | `#e7e5e4`, `#8f8883`                                    | a rule, the border of a field or an outline       |
+| `site-surface`, `site-chip`, `site-accent`                        | `#ffffff`, `#f5f5f4`, `#dd2c27`                         | a card, a hovered link, the main button and focus |
+| `landing-page`, `landing-muted`, `landing-warm`, `landing-stone`  | `#fffdf9`, `#57534e`, `#faf7f2`, `#f3f1ee`              | the landing: its page, a hint, two bands          |
+| `landing-on-night`, `-night-muted`, `-night-faint`                | `#fafaf9`, `#d6d3d1`, `#a8a29e`                         | text on the dark cards and the one-liner          |
+| `landing-cta`, `-cta-*`                                           | `#c8211d`, and the fade and the outline of the red band | the red band                                      |
+| `docs-page`, `docs-inset`, `docs-muted`                           | `#faf9f5`, `#fafaf9`, `#736c67`                         | the guides: the page, a callout, a hint           |
+| `docs-code-surface`, `-code-text`, `-code-comment` to `-code-tag` | `#1c1917`, `#e7e5e4`, the Rouge palette                 | a code block, each colour at 4.5:1 or more        |
+| `shadow-landing-*`, `drop-shadow-landing-pin`, `shadow-docs-*`    | see `theme.css`                                         | the frame, a pin, a note, the popup               |
 
 `--spacing` is 4 px there, inline: `p-6` is `24px` in the built sheet, as it was written.
 

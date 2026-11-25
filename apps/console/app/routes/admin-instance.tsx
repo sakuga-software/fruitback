@@ -209,7 +209,7 @@ function Health({ facts }: { facts: InstanceFacts }) {
   );
 }
 
-const TONES = { done: 'text-done', alert: 'text-accent' } as const;
+const TONES = { done: 'text-done', alert: 'text-accent-strong' } as const;
 
 /** What the mail of the instance did last. */
 function mailDetail(provider: string | undefined, lastSentAt: string | null, now: number): string {
@@ -310,7 +310,7 @@ function Redirect({ address }: { address: string }) {
   return (
     <div className="mt-[10px] mb-[6px] flex flex-wrap items-center gap-x-[16px] gap-y-[10px] text-hint text-muted">
       <span>{t('Redirect address to give Google:')}</span>
-      <code className="rounded-button border border-line bg-subtle px-[8px] py-[4px] font-mono text-tiny text-ink [overflow-wrap:anywhere]">
+      <code className="rounded-control border border-line bg-subtle px-[8px] py-[4px] font-mono text-tiny text-ink [overflow-wrap:anywhere]">
         {address}
       </code>
       <LinkButton onClick={copy}>{copied === 'yes' ? t('Copied') : t('Copy')}</LinkButton>
@@ -322,16 +322,15 @@ function Redirect({ address }: { address: string }) {
 }
 
 /**
- * « Suspended since 30 Sep » under the name of a suspended workspace, in the red of the mockup, as
- * the row of a suspended person (FRU-281). On the chosen row the red is the strong accent: the accent
- * is 4.28:1 on the tint of the row.
+ * « Suspended since 30 Sep » under the name of a suspended workspace, in the strong red, as the row
+ * of a suspended person (FRU-281): the accent is under 4.5:1 on the slate tints of a row (FRU-683).
  */
-export function SuspendedSince({ workspace, chosen }: { workspace: WorkspaceSuspension; chosen: boolean }) {
+export function SuspendedSince({ workspace }: { workspace: WorkspaceSuspension }) {
   useLocale();
   if (workspace.suspended !== true) return null;
 
   return (
-    <span className={`block text-hint font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`}>
+    <span className="block text-hint font-semibold text-accent-strong">
       {workspace.suspendedAt === undefined
         ? t('Suspended')
         : t('Suspended since {day}', { day: dayOf(workspace.suspendedAt) })}
@@ -415,7 +414,7 @@ function Workspaces() {
                     <LinkButton to={`/admin/workspaces?open=${encodeURIComponent(workspace.id)}`}>
                       {workspace.name}
                     </LinkButton>
-                    <SuspendedSince workspace={workspace} chosen={false} />
+                    <SuspendedSince workspace={workspace} />
                   </td>
                   <td>{workspace.owners.map((owner) => owner.email).join(', ')}</td>
                   <td data-align="end">{workspace.members}</td>
