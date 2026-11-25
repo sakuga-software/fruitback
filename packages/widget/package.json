@@ -40,6 +40,7 @@
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "icons:build": "node build-icons.ts",
+    "styles:build": "node build-styles.ts",
     "lint": "oxlint .",
     "prepack": "pnpm build",
     "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'src/**/*.test.ts'",
@@ -51,12 +52,15 @@
   },
   "devDependencies": {
     "@iconify-json/ph": "^1.2.2",
+    "@tailwindcss/node": "^4.3.3",
+    "@tailwindcss/oxide": "^4.3.3",
     "@types/node": "catalog:",
     "esbuild": "catalog:",
     "happy-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "react-grab": "catalog:",
+    "tailwindcss": "^4.3.3",
     "typescript": "catalog:"
   },
   "nx": {

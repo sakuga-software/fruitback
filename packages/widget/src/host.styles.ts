@@ -6,14 +6,7 @@ import { GROUND_INK } from './page-ground.ts';
 export const STYLES = `
 :host { all: initial; }
 /*
-  The reset stops at the edge of an SVG, and that exclusion is load-bearing rather than tidy. Under a
-  plain star selector, a path computes d:none and stroke:none — the geometry itself is a CSS property
-  since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
-  anywhere. Measured in Chromium before this was written (FRU-36).
-*/
-*:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; overflow-wrap: inherit; white-space: inherit; }
-/*
-  all:initial also stops inheritance. Without the three inherit values above, an element with no colour
+  all:initial also stops inheritance. Without the three inherit values of the reset below, an element with no colour
   rule of its own is black at 16px: the launch label on a chip, and the thread and the panel on a dark
   surface, where axe measured 1.2 to 1 (FRU-51). The host gives the first values to inherit.
 
@@ -23,36 +16,51 @@ export const STYLES = `
 */
 :host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); overflow-wrap: anywhere; }
 /*
-  The rule of the text, in two halves (FRU-350). Content wraps anywhere, so an address, a file path
-  or a long word never runs past its box: :host above gives it to every element. A label never
-  breaks inside its words: a button, a switch, a tab and a key stay on one line, and what they hold
-  inherits it. The few buttons that hold a note, the rows of a list, say white-space: normal in their
-  own module. A field keeps the line breaks its writer typed, as the browser draws it.
+  The rules of every element are the base layer of Tailwind (FRU-680). A rule outside a layer wins
+  over every layer, so the reset left outside one undid each utility: all:initial took the padding
+  of a fruitback:p-3, and div display:block the display of a fruitback:flex. Measured in Chromium.
+  A rule of a module outside a layer still wins over them, as its class always did.
 */
-button, [role='switch'], [role='tab'], kbd { white-space: nowrap; }
-textarea { white-space: pre-wrap; }
-/*
-  all:initial is thorough enough to undo the browser's own display:none on a style element, which
-  then renders the stylesheet as a column of visible text in the corner of the client's page. Found
-  by looking at it; no unit test would have, since happy-dom draws nothing.
-*/
-style, script { display: none; }
+@layer base {
+  /*
+    The reset stops at the edge of an SVG, and that exclusion is load-bearing rather than tidy. Under a
+    plain star selector, a path computes d:none and stroke:none — the geometry itself is a CSS property
+    since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
+    anywhere. Measured in Chromium before this was written (FRU-36).
+  */
+  *:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; overflow-wrap: inherit; white-space: inherit; }
+  /*
+    The rule of the text, in two halves (FRU-350). Content wraps anywhere, so an address, a file path
+    or a long word never runs past its box: :host above gives it to every element. A label never
+    breaks inside its words: a button, a switch, a tab and a key stay on one line, and what they hold
+    inherits it. The few buttons that hold a note, the rows of a list, say white-space: normal in their
+    own module. A field keeps the line breaks its writer typed, as the browser draws it.
+  */
+  button, [role='switch'], [role='tab'], kbd { white-space: nowrap; }
+  textarea { white-space: pre-wrap; }
+  /*
+    all:initial is thorough enough to undo the browser's own display:none on a style element, which
+    then renders the stylesheet as a column of visible text in the corner of the client's page. Found
+    by looking at it; no unit test would have, since happy-dom draws nothing.
+  */
+  style, script { display: none; }
+  /*
+    And it undoes the browser's display:block on every block element, so a paragraph is inline until
+    something says otherwise: in the note thread the note, its byline and the "found by position"
+    warning all ran together into one line, vertical margins silently doing nothing. Restoring it here
+    rather than on each class is what keeps the next element added to the widget from inheriting the
+    same surprise. Found by looking at a recording — every unit test passed. A list was missing from
+    this rule until FRU-154: the replies of a thread were inline, so their height limit, their scroll
+    and their indent did nothing.
+  */
+  div, p, header, footer, section, form, ul, ol { display: block; }
+  li { display: list-item; }
+}
 /* The reset also removes the focus ring. The keyboard reaches these controls, so they must show focus (FRU-51). */
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--fruitback-color-accent);
   outline-offset: 2px;
 }
-/*
-  And it undoes the browser's display:block on every block element, so a paragraph is inline until
-  something says otherwise: in the note thread the note, its byline and the "found by position"
-  warning all ran together into one line, vertical margins silently doing nothing. Restoring it here
-  rather than on each class is what keeps the next element added to the widget from inheriting the
-  same surprise. Found by looking at a recording — every unit test passed. A list was missing from
-  this rule until FRU-154: the replies of a thread were inline, so their height limit, their scroll
-  and their indent did nothing.
-*/
-div, p, header, footer, section, form, ul, ol { display: block; }
-li { display: list-item; }
 /*
   Every glyph in the widget, and this rule sizes them and nothing else. The paint is on the paths
   themselves, because a fill declared here would be a class selector beating the presentation

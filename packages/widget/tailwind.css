@@ -1,0 +1,62 @@
+/*
+  The Tailwind input of the widget (FRU-680). build-styles.ts compiles it into src/tailwind-sheet.ts,
+  a string that host.ts adopts into the Shadow root. No stylesheet file reaches the page of the host.
+  docs/decisions/widget.md, « Tailwind in the Shadow root », gives the reasons and the measures.
+
+  - The layers come first, in the order of Tailwind. host.styles.ts puts the reset in base, so a
+    utility wins over it. A rule outside a layer wins over every utility: during the conversion, a
+    module that is not converted yet keeps its rules outside a layer.
+  - No preflight: the reset of host.styles.ts is the base of the widget.
+  - No default theme of Tailwind: it is written in rem, and a rem in a Shadow root is the font size of
+    the page of the host. Every size here is in px.
+  - The prefix is fruitback, as for every name of the widget: fruitback:flex. It also keeps the words
+    of the sources out of the sheet: without it, « hidden », « table » or « ring » in a comment each
+    gave a rule. No variable of the theme is declared: every one is inline, so the page has no name of
+    ours to set.
+*/
+@layer properties, theme, base, components, utilities;
+
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+@source './src/**/*.ts';
+@source not './src/**/*.test.ts';
+@source not './src/**/*.fixture.ts';
+@source not './src/tailwind-sheet.ts';
+
+/*
+  A hover of Tailwind 4 holds only under @media (hover: hover). The widget writes :hover alone, as
+  before: a touch screen shows the hover after a tap, as it does today.
+*/
+@custom-variant hover (&:hover);
+
+/*
+  The sizes of the widget that the shared theme does not name (FRU-677 brings it). Written into the
+  utility, never declared on :host: a custom property on :host loses to a rule of the page on the host
+  element, such as the * of Tailwind 3.
+*/
+@theme inline prefix(fruitback) {
+  --spacing: 4px;
+  --text-caption: 11px;
+  --text-caption--line-height: 1.4;
+  --text-hint: 13px;
+  --text-hint--line-height: 1.5;
+  --font-weight-semibold: 600;
+  --color-highlight: Highlight;
+  --color-button-text: ButtonText;
+}
+
+/*
+  The page outside the area, dimmed: the shadow is the rest of the window. Tailwind writes a
+  color-mix() twice: first with its first colour alone, for a browser with no color-mix(), then the
+  mix under @supports. The transparent side comes first, so that browser dims nothing, as before,
+  and is not covered in ink. The mix is the same: 45 % of ink, 55 % of transparent.
+*/
+@utility shadow-dim {
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, transparent, var(--fruitback-color-ink) 45%);
+}
+
+/*
+  build-styles.ts adds here, as @theme inline reference, every token of theme.ts that Tailwind can name (color,
+  radius, shadow, font, ease) as var(--fruitback-<token>). THEME_STYLES declares it on :host, with
+  the dark scheme, and a host may change it: bg-accent is the accent the host chose.
+*/

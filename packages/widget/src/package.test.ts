@@ -136,12 +136,16 @@ describe('the script-tag build', () => {
 
   it('is small enough to put on someone else’s page', async () => {
     const { size } = await import('node:fs').then((fs) => fs.promises.stat(join(dist, 'fruitback.iife.js')));
-    const gzipped = await gzipSize(join(dist, 'fruitback.iife.js'));
+    const { gzipped, brotli } = await compressedSizes(join(dist, 'fruitback.iife.js'));
+    const sizes = `${gzipped} B gzipped, ${brotli} B brotli, from ${size} B raw`;
 
     // Not a style rule: a feedback widget that costs its host half a megabyte is one they remove.
-    // The number is generous on purpose — it is a tripwire for a dependency that should have been
-    // bundled out, not a budget to optimise against.
-    assert.ok(gzipped < 200_000, `${Math.round(gzipped / 1024)}kB gzipped, from ${Math.round(size / 1024)}kB raw`);
+    // FRU-680 measured 135 609 B gzipped and 113 722 B brotli before Tailwind, and projects about
+    // 138 000 and 119 000 once every sheet is Tailwind: the ceiling leaves room for that and for the
+    // features of the same weeks, and no more (docs/decisions/widget.md, « Tailwind in the Shadow
+    // root »). A server sends brotli when the browser takes it, gzip otherwise: both are held.
+    assert.ok(gzipped < 150_000, sizes);
+    assert.ok(brotli < 130_000, sizes);
   });
 
   it('carries the English messages of zod and no other locale', async () => {
@@ -398,8 +402,9 @@ describe('a consumer installing this from npm', () => {
   });
 });
 
-async function gzipSize(path: string): Promise<number> {
-  const { gzipSync } = await import('node:zlib');
+async function compressedSizes(path: string): Promise<{ gzipped: number; brotli: number }> {
+  const { brotliCompressSync, gzipSync } = await import('node:zlib');
+  const bytes = await readFile(path);
 
-  return gzipSync(await readFile(path)).byteLength;
+  return { gzipped: gzipSync(bytes).byteLength, brotli: brotliCompressSync(bytes).byteLength };
 }

@@ -13,6 +13,7 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { framesOf, settle } from './settle.ts';
 import { markGround, readGround } from './page-ground.ts';
 import { adoptStyles } from './stylesheet.ts';
+import { TAILWIND_STYLES } from './tailwind-sheet.ts';
 import { STYLES } from './host.styles.ts';
 
 /**
@@ -175,9 +176,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   paintAction(options.actionColor);
 
   const root = container.attachShadow({ mode: 'open' });
-  // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
-  // resolves `var(--fruitback-…)` against them by inheritance, without importing anything.
-  adoptStyles(root, THEME_STYLES + STYLES);
+  // The order of the layers first, then the utilities of Tailwind, which every module of this root
+  // writes in its class names (FRU-680). Then the tokens: every other stylesheet in this root — the
+  // overlay's, the composer's, the panel's — resolves `var(--fruitback-…)` against them by
+  // inheritance, without importing anything.
+  adoptStyles(root, TAILWIND_STYLES + THEME_STYLES + STYLES);
 
   const button = document.createElement('button');
   button.type = 'button';

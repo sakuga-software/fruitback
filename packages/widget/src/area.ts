@@ -1,7 +1,5 @@
 import { deepActiveElement } from './focus.ts';
 import type { Translator } from './messages.ts';
-import { adoptStyles } from './stylesheet.ts';
-import { STYLES } from './area.styles.ts';
 
 /**
  * The area of the page that a capture takes (FRU-332): the person draws a rectangle, or moves the one
@@ -14,6 +12,13 @@ import { STYLES } from './area.styles.ts';
  *
  * The overlay is gone before the capture is taken: `pickArea` answers once it is removed.
  */
+
+/** The buttons of the bar: « Cancel », « Visible part » and « Take this area ». */
+const BUTTON =
+  'fruitback:min-h-11 fruitback:px-3.5 fruitback:py-0 fruitback:border-0 fruitback:rounded-md fruitback:font-sans fruitback:font-semibold fruitback:text-hint fruitback:leading-none fruitback:cursor-pointer ' +
+  'fruitback:focus-visible:outline-2 fruitback:focus-visible:outline-accent fruitback:focus-visible:outline-offset-2 ' +
+  'fruitback:forced-colors:outline-1 fruitback:forced-colors:outline-button-text';
+const CANCEL = 'fruitback:bg-transparent fruitback:text-text-muted fruitback:hover:bg-surface-sunken';
 
 /** An area in CSS pixels of the viewport. */
 export type Area = { left: number; top: number; width: number; height: number };
@@ -40,44 +45,66 @@ export function pickArea(options: {
   );
 
   const overlay = document.createElement('div');
-  overlay.className = 'fruitback-area';
+  overlay.className = [
+    'fruitback-area',
+    'fruitback:fixed fruitback:inset-0 fruitback:z-2147483600 fruitback:cursor-crosshair fruitback:outline-none fruitback:touch-none fruitback:group',
+  ].join(' ');
   overlay.dataset.fruitbackArea = '';
   overlay.tabIndex = -1;
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', t.text('area.dialog'));
   const box = document.createElement('div');
-  box.className = 'fruitback-area-box';
+  box.className = [
+    'fruitback-area-box',
+    'fruitback:fixed fruitback:box-border fruitback:border-2 fruitback:border-accent fruitback:rounded-sm fruitback:shadow-dim fruitback:pointer-events-none',
+    'fruitback:group-focus-visible:outline-2 fruitback:group-focus-visible:outline-on-accent fruitback:group-focus-visible:outline-offset-2',
+    'fruitback:forced-colors:border-highlight fruitback:forced-colors:shadow-none',
+  ].join(' ');
   box.dataset.fruitbackAreaBox = '';
   const help = document.createElement('p');
-  help.className = 'fruitback-area-help';
+  help.className = [
+    'fruitback-area-help',
+    'fruitback:grow fruitback:shrink fruitback:basis-50 fruitback:m-0 fruitback:text-text-muted',
+  ].join(' ');
   help.id = 'fruitback-area-help';
   help.textContent = t.text('area.help');
   overlay.setAttribute('aria-describedby', help.id);
   const take = document.createElement('button');
   take.type = 'button';
-  take.className = 'fruitback-area-take';
+  take.className = [
+    'fruitback-area-take',
+    BUTTON,
+    'fruitback:bg-accent fruitback:text-on-accent fruitback:hover:bg-accent-strong',
+  ].join(' ');
   take.textContent = t.text('area.take');
   const cancel = document.createElement('button');
   cancel.type = 'button';
-  cancel.className = 'fruitback-area-cancel';
+  cancel.className = ['fruitback-area-cancel', BUTTON, CANCEL].join(' ');
   cancel.textContent = t.text('area.cancel');
   // FRU-609: the visible part of the page, whole, in one click.
   const visible = document.createElement('button');
   visible.type = 'button';
-  visible.className = 'fruitback-area-cancel fruitback-area-visible';
+  visible.className = ['fruitback-area-cancel fruitback-area-visible', BUTTON, CANCEL].join(' ');
   visible.dataset.fruitbackAreaVisible = '';
   visible.textContent = t.text('area.visible');
   // FRU-609: the size of the area as it is drawn, in CSS pixels, on its corner.
   const size = document.createElement('span');
-  size.className = 'fruitback-area-size';
+  size.className = [
+    'fruitback-area-size',
+    'fruitback:fixed fruitback:-translate-x-full fruitback:translate-y-1.5 fruitback:px-1.5 fruitback:py-0.5 fruitback:rounded-sm fruitback:bg-ink fruitback:text-on-ink',
+    'fruitback:font-mono fruitback:font-semibold fruitback:text-caption fruitback:pointer-events-none fruitback:whitespace-nowrap',
+  ].join(' ');
   size.dataset.fruitbackAreaSize = '';
   size.setAttribute('aria-hidden', 'true');
   const bar = document.createElement('div');
-  bar.className = 'fruitback-area-bar';
+  bar.className = [
+    'fruitback-area-bar',
+    'fruitback:fixed fruitback:inset-x-3 fruitback:bottom-3 fruitback:flex fruitback:flex-wrap fruitback:items-center fruitback:gap-2 fruitback:px-3 fruitback:py-2.5',
+    'fruitback:border fruitback:border-border fruitback:rounded-lg fruitback:bg-surface fruitback:text-text fruitback:font-sans fruitback:text-hint fruitback:shadow-lg fruitback:cursor-default',
+  ].join(' ');
   bar.append(help, cancel, visible, take);
   overlay.append(box, size, bar);
-  const style = adoptStyles(host, STYLES);
   host.append(overlay);
 
   // In the Shadow root of the widget, `document.activeElement` is the host: the button that opened the
@@ -91,7 +118,6 @@ export function pickArea(options: {
 
     const finish = (chosen: Area | undefined): void => {
       overlay.remove();
-      style.remove();
       previous?.focus?.();
       resolve(chosen);
     };

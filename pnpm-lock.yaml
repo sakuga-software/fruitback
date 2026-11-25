@@ -606,6 +606,12 @@ importers:
       '@iconify-json/ph':
         specifier: ^1.2.2
         version: 1.2.2
+      '@tailwindcss/node':
+        specifier: ^4.3.3
+        version: 4.3.3
+      '@tailwindcss/oxide':
+        specifier: ^4.3.3
+        version: 4.3.3
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
@@ -624,6 +630,9 @@ importers:
       react-grab:
         specifier: 'catalog:'
         version: 0.2.0(react@19.3.1)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

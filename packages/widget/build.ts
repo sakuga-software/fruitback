@@ -20,6 +20,9 @@ const OUT = 'dist';
 
 await rm(OUT, { recursive: true, force: true });
 
+// The Tailwind sheet first (FRU-680): the bundle takes `src/tailwind-sheet.ts` as it is on disk.
+await promisify(execFile)(process.execPath, ['build-styles.ts']);
+
 /**
  * The comments of the stylesheets stay in the sources and out of `dist` (FRU-609).
  *

@@ -97,6 +97,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **The CSS of `<module>.ts` is the `STYLES` of `<module>.styles.ts`** (FRU-509), with the measures
   the code shares with it (`WIDTH` of the composer, `BADGE_RISE` of a pin). `direction.test.ts`,
   `motion.test.ts` and `theme.test.ts` read the sheets from there. `index.ts` does not re-export them.
+  A module converted to Tailwind has no `*.styles.ts` any more: its CSS is the utilities of its class
+  names, in the one sheet of _Tailwind in the Shadow root_ (FRU-680). `area.ts` is the first.
 
 ### The reasons, and the history
 
@@ -537,6 +539,156 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     capped at 180 px with a scroll a keyboard can reach (FRU-154), 10 px apart; a note kept for
     later, whose head says « Not sent yet » behind a grey drop, with no link; the dark scheme; and
     an outline in forced colours, where a shadow is not drawn.
+
+## Tailwind in the Shadow root (FRU-680)
+
+The widget moves from hand-written sheets (`*.styles.ts`) to Tailwind 4, one sheet after the other
+(FRU-676). Four points had to be settled first: the `rem` of the page, the CSP, the weight, and the
+isolation. Everything below was measured in Chromium 156 (Playwright 1.64.1) on 2026-11-25; the probe
+and the comparison scripts are in the description of the pull request.
+
+### The rules, in short
+
+- **Tailwind runs at authoring time, never in the page.** `build-styles.ts` compiles `tailwind.css`
+  with the class names of `src/**` (tests and fixtures left out) into `src/tailwind-sheet.ts`, one
+  string, committed as `icon-data.ts` is. `build.ts` runs it first; `tailwind-sheet.test.ts` builds
+  it again and fails on a stale or edited copy. `host.ts` adopts it with `adoptStyles`, before
+  `THEME_STYLES` and its own sheet. So the CSP of FRU-522 sees what it saw: a constructed sheet, no
+  `<style>` and no file. After a change of a class name: `pnpm styles:build`.
+- **Every size is in px, never in rem.** In a Shadow root `1rem` is the font size of the `<html>` of
+  the page. The default theme of Tailwind is written in rem, so it is not imported: `--spacing` is
+  `4px` (`fruitback:p-3` is 12 px, as `p-3` in the console on a page at 16 px), and the shared theme of
+  FRU-677 is in px. `offences` of `build-styles.ts` refuses a rem in the sheet, and
+  `e2e/root-font-size.spec.ts` measures the dock, the composer and the area on a page at 62.5 %
+  against the same page at 100 %.
+- **A utility is prefixed: `fruitback:flex`.** One prefix for every name of the widget, as
+  `--fruitback-*` and `.fruitback-*`. The prefix also keeps the words of the sources out of the sheet.
+- **Tailwind declares no variable.** The shared theme is imported as
+  `@import '@fruitback/shared/tailwind/theme.css' theme(inline reference) prefix(fruitback);`, so its
+  value is written in the utility (`fruitback:text-hint` is `font-size: 13px`). The tokens of
+  `theme.ts` are an `@theme inline reference` that `build-styles.ts` writes from the light `:host`
+  block of `THEME_STYLES`: `fruitback:bg-accent` is `var(--fruitback-color-accent)`, whose value stays
+  on `:host`, with the dark scheme, and that a host may change. A name in both comes from `theme.ts`,
+  which is read last (`color-chip`, `font-sans`). What a host may change is read from its token, never
+  from the shared theme: a pin is painted by `--fruitback-stage-*`, not by `status-*`.
+- **The layers come first: `properties, theme, base, components, utilities`.** The reset and the rules
+  of every element of `host.styles.ts` are the base layer: a rule outside a layer wins over every
+  layer, so a reset outside one undid every utility. A rule of a module not yet converted stays
+  outside a layer, and so wins over any utility on the same element. A conversion removes every rule
+  of what it converts, and reads the rules of other modules that reach it: the `:where(…) button` of
+  `host.styles.ts` gives a transition and a press to the buttons of the area bar, and stays.
+- **No preflight.** The reset of `host.styles.ts` is the base. `:host { all: initial }` stays as it is.
+- **Each variable of Tailwind has its value on every element of the root.** `build-styles.ts` turns the
+  `@property` rules, which a Shadow root ignores, into `*, ::before, ::after, ::backdrop { --tw-…: … }`
+  in the properties layer.
+- **`fruitback:hover:` is `:hover`**, as the hand-written sheets say, and not the
+  `@media (hover: hover)` of Tailwind 4 (`@custom-variant hover` in `tailwind.css`).
+- **A mix with transparent names transparent first**: `color-mix(in srgb, transparent, X 45%)`.
+  Tailwind writes the first colour alone for a browser with no `color-mix()`, then the mix under
+  `@supports`: written the other way, that browser covered the page in ink.
+- **The class of the part comes first, and has no rule**: `fruitback-area-take fruitback:min-h-11 …`.
+  Tests, specs and the rules of other modules find the part by it.
+- **The weight has a ceiling**: `fruitback.iife.js` stays under 150 000 B gzipped and 130 000 B with
+  brotli (`package.test.ts`), and the sheet under 64 000 B raw and 14 000 B gzipped
+  (`tailwind-sheet.test.ts`).
+- **One sheet of styles per pull request, stacked**: area (this one), orphans, panel, host, sidebar,
+  overlay, composer. Each one keeps the e2e specs green with no change and has a video before and
+  after. The guard tests follow the sheet: `direction.test.ts` reads the physical sides in the class
+  names (`fruitback:left-*`, `fruitback:pr-*`, `fruitback:text-right`), `motion.test.ts` wants a
+  `fruitback:motion-reduce:animate-none` beside each `fruitback:animate-*`, and `theme.test.ts` and
+  `contrast.test.ts` read the pairs of a foreground and its background in the same class list.
+
+### The reasons, and the measures
+
+**`rem`.** On a page with `html { font-size: 62.5% }`, in the Shadow root: `padding: 1rem` is 10 px
+and `font-size: 0.875rem` is 8.75 px; `1em` (14 px on the host) and `16px` do not move. Two ways were
+open: a theme in px, or variables on `:host` that a theme in rem would multiply. Variables on `:host`
+lose to the page: a rule `* { --fruitback-spacing: 99px }` of the page applies to the host element and
+beats `:host { --fruitback-spacing: 4px }` (measured: 99 px). A theme in px has nothing to lose: the
+value is in the utility. The widget is in px today (no rem in any `*.styles.ts`), so its sizes stay
+what they are. The
+spec is checked by its control: a dock written `padding-block: 0.1875rem` made it fail (52 px tall at
+100 %, 49.75 px at 62.5 %).
+
+**The CSP.** Nothing changes for it: the sheet is a string in the bundle, given to `replaceSync` of a
+`CSSStyleSheet` of the window of the host (`stylesheet.ts`), and the fallback with no
+`adoptedStyleSheets` is still a `<style>` element in the root. The pipeline: `tailwind.css` +
+`@theme` of `theme.ts` → `compile` of `@tailwindcss/node` → the candidates the `Scanner` of
+`@tailwindcss/oxide` finds in `src/**` → `@property` turned into values on every element → `optimize`
+(Lightning CSS, minified) → no banner → `offences` (no rem, no `@property`, no `:root` or `:host`, no
+`@import` or `url()`) → `src/tailwind-sheet.ts`. The three packages are devDependencies: a client
+installs nothing (`markup.test.ts`). `THIRD-PARTY-NOTICES.md` carries the licence of Tailwind.
+
+**Isolation.** `:host { all: initial }` and the reset are unchanged; only their layer moved. What the
+probe measured, each in an adopted sheet of a Shadow root:
+
+| Case                                                                                  | Result                                                                |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| reset outside a layer, `@layer utilities { .p { padding: 12px; display: block } }`    | padding 0, display inline                                             |
+| reset in `@layer base`, same utility                                                  | padding 12 px                                                         |
+| same, and `.q { padding: 3px }` outside a layer on the same element                   | 3 px: a rule outside a layer wins                                     |
+| `@property --tw-outline-style` in the root, `outline-style: var(--tw-outline-style)`  | none: no outline at all                                               |
+| the same value given on `*` in the root                                               | solid                                                                 |
+| the same `@property` written by the page                                              | solid: it depends on the page                                         |
+| page of Tailwind 3: `* { --tw-shadow: 0 0 0 5px red }`, root reads `var(--tw-shadow)` | a red ring in the widget                                              |
+| the same, with the values on `*` in the root                                          | no ring                                                               |
+| preflight in `@layer base`, under the rules of the widget                             | `:host` keeps its font; an `svg` with no class turns `display: block` |
+| preflight alone, page `body { color: red; font-family: Papyrus }`                     | the text of the root is red: preflight isolates nothing               |
+
+So preflight would change the widget (an `svg` turns block) and protect nothing that the reset does
+not.
+
+**The prefix.** Without it, the scan found `hidden`, `table`, `block`, `ring`, `container`,
+`invisible`, `transform` and a dozen more in comments and messages, each one a rule. With it, the
+measured cost on the area is nothing that compression keeps: the same prototype with no prefix was
+1 572 B smaller raw, 133 B gzipped, and 1 B larger with brotli.
+
+**`inline reference`.** `@theme inline` alone declared `:root, :host { --fruitback-color-accent:
+var(--fruitback-color-accent) }`, a cycle that empties every token: `offences` refused it.
+`reference` keeps the utility and writes no declaration.
+
+**No visible change.** The area was compared with the bundle of `main` and the bundle of this branch,
+on the same servers: 2 page roots (100 % and 62.5 %) × 2 schemes × forced colours off and on × 4
+states (at rest, « Take this area » focused, « Cancel » under the pointer, the area focused). The box,
+the size, the font, the colours, the padding and the radius of every element are the same. The computed
+values that differ say the same thing in other words: a `border-style: solid` with a width of 0, an
+`outline-width: 3px` with `outline-style: none`, `translate: -100% 6px` for a `transform` of the same
+move, and a `box-shadow` with four transparent shadows ahead of the same one. The screenshots are the
+same pixels, but for at most 36 pixels of a channel difference of at most 11 inside the composer;
+the bundle of `main` compared with itself gives 31 pixels, at most 11, at the same place.
+
+**The weight.** `fruitback.iife.js`, in bytes, gzip and brotli at the defaults of `node:zlib`:
+
+| Bundle                                 | Raw       | gzip      | brotli    |
+| -------------------------------------- | --------- | --------- | --------- |
+| `main` 381f63bf                        | 479 256   | 135 609   | 113 722   |
+| this prototype: the area in Tailwind   | 484 126   | 136 898   | 114 849   |
+| difference                             | +4 870    | +1 289    | +1 127    |
+| no hand-written sheet at all (a floor) | 386 044   | 119 420   | 103 329   |
+| projected: every sheet in Tailwind     | ≈ 520 000 | ≈ 138 000 | ≈ 119 000 |
+
+The sheet of the prototype is 5 373 B raw, 1 353 B gzipped: 774 B of fixed cost (the values of the
+variables on every element) and 70 rules. The area alone looks expensive because it pays the fixed
+cost, and because its 76 utilities are new words to the compressor.
+
+The projection takes each declaration of the seven hand-written sheets (2 246 of them, 783 distinct
+by variant and value) and writes, as the area did, 1.31 utilities per declaration in the class names
+and one rule per distinct utility, into the bundle with no hand-written sheet. The model gave 489 855,
+135 233 and 116 013; checked on the area, it was short of the real prototype by 13 % gzipped, 28 % raw
+and 20 % with brotli, and the projection above is corrected by those factors, fixed cost included. The
+sheet itself comes out near 49 000 B raw. The hand-written sheets ship their spaces and their long
+selectors, and the class names repeat the same words: that is why gzip hardly moves.
+
+The ceiling replaces the old tripwire of 200 000 B gzipped: 150 000 B gzipped and 130 000 B with
+brotli leave about 12 000 B over the projection, for the features of the same weeks. A sheet past
+64 000 B raw holds rules nobody writes: a scan of a wrong source, or a theme read whole.
+
+**The shared theme.** Measured on the file of #924 (FRU-677): imported `theme(inline reference)
+prefix(fruitback)`, `fruitback:h-control` is `height: 44px`, `fruitback:rounded-box` is
+`border-radius: 10px`, `fruitback:text-ink` is `color: #18181b`, and `fruitback:bg-chip` stays
+`var(--fruitback-color-chip)`, the chip of the widget, since `theme.ts` is read after it. Until #924 is
+on `main`, `tailwind.css` declares the two sizes the area needs (`--text-hint`, with the values of the
+shared one, and `--text-caption`); the import replaces the first one then.
 
 ## The popover
 

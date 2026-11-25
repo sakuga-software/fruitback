@@ -18,6 +18,11 @@ the bundle, and neither `zod` nor `@iconify-json/ph` carries any, so their notic
 only through this file. `@iconify-json/ph` ships no `LICENSE` file either, so the text below comes
 from Phosphor's own repository, which `info.json` names.
 
+**Tailwind CSS** is here by the route of Phosphor (FRU-680): `build-styles.ts` runs it at authoring
+time, and the stylesheet it writes into `src/tailwind-sheet.ts` is compiled into the bundle. The
+banner Tailwind puts on that stylesheet is taken off with every comment, so its notice reaches a
+consumer only through this file.
+
 `@fruitback/shared` is compiled by `tsc`, not bundled, so it keeps `zod` as an ordinary dependency
 the consumer installs and needs no notice here. Same for `fruitback`, which forwards both packages.
 
@@ -90,6 +95,34 @@ Eight icons — `gear-fill`, `x-bold`, `magnifying-glass-bold`, `dots-six-vertic
 MIT License
 
 Copyright (c) 2023 Phosphor Icons
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## tailwindcss
+
+<https://github.com/tailwindlabs/tailwindcss>
+
+```
+MIT License
+
+Copyright (c) Tailwind Labs, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
