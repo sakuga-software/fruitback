@@ -507,70 +507,84 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   which left an empty band at the right of a wide window, and Mathieu asked for the whole width on
   2026-10-23. `e2e/console-frame.spec.ts` holds the bar after a scroll at 1440 px and at 390 px,
   and the right edge of each screen.
-- **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
-  of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). **A card is read from the top, in
-  three parts** (FRU-432, Mathieu): the icon and the name of the site (`siteName`, 17 px, the largest
-  words of the card); then its status, the count of its notes at 20 px, a bar whose name says the
-  counts again, and how many are new in the accent, or « Waiting for the first note », and under it
-  who sees its notes and, when it is the exception, who writes them (FRU-584, Mathieu: out of the head
-  of the card). Who sees them is « Members only » or « Everyone who visits », and names no workspace
-  (FRU-583, Mathieu): the card is in that workspace already. Then a foot
-  under a line, where the notes go at the left, to whoever sees the tracker, after the logo of its
-  tracker (FRU-541, the mark of the Notes table, read from the first word of the label of the
-  worker: « Linear », « GitHub », « REST API »; a word it does not know has its name alone), and the
-  last one at the
-  right (`ago.ts`: « 12 min ago », « Yesterday », then the day). The terms of the foot are for a
-  screen reader: the place and the moment say what they are to the eye. How the notes came (the
-  script or the extension) is on the page of the site. Cards are side by side while each has 280 px, and
-  one under the other on a phone, so nothing scrolls sideways. The counts are the summary of the
-  sites (FRU-237), in the answer that lists them: **nothing of a card comes after the card**, so
+- **The Sites screen is a dense table, one line of 36 px per site** (FRU-688, the mockup of the
+  redesign of 2026-11-25, in place of the grid of cards of FRU-408 and FRU-432, `routes/sites.tsx`).
+  **The head of the screen** is 48 px, « Sites » and « Add a site » (28 px), as the head of Notes
+  (FRU-686); the sentence under the large title went with it. **The bar under it** is 44 px: the
+  search by address (240 px, « / » gives it the focus, `useSlashKey` of `notes-filters.tsx`), then
+  **the colours of the statuses** at the right, the drop and the name of each stage (in place of « no
+  legend » of FRU-400: the ticket asks for it); under 720 px the colours go, and the name of each bar
+  still says its counts. **The table** goes from one edge of the screen to the other, a head of 32 px,
+  then per site: the site (its icon in 20 px, its host, the site itself in a new tab), its notes (a bar
+  whose name says the counts, and how many) or « Waiting for the first note », its new notes (« 3 new »
+  in red after a dot, a link to the Notes screen with the site and « New » chosen, FRU-570), where they
+  go (to whoever sees the tracker), who sees them, the last one, and the menu. **No cell goes on a
+  second line**: what is longer is cut with « … ». **The columns go by the width of the table**, a
+  container query as in the Notes table (FRU-685): who sees the notes under 1100 px, where they go under
+  800, the notes under 600, the last note under 440; at 390 px a row keeps the site, its new notes and
+  its menu, and nothing scrolls sideways. A column that has no room is 0 px wide, its head said to a
+  screen reader only. **A press anywhere on a row opens the page of the site**; the host is the link a
+  keyboard and a screen reader reach, and a press on a control of the row (a link, the menu, a
+  tooltip) is the control's. Cmd or Ctrl and a press open the page in a new tab.
+  **Where the notes go** is the logo of each tracker (FRU-541, the mark of the Notes table, read from
+  the first word of the label of the worker: « Linear », « GitHub », « REST API »; a word it does not
+  know has no mark, and its name before the place), then the places on one line: « Team Acme web » for
+  one place of a Linear, « Acme web, Support » for several. The labels of the worker are whole in a
+  tooltip. The team of one Linear place is a link to its page at Linear (FRU-574). Notes an address did
+  not take yet add **the icon of a retry in red**, a link to the notes of the site, where each one is
+  sent again (`…/notes/<id>/retry`): the worker has no route that sends again every note of a site, and
+  FRU-688 adds none. A site with no tracker says « Kept in Fruitback » after the drop, and **a band in
+  dashes under the table** names the sites of the page that keep their notes in Fruitback, with
+  « Connect a tracker » (the dialog « Add a connector » of the Connectors screen, FRU-571). **Who sees
+  the notes** is « Members only » or « Everyone who visits » after its icon, and names no workspace
+  (FRU-583); where anyone on the page writes a note on a site that its members read (FRU-330), a
+  pencil follows, its words in a tooltip and to a screen reader. **The last note** is short to the eye
+  (`agoShort`: « 2h », « 40m »), whole under the pointer and to a screen reader (`ago`: « 2 h ago »).
+  **A problem of a site is a line of its own under its row**, the only line taller than 36 px: a public
+  repository (FRU-382) and a place that the tracker refuses (FRU-640). The counts are the summary of
+  the sites (FRU-237), in the answer that lists them: **nothing of a row comes after the row**, so
   nothing moves under a press, and a test holds the read to prove it. A value with nothing to say
   draws « · » for the eye and says « None yet » to a screen reader; a worker that sends no summary
-  gets that, and no bar. **No legend of the statuses** (FRU-400, Mathieu): the name of a bar says
-  its counts, and the page of the statuses of a site says what each colour is.
+  gets that, and no bar.
   **The icon of a site is its `/favicon.ico`** (`site-icon.tsx`, shared with the preview of the
   setup), asked by the browser of the person with no referrer, and its first letter when it does
   not load or the site is on `http`: the policy of the image allows `img-src https:` only. No other
   service is asked for it. Measured on 2026-10-23: under Playwright a route never sees a request to
   `/favicon.ico` (Chromium and Chrome), so the specs see the letter, and read the attributes of the
   image when there is one.
-  **The search and the pages are done in the console** (FRU-408): the worker answers every site of
-  a workspace at once and has no search. The search keeps the sites whose name holds what is typed,
-  is written in the address (`q`) 300 ms after the last key (`useTypedSearch`), and goes back to the
-  first page. A page is 12 cards (rows of 1, 2, 3 or 4), with the pages of the
+  **The worker answers the search and the pages** (FRU-497): the search keeps the sites whose address
+  holds what is typed, is written in the address (`q`) 300 ms after the last key (`useTypedSearch`),
+  and goes back to the first page. A page is 25 rows, as a page of the notes, with the pages of the
   Notes page (`NotePages`), and lives in the address (`page`); a page past the last shows the last.
   A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
-  page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
-  200, the answer of `GET …/sites` is the place for `q` and a cursor, a route of the worker.
-  **The grid unfolds nothing under a card** (FRU-433, Mathieu: a panel over the whole width of the
-  grid, between two rows of cards, read as a stray card). **A site has a page of its own**,
-  `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from the name of its card, which is a
-  link, and from its menu: « Settings » and « Install », for every role; « Statuses » and « Remove »,
-  for who manages the sites. « Install » and « Remove » lead to their section of the page
-  (`#install`, `#remove`). A new site opens its page at `#install`. « Remove » asks twice: the menu
-  is the first time, and `Confirmation` (`confirm.tsx`) on the page the second; once the site is
-  gone, the grid comes back with focus on its search, or on the field of the card when it was the
-  last one. **No item changes who sees the notes of a site, nor who writes them**: the worker has
-  no route for it, and a button that does nothing is not drawn; so the form that adds a site asks
-  it, in the card of a workspace with no site too, where the mockup draws the address alone, and the
-  page of the site says them, read only. **A host is on one line, cut with « … »** (FRU-585,
-  Mathieu, in place of the break after its dots of FRU-159): `CutLink` of the kit, whole in the page
-  for a screen reader, and whole in a tooltip **only when it is cut**, measured on the link
+  page is shown, with no search.
+  **The table unfolds nothing under a row** (FRU-433, Mathieu). **A site has a page of its own**,
+  `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from its row, its host and its menu:
+  « Open its page » and « See the notes », for every role; « Statuses » and « Remove », for who manages
+  the sites. « Remove » leads to its section of the page (`#remove`). A new site opens its page at
+  `#install`. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) on
+  the page the second; once the site is gone, the table comes back with focus on its search, or on
+  the field of the card when it was the last one. **No item changes who sees the notes of a site, nor
+  who writes them** from the table: the form that adds a site asks it, in the card of a workspace with
+  no site too, and the page of the site holds the rest. **A host is on one line, cut with « … »**
+  (FRU-585, Mathieu): `CutLink` of the kit, in a `span` in the head of its row, whole in the page for a
+  screen reader, and whole in a tooltip **only when it is cut**, measured on the link
   (`scrollWidth > clientWidth`, again on a resize and once the fonts load). The tooltip opens under the
   pointer, with the focus of the keyboard (Escape closes it), and on a long press of a finger (500 ms,
   and the `contextmenu` of Android), which then does not follow the link; the next press anywhere
-  closes it. The link clips itself, not its heading, so its focus ring is whole. The card and
-  the alert are sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px
-  inside their padding. **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's
-  Modal): named by its title, focus in its field and kept inside, Escape or its close button close
-  it, and focus goes back to the button. A press outside does not: it would hide the form and its
-  refusal. What is typed stays when it closes. Once the
-  field holds an address and nobody typed for 600 ms, the dialog shows the icon and the domain of the
-  site, then its page in the sandboxed frame of the setup (`SitePreview`). The browser of the person
-  asks the site, under the `img-src https:` and `frame-src` the console already has; **the worker
-  fetches no typed address**, and no policy changed. The card of a workspace with no site keeps the
-  form in place. `e2e/console-sites.spec.ts` holds the three states, the counts, the search, the
-  pages, the form and its dialog, the menu, the roles, 390 px and axe.
+  closes it. The card of a workspace with no site and the alert of a read that failed are sized by
+  their content (`box-content`): 640 px and 760 px inside their padding, 24 px under the head.
+  **« Add a site » opens a dialog** (FRU-558, `Dialog` of `ui.tsx` on HeroUI's Modal): named by its
+  title, focus in its field and kept inside, Escape or its close button close it, and focus goes back
+  to the button. A press outside does not: it would hide the form and its refusal. What is typed stays
+  when it closes. Once the field holds an address and nobody typed for 600 ms, the dialog shows the
+  icon and the domain of the site, then its page in the sandboxed frame of the setup (`SitePreview`).
+  The browser of the person asks the site, under the `img-src https:` and `frame-src` the console
+  already has; **the worker fetches no typed address**, and no policy changed. The card of a workspace
+  with no site keeps the form in place. `e2e/console-sites.spec.ts` holds the three states, the head,
+  the bar, the rows of 36 px and their columns, a press on a row, the search, the pages, the form and
+  its dialog, the menu, the roles, 390 px and axe; `e2e/console-table-heads.spec.ts` holds every head
+  and every text of a row on one line, in French, at four widths.
 - **The page of a site** (FRU-433, `routes/site.tsx`) has the crumbs « Sites › site » of the page
   of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
   sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
