@@ -400,7 +400,7 @@ export function NotesTable({
                   <th
                     scope="colgroup"
                     colSpan={columns}
-                    className="sticky top-[var(--kit-pinned-top,0px)] z-1 border-y border-line bg-subtle p-0 text-left font-normal"
+                    className="sticky top-[var(--kit-pinned-top,0px)] z-1 border-b border-line bg-subtle p-0 text-left font-normal"
                   >
                     <GroupHead
                       stage={group.stage}

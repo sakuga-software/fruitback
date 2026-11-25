@@ -31,6 +31,8 @@ const INK = '#18181b';
 const MUTED = '#6b6b74';
 const CONTROL = '#8a8a93';
 const ACCENT_STRONG = '#b91c1c';
+/** `--muted` of the slate theme (FRU-683), which the list of FRU-685 is drawn in. */
+const SLATE_MUTED = '#5b6779';
 const WHITE = '#ffffff';
 const RAIL_TEXT = '#d4d4d8';
 
@@ -434,10 +436,10 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     });
   // Its page: the path, muted. Its site: the tile and the host (FRU-685, in place of the domain of FRU-547).
   await expect(first.locator('td').nth(2)).toHaveText('/');
-  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(MUTED));
+  expect.soft(await painted(first.locator('td').nth(2).locator('span').last(), 'color')).toEqual(rgb(SLATE_MUTED));
   await expect(row(page, 'returns policy').locator('td').nth(2)).toHaveText('/help/returns');
   await expect(first.locator('td').nth(3)).toHaveText('Sstaging.acme.dev');
-  await expect(row(page, 'cream').locator('td').nth(3)).toHaveText('Aacme.dev');
+  await expect(row(page, 'returns policy').locator('td').nth(3)).toHaveText('Aacme.dev');
   // The way to see it on its page: an icon in the last column, the address in its tooltip (FRU-546).
   const show = first.getByRole('link', { name: 'Show on the page' });
   await expect(first.locator('td').last().getByRole('link')).toHaveCount(1);
@@ -532,7 +534,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   await expect(when).toHaveText('1h1 h ago');
   await expect(when.locator('[aria-hidden="true"]')).toHaveAttribute('title', '1 h ago');
   await expect(row(page, 'The mug').locator('td').nth(6)).toHaveText('6d6 days ago');
-  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(MUTED));
+  expect.soft(await painted(when.locator('span').first(), 'color')).toEqual(rgb(SLATE_MUTED));
   expect.soft(await styles(when.locator('span').first(), ['font-variant-numeric', 'font-size'])).toEqual({
     'font-variant-numeric': 'tabular-nums',
     'font-size': '12px',
