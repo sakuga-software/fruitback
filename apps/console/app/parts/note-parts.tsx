@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { STAGE_NAMES, type Stage } from '../stages';
 import { type Answer, type Connector } from '../api';
-import { Choice, LoadFailed, Mark, Problem, StatusDot, Tip } from '../ui';
+import { Choice, IconButton, LoadFailed, Mark, Problem, StatusDot, Tip } from '../ui';
 import { KINDS, connectorName } from './connector-parts';
 import { ConnectorMark } from '../connector-marks';
 import { msg, t } from '../i18n';
@@ -46,22 +46,39 @@ export function hostOfLabel(label: string | undefined): string | undefined {
 }
 
 /**
- * Who left a note (FRU-553): the icon of their role, then their name cut to its room. The tooltip,
- * under the pointer, says the name whole and the role; a screen reader reads both in the cell.
+ * Who left a note (FRU-553, FRU-685): a round of 20 px, the initial of a person of the workspace, or a
+ * dashed round for a visitor with no account. The tooltip, under the pointer, says the name whole and
+ * the role; a screen reader reads both in the cell.
  */
 export function Author({ author, site }: { author: NoteAuthor; site: string }) {
   useLocale();
   const visitor = author.kind === 'verified' || author.kind === 'anonymous';
   const who = visitor ? t('Visitor') : (author.name ?? t('Somebody of the workspace'));
   const role = author.kind === 'verified' ? t(AUTHOR_WORDS.verified, { site }) : t(AUTHOR_WORDS[author.kind]);
+  const initial = visitor ? '' : (author.name ?? '').trim().charAt(0).toUpperCase();
+  let round = (
+    <span
+      aria-hidden="true"
+      className="inline-flex size-[20px] flex-none items-center justify-center rounded-full bg-avatar text-[9px] leading-none font-semibold text-page"
+    >
+      {initial}
+    </span>
+  );
+  if (visitor || initial === '')
+    round = (
+      <span
+        aria-hidden="true"
+        data-visitor={visitor}
+        className={`inline-flex size-[20px] flex-none items-center justify-center rounded-full border border-control text-muted [&_svg]:size-[11px] ${visitor ? 'border-dashed' : ''}`}
+      >
+        <NoteIcon name={visitor ? 'member' : author.kind} />
+      </span>
+    );
 
   return (
-    <Tip tip={`${who} · ${role}`}>
-      <span className="text-muted">
-        <NoteIcon name={author.kind} />
-      </span>
-      <span className="min-w-0 truncate">{who}</span>
-      <span className="sr-only">{`, ${role}`}</span>
+    <Tip tip={`${who} · ${role}`} className="kit-author">
+      {round}
+      <span className="sr-only">{`${who}, ${role}`}</span>
     </Tip>
   );
 }
@@ -213,6 +230,103 @@ export function Place({
           {after}
         </>
       )}
+    </span>
+  );
+}
+
+/** The words of a note that did not reach its address: still tried, or given up (FRU-122). */
+const NOT_DELIVERED = {
+  waiting: msg('Not delivered yet'),
+  'gave-up': msg('Not delivered: Fruitback stopped trying'),
+} as const;
+
+/**
+ * Where a note went, on one line of a row of the list (FRU-685): the mark of the place, then its
+ * reference, the host of an address, or the name of the place. A note that did not reach its address
+ * reads « Failed » in red, the sentence whole under the pointer and to a screen reader, and whoever
+ * manages the connectors sends it again from the arrow beside it.
+ */
+export function PlaceCell({
+  place,
+  source,
+  reference,
+  address,
+  delivery,
+  sending,
+  onSend,
+}: {
+  place: NotePlace;
+  source: Connector | undefined;
+  reference: string | undefined;
+  address: string | undefined;
+  delivery: 'waiting' | 'gave-up' | undefined;
+  sending: boolean;
+  /** « Send again »: none for whoever does not manage the connectors. */
+  onSend: (() => void) | undefined;
+}) {
+  useLocale();
+  if (place.kind === 'removed') {
+    const words = t('A connector that was removed');
+
+    return (
+      <span className="min-w-0 truncate text-muted" title={words}>
+        {words}
+      </span>
+    );
+  }
+  if (place.kind === 'fruitback') {
+    return (
+      <span className="flex min-w-0 items-center gap-[6px] text-ink-soft" data-place="fruitback">
+        <Mark size={14} />
+        <span className="truncate">{t('Fruitback')}</span>
+      </span>
+    );
+  }
+  const name = source === undefined ? t(KINDS[place.kind].name) : connectorName(source);
+  if (delivery !== undefined) {
+    const words = t(NOT_DELIVERED[delivery]);
+
+    return (
+      <span className="flex min-w-0 items-center gap-[6px]" data-place={place.kind} data-delivery={delivery}>
+        <span className="text-accent-strong">
+          <ConnectorMark kind={place.kind} />
+        </span>
+        <span className="sr-only">{name}</span>
+        <span aria-hidden="true" className="truncate font-medium text-accent-strong" title={words}>
+          {t('Failed')}
+        </span>
+        <span className="sr-only">{words}</span>
+        {onSend === undefined ? null : (
+          <IconButton label={t('Send again')} onClick={onSend} disabled={sending} size="tiny">
+            <NoteIcon name="retry" />
+          </IconButton>
+        )}
+      </span>
+    );
+  }
+  const host = place.kind === 'rest' ? hostOfLabel(place.label) : undefined;
+  let after: ReactNode = <span className="truncate text-ink-soft">{name}</span>;
+  if (reference !== undefined)
+    after =
+      address === undefined ? (
+        <span className="truncate font-medium text-ink-soft tabular-nums">{reference}</span>
+      ) : (
+        <a
+          href={address}
+          target="_blank"
+          rel="noreferrer"
+          className="truncate font-medium text-ink-soft tabular-nums no-underline hover:text-ink hover:underline hover:decoration-1 hover:underline-offset-[3px]"
+        >
+          {reference}
+        </a>
+      );
+  else if (host !== undefined) after = <span className="truncate text-ink-soft">{host}</span>;
+
+  return (
+    <span className="flex min-w-0 items-center gap-[6px]" data-place={place.kind} title={reference ?? host ?? name}>
+      <ConnectorMark kind={place.kind} />
+      {reference === undefined && host === undefined ? null : <span className="sr-only">{name}</span>}
+      {after}
     </span>
   );
 }

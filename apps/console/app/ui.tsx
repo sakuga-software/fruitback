@@ -385,8 +385,8 @@ type IconButtonProps = {
   label: string;
   onClick?: () => void;
   disabled?: boolean;
-  /** 28 px, or 24 px (« small »). */
-  size?: 'chip' | 'small';
+  /** 28 px, 24 px (« small »), or 20 px (« tiny », beside the words of a line of a list, FRU-685). */
+  size?: 'chip' | 'small' | 'tiny';
   /** The button opens a menu. */
   menu?: boolean;
   /** The picture: an `svg` with `aria-hidden`. */
@@ -397,7 +397,11 @@ type IconButtonProps = {
 const ICON_BUTTON =
   'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-control bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-hover data-[hovered=true]:bg-hover data-[pressed=true]:bg-hover disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
 
-const ICON_BUTTON_SIZE = { chip: 'size-control-md', small: 'size-control-sm' } as const;
+const ICON_BUTTON_SIZE = {
+  chip: 'size-control-md',
+  small: 'size-control-sm',
+  tiny: 'size-[20px] rounded-inner [&_svg]:size-[13px]',
+} as const;
 
 /** A button that is a picture, named for a screen reader. */
 export function IconButton({
@@ -419,6 +423,40 @@ export function IconButton({
       {...(onClick === undefined ? {} : { onPress: onClick })}
       className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]}`}
       data-size={size}
+    >
+      {children}
+    </HeroButton>
+  );
+}
+
+/**
+ * Words that are pressed in a line of a list (FRU-685): the text of a note, which opens it, and the
+ * head of a group, which folds it. Not underlined, as Linear draws them: the list says what a press
+ * does. On one line; what is longer is cut by its container.
+ */
+const TEXT_BUTTON =
+  'kit-text-button h-auto min-w-0 p-0 border-0 border-none border-current rounded-inner bg-transparent bg-none text-ink font-[inherit] [font-size:inherit] leading-[inherit] text-left justify-start whitespace-nowrap cursor-pointer transform-none [transition:none] data-[pressed=true]:bg-transparent';
+
+type TextButtonProps = {
+  onClick: () => void;
+  /** A button that shows or hides what follows it: the head of a group that folds. */
+  expanded?: boolean;
+  className?: string;
+  /** `data-*` of the button, which a screen or a spec finds it by. */
+  data?: Readonly<Record<`data-${string}`, string>>;
+  children: ReactNode;
+};
+
+/** A press on words of a line of a list: the text of a note, the head of a group (FRU-685). */
+export function TextButton({ onClick, expanded, className = '', data = {}, children }: TextButtonProps) {
+  return (
+    <HeroButton
+      type="button"
+      variant="ghost"
+      onPress={onClick}
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      className={`${TEXT_BUTTON} ${className}`}
+      {...data}
     >
       {children}
     </HeroButton>

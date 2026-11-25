@@ -197,6 +197,19 @@ test('the key C opens « New task », but not in a field; the head of a column o
   await expect(p.locator('section[data-column="own:todo"]')).toContainText('Call the printer');
 });
 
+test('« + » in the head of a group of the list gives its status (FRU-685)', async ({ page: p }) => {
+  const sent = await worker(p);
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  const head = p.locator('tbody[data-group="todo"] .kit-table-group');
+  await expect(head).toBeVisible();
+  await head.getByRole('button', { name: 'New task in To do' }).click();
+  const dialog = p.getByRole('dialog', { name: 'New task' });
+  await expect(dialog.getByRole('button', { name: /Status/ })).toContainText('To do');
+  await dialog.getByLabel('Title').fill('Call the printer');
+  await dialog.getByLabel('Title').press('Enter');
+  await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Call the printer', status: 'own:todo' });
+});
+
 test('a refusal keeps what was typed, and the dialog fits a phone', async ({ page: p }) => {
   const sent = await worker(p, { refuse: true });
   await p.setViewportSize({ width: 390, height: 844 });
