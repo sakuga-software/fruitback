@@ -70,10 +70,11 @@ Read on `main` on 2026-10-26.
 | `set_note_status({ id, status })`                                                | write | A status of the site, for a note that the worker keeps.                                                                                |
 | `task_choices({})`                                                               | read  | The labels of the workspace and its members who are not guests (FRU-659).                                                              |
 | `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`            | write | The status and the fields of a task that the worker keeps (FRU-659).                                                                   |
+| `create_task({ site, title, text?, status?, …fields })`                          | write | A task with no page and no pin, as « New task » of the console (FRU-657, FRU-659).                                                     |
 
 A key with the right `read` only gets the read tools: a write tool is not listed to it, and is
 refused if called. On a worker that keeps no task (`FRUITBACK_TASKS=off`, FRU-651), no key gets
-`task_choices`, `set_note_status` or `update_task`: the tools of a task follow the module, as the
+`task_choices`, `set_note_status`, `update_task` or `create_task`: the tools of a task follow the module, as the
 screens of the console do. `list_notes` and `get_note` still give the fields of a task kept before.
 
 A store that does not answer during a call, the accounts that read its site included, fails that

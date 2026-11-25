@@ -1,4 +1,12 @@
-import { type FeedbackWords, type NoteIssue, type TaskIssue, feedbackText, tasksText } from '@fruitback/shared';
+import {
+  type FeedbackWords,
+  NOTE_MAX_LENGTH,
+  type NoteIssue,
+  TASK_TITLE_MAX_LENGTH,
+  type TaskIssue,
+  feedbackText,
+  tasksText,
+} from '@fruitback/shared';
 import { type AccountStore, type AgentWrite, can } from './accounts.ts';
 import type { AgentGrant } from './agent-keys.ts';
 import type { ClientConfig, ClientPolicy, ClientResolution } from './clients.ts';
@@ -22,7 +30,7 @@ import type { NoteStage } from '@fruitback/shared';
 import type { ListedNote, NoteIndex } from './notes-index.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
 import { type NoteStore, StoreError, findNote, takesChecks, takesReplies, takesStatuses } from './store.ts';
-import { TASK_PRIORITIES, type TaskChange, type TaskFields, readTaskChange } from './task-fields.ts';
+import { TASK_PRIORITIES, type TaskChange, type TaskFields, readNewTask, readTaskChange } from './task-fields.ts';
 
 /**
  * The read tools of `/mcp` (FRU-463): the notes of the sites of an agent key, with their whole
@@ -40,7 +48,7 @@ import { TASK_PRIORITIES, type TaskChange, type TaskFields, readTaskChange } fro
  * - **A key whose member does not see the tracker reads no reference of it**, as a guest in the
  *   console (FRU-250).
  * - **The tools of a task follow the module** (FRU-659): on a worker that keeps no task (FRU-651),
- *   `task_choices`, `set_note_status` and `update_task` are not given. The reads still give the
+ *   `task_choices`, `set_note_status`, `update_task` and `create_task` are not given. The reads still give the
  *   fields of a task kept before, as the list of the console does.
  */
 
@@ -49,7 +57,14 @@ export type AgentToolsContext = {
   /** What the write tools read and write beside the store (FRU-464), the fields of a task (FRU-659), and a task written by hand (FRU-657). */
   accounts: Pick<
     AccountStore,
-    'siteStatuses' | 'recordAgentWrite' | 'setTaskFields' | 'labels' | 'membersOf' | 'readTask'
+    | 'siteStatuses'
+    | 'recordAgentWrite'
+    | 'setTaskFields'
+    | 'labels'
+    | 'membersOf'
+    | 'readTask'
+    | 'createTask'
+    | 'setNoteStatus'
   >;
   /** Whether this worker keeps tasks (FRU-651). `off`: no tool of a task is given. */
   tasks: 'on' | 'off';
@@ -259,6 +274,35 @@ function taskWriteTools(context: AgentToolsContext): McpTool[] {
         additionalProperties: false,
       },
       call: (args) => updateTask(context, args),
+    },
+    {
+      name: 'create_task',
+      description:
+        'Writes a task that Fruitback keeps, with no page and no pin, in a site of this key: a title, and if you like a text, a status, an assignee, a priority, a due day and labels. It is written whole or not at all, and the answer gives what was written.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          site: { type: 'string', description: `One of: ${context.grant.sites.join(', ')}` },
+          title: { type: 'string', maxLength: TASK_TITLE_MAX_LENGTH, description: 'One line.' },
+          text: { type: 'string', maxLength: NOTE_MAX_LENGTH },
+          status: {
+            type: 'string',
+            description: `A status of its site, as \`${OWN_SOURCE}:<key>\`. Absent: \`${OWN_SOURCE}:new\`.`,
+          },
+          assignee: { type: 'string', description: 'The id of a member, as task_choices gives it.' },
+          priority: { type: 'string', enum: [...TASK_PRIORITIES] },
+          dueOn: { type: 'string', description: 'A day, YYYY-MM-DD.' },
+          labels: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 20,
+            description: 'The ids of its labels, as task_choices gives them.',
+          },
+        },
+        required: ['site', 'title'],
+        additionalProperties: false,
+      },
+      call: (args) => createTask(context, args),
     },
   ];
 }
@@ -544,6 +588,23 @@ function notesAsText(
   });
 }
 
+/**
+ * The task written by hand of the grant that `id` names (FRU-657), or `undefined` for a note of a
+ * page, or no note. The worker keeps it, so its status and its fields go to the accounts, not to a
+ * store of the notes.
+ */
+async function handwrittenOf(
+  context: AgentToolsContext,
+  id: unknown,
+): Promise<{ site: Site; note: string } | undefined> {
+  const key = typeof id === 'string' ? noteKeyOf(id) : undefined;
+  const site = key === undefined ? undefined : await siteOf(context, key.site);
+  if (key === undefined || site === undefined || context.noteIndex === undefined) return undefined;
+  const page = await context.noteIndex.pageOfNote(site.workspace, site.id, key.note);
+
+  return page === NO_PAGE ? { site, note: key.note } : undefined;
+}
+
 /** The note of the grant that `id` names, with the places of its site to look for it in. */
 async function writableNote(
   context: AgentToolsContext,
@@ -665,6 +726,13 @@ function setNoteStatus(context: AgentToolsContext, args: Record<string, unknown>
     if (typeof asked !== 'string' || !asked.startsWith(prefix)) {
       return { ok: false, error: `Invalid status: a status of the site, as \`${prefix}<key>\`.` };
     }
+    // FRU-659: a task written by hand, as `create_task` writes it.
+    const written = await handwrittenOf(context, args.id);
+    if (written !== undefined) {
+      const done = await writeHandwritten(context, written, undefined, asked);
+
+      return done.ok ? { ok: true, content: { status: done.content.status, stage: done.content.stage } } : done;
+    }
     const found = await writableNote(context, args.id);
     if (found === undefined) return { ok: false, error: NO_NOTE };
     const { site, note, page } = found;
@@ -754,6 +822,9 @@ function updateTask(context: AgentToolsContext, args: Record<string, unknown>): 
     if (change === undefined && args.status === undefined) {
       return { ok: false, error: 'Nothing to change: give a status, an assignee, a priority, a due day or labels.' };
     }
+    // FRU-659: a task written by hand, as `create_task` writes it.
+    const written = await handwrittenOf(context, args.id);
+    if (written !== undefined) return writeHandwritten(context, written, change, args.status);
     const found = await writableNote(context, args.id);
     if (found === undefined) return { ok: false, error: NO_NOTE };
     const { site, note, page } = found;
@@ -827,6 +898,156 @@ function updateTask(context: AgentToolsContext, args: Record<string, unknown>): 
     }
 
     return { ok: false, error: NO_NOTE };
+  });
+}
+
+/** Why `setNoteStatus` of the accounts refused, as the agent reads it. */
+const STATUS_REFUSED = {
+  'not-found': NO_NOTE,
+  'not-allowed': NO_NOTE,
+  'not-kept': IN_TRACKER,
+  'unknown-status': 'No status of this site has this key.',
+  'status-hidden': 'This status is hidden on its site.',
+} as const;
+
+/**
+ * `update_task` and `set_note_status` on a task written by hand (FRU-659): the fields as
+ * `POST …/notes/<note>/task` writes them, and the status as `POST …/notes/<note>/status` writes it,
+ * with the member of the key and `manages: true`, as `update_task` writes a note. The same order and
+ * the same answers as for a note: the fields first, then the status, and a status that fails after
+ * the fields says « The fields were saved; the status was not. »
+ */
+async function writeHandwritten(
+  context: AgentToolsContext,
+  { site, note }: { site: Site; note: string },
+  change: TaskChange | undefined,
+  asked: unknown,
+): Promise<ToolAnswer> {
+  let key: string | undefined;
+  if (asked !== undefined) {
+    const status = await statusOf(context, site, asked);
+    if ('error' in status) return { ok: false, error: status.error };
+    key = (asked as string).slice(`${OWN_SOURCE}:`.length);
+  }
+  if (!(await chargeKey(context))) return { ok: false, error: LIMITED };
+  const who = { account: context.grant.account, manages: true };
+  const write = { key: context.grant.key, keyName: context.grant.name, site: site.id, note };
+
+  if (change !== undefined) {
+    const set = await context.accounts.setTaskFields(site.workspace, site.id, note, change, who);
+    if (!set.set) return { ok: false, error: TASK_REFUSED[set.reason] };
+    await logged(context, site.workspace, { ...write, action: 'task', at: Date.now() });
+  }
+  let stage: NoteStage | undefined;
+  if (key !== undefined) {
+    const saved = change === undefined ? '' : 'The fields were saved; the status was not. ';
+    let answer: Awaited<ReturnType<AgentToolsContext['accounts']['setNoteStatus']>>;
+    try {
+      answer = await context.accounts.setNoteStatus(site.workspace, site.id, note, key, who);
+    } catch (error) {
+      if (saved !== '' && error instanceof StoreError) return { ok: false, error: `${saved}${UNAVAILABLE}` };
+      throw error;
+    }
+    if (!answer.set) return { ok: false, error: `${saved}${STATUS_REFUSED[answer.reason]}` };
+    stage = answer.stage;
+    await logged(context, site.workspace, { ...write, action: 'status', status: asked as string, at: Date.now() });
+  }
+  const task = await context.noteIndex?.taskOf(site.workspace, site.id, note);
+
+  return {
+    ok: true,
+    content: {
+      id: noteIdOf(site.id, note),
+      ...(key === undefined ? {} : { status: asked, stage }),
+      ...(task === undefined ? {} : { task: taskView(task) }),
+    },
+  };
+}
+
+/** The arguments of `create_task` (FRU-659): the body of `POST …/notes` of the console (FRU-657). */
+const NEW_TASK_ARGUMENTS = ['site', 'title', 'text', 'status', 'assignee', 'priority', 'dueOn', 'labels'];
+
+/** Why `createTask` refused, as the agent reads it. Nothing is written then. */
+const NEW_TASK_REFUSED = {
+  'not-found': NO_SITE,
+  'unknown-status': 'No status of this site has this key.',
+  'status-hidden': 'This status is hidden on its site.',
+  'not-member': TASK_REFUSED['not-member'],
+  'unknown-label': TASK_REFUSED['unknown-label'],
+} as const;
+
+/**
+ * The store did not answer the write of a task. It may have kept it before it failed: the agent
+ * looks for it before it writes it again, or it writes the task twice.
+ */
+const MAYBE_WRITTEN =
+  'The store of the notes did not answer: the task may have been written. Look for it with notes_as_text before you write it again.';
+
+/**
+ * `create_task` (FRU-659): a task written by hand, as `POST …/notes` of the console writes it
+ * (FRU-657), in a site of the key, with the member of the key as its author.
+ *
+ * - **Everything that can be refused is refused before the write**: an argument it does not take, a
+ *   site out of the key, a field that `readNewTask` refuses. Then `createTask` writes the task in one
+ *   transaction, which refuses a status, a member or a label that its site or its workspace does not
+ *   have, and then writes nothing.
+ * - **The answer gives what was written**, the ids as they were sent. No error is answered once the
+ *   task is written: the agent would write it a second time.
+ * - **It starts no agent**: a task in To do calls no trigger of its site, as `set_note_status`
+ *   (FRU-468). The console calls it, because a person wrote the task.
+ */
+function createTask(context: AgentToolsContext, args: Record<string, unknown>): Promise<ToolAnswer> {
+  return guarded(async () => {
+    // A field it does not take is refused, never dropped: the agent would think it written.
+    const unknown = Object.keys(args).find((field) => !NEW_TASK_ARGUMENTS.includes(field));
+    if (unknown !== undefined) {
+      return { ok: false, error: `Unknown argument: ${unknown}. create_task takes ${NEW_TASK_ARGUMENTS.join(', ')}.` };
+    }
+    const input = readNewTask(args, { title: TASK_TITLE_MAX_LENGTH, text: NOTE_MAX_LENGTH });
+    if ('invalid' in input) {
+      const why = input.invalid === 'status' ? `: a status of the site, as \`${OWN_SOURCE}:<key>\`` : '';
+
+      return { ok: false, error: `Invalid ${input.invalid}${why}.` };
+    }
+    const site = await siteOf(context, args.site);
+    if (site === undefined) return { ok: false, error: NO_SITE };
+    if (!(await chargeKey(context))) return { ok: false, error: LIMITED };
+
+    let answer: Awaited<ReturnType<AgentToolsContext['accounts']['createTask']>>;
+    try {
+      answer = await context.accounts.createTask(site.workspace, site.id, input, { account: context.grant.account });
+    } catch (error) {
+      if (error instanceof StoreError) return { ok: false, error: MAYBE_WRITTEN };
+      throw error;
+    }
+    if (!answer.created) return { ok: false, error: NEW_TASK_REFUSED[answer.reason] };
+    const status = `${OWN_SOURCE}:${input.status ?? answer.stage}`;
+    await logged(context, site.workspace, {
+      key: context.grant.key,
+      keyName: context.grant.name,
+      site: site.id,
+      note: answer.note,
+      action: 'create',
+      status,
+      at: Date.now(),
+    });
+
+    return {
+      ok: true,
+      content: {
+        id: noteIdOf(site.id, answer.note),
+        site: site.id,
+        identifier: answer.identifier,
+        status,
+        stage: answer.stage,
+        title: input.title,
+        ...(input.text === undefined ? {} : { text: input.text }),
+        ...(input.assignee === undefined ? {} : { assignee: input.assignee }),
+        ...(input.priority === undefined ? {} : { priority: input.priority }),
+        ...(input.dueOn === undefined ? {} : { dueOn: input.dueOn }),
+        labels: input.labels ?? [],
+      },
+    };
   });
 }
 
