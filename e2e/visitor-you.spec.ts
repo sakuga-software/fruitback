@@ -99,9 +99,9 @@ test('a visitor edits the text of their open note, and another browser reads the
 
   await mount(page, path);
   const thread = await openThread(page);
-  await expect(thread.getByText('You can edit it until a member picks it up.')).toBeVisible();
+  await expect(thread.getByText('You can edit or delete it until a member picks it up.')).toBeVisible();
   await thread.getByRole('button', { name: 'More actions on your note' }).click();
-  await expect(thread.getByRole('menuitem')).toHaveText(['Edit the text', 'Copy link to the note']);
+  await expect(thread.getByRole('menuitem')).toHaveText(['Edit the text', 'Copy link to the note', 'Delete the note']);
   await thread.getByRole('menuitem', { name: 'Edit the text' }).click();
   const field = thread.getByRole('textbox', { name: 'Your note' });
   await field.fill('Une note modifiée par ce navigateur');
