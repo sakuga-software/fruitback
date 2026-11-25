@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router';
 import { type Stage } from '../stages';
 import { type Connector, type SiteChoice, call, siteChoices } from '../api';
 import { type Fetched, type Listed, listedOf } from '../listed';
-import { Button, LinkButton } from '../ui';
+import { Button, LinkButton, Problem } from '../ui';
+import { ReadProblem } from '../read-problem';
 import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
@@ -70,14 +71,22 @@ export default function Notes() {
   // chips. Both are read once, with the first page.
   // Their id and address only, by address (FRU-497): no count of the notes of every site.
   const [sites, setSites] = useState<Listed<SiteChoice>>('loading');
-  const [connectors, setConnectors] = useState<Connector[]>([]);
+  // FRU-682: a read that failed is no empty list. The screen says it, with « Try again ».
+  const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
+  // The read asked last: the answer of a read of before is dropped, as the address can go to the
+  // notes of another workspace while it is on its way.
+  const connectorsAsked = useRef(0);
+  const readConnectors = useCallback(async () => {
+    const mine = (connectorsAsked.current += 1);
+    setConnectors('loading');
+    const answer = await call<{ connectors: Connector[] }>('GET', `${base}/connectors`);
+    if (mine !== connectorsAsked.current) return;
+    setConnectors(listedOf(answer, (data) => data.connectors));
+  }, [base]);
   useEffect(() => {
     void siteChoices(workspace.id).then((answer) => setSites(listedOf(answer, (data) => data.sites)));
-    if (seesTracker)
-      void call<{ connectors: Connector[] }>('GET', `${base}/connectors`).then((answer) => {
-        if (answer.ok) setConnectors(answer.data.connectors);
-      });
-  }, [base, seesTracker, workspace.id]);
+    if (seesTracker) void readConnectors();
+  }, [readConnectors, seesTracker, workspace.id]);
 
   const filters = useMemo(
     () =>
@@ -264,7 +273,8 @@ export default function Notes() {
   if (siteInView === undefined && typeof sites === 'object' && sites.length === 1) siteInView = sites[0]?.id;
   const choose = (note: IndexedNote, status: string) =>
     call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
-  const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
+  const sourceOf = (note: IndexedNote) =>
+    typeof connectors === 'string' ? undefined : connectors.find((each) => each.id === note.place?.connector);
   // FRU-665: the columns of the board, each in the order of its tasks.
   const columns = useMemo(
     () =>
@@ -452,6 +462,18 @@ export default function Notes() {
           action={newTask}
         />
 
+        {/* FRU-682: the connectors name the places and the tracker of a note. A read that failed says so. */}
+        {seesTracker && connectors === 'failed' ? (
+          <div className="mt-[16px] flex flex-col items-start gap-[8px]" data-connectors-failed="">
+            <Problem>
+              {t('The connectors of this workspace did not load.')} <ReadProblem />
+            </Problem>
+            <Button tone="outline" onClick={() => void readConnectors()}>
+              {t('Try again')}
+            </Button>
+          </div>
+        ) : null}
+
         {shown === 'loading' ? <p className="mt-[24px] text-small text-muted">{t('Loading…')}</p> : null}
 
         {shown === 'failed' ? (
@@ -483,7 +505,16 @@ export default function Notes() {
                 // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
                 {...(shown.notes.some((note) => note.task !== undefined) ||
                 TASK_FILTERS.some((name) => filters[name] !== '')
-                  ? { tasks: { people: tasks.seam.people, labels: tasks.seam.labels } }
+                  ? {
+                      tasks: {
+                        people: tasks.seam.people,
+                        peopleRead: tasks.seam.peopleRead,
+                        readPeople: tasks.seam.readPeople,
+                        labels: tasks.seam.labels,
+                        labelsRead: tasks.seam.labelsRead,
+                        readLabels: tasks.seam.readLabels,
+                      },
+                    }
                   : {})}
               />
             }
