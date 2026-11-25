@@ -167,6 +167,29 @@ tokens again in its own file, under `prefers-color-scheme: dark`, and `app/share
 holds the theme to that shape. The tokens of one surface alone go in a file of that surface,
 imported after the shared theme.
 
+## The tokens of fruitback.com (FRU-681)
+
+The landing and the guides of `docs/` keep the warm greys of the boards of 2026-10-07 and of the
+mock-up of the landing (FRU-387, FRU-417), not the neutral greys of the console. Their tokens are in
+`apps/site/src/theme.css`, imported after the shared theme; the sheets take the shared `accent-strong`,
+`status-*`, `on-ink`, `ink`, `font-sans` and `font-mono` where the value is the same. `apps/site`
+builds `docs/assets/landing.css` and `docs.css` with the CLI of Tailwind, and `css.test.ts` fails on a
+colour written as a value in a sheet.
+
+| Token                                                            | Value                                                   | What it is for                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------- |
+| `site-ink`, `site-body`                                          | `#1c1917`, `#44403c`                                    | text, on both                                     |
+| `site-line`, `site-edge`                                         | `#e7e5e4`, `#8f8883`                                    | a rule, the border of a field or an outline       |
+| `site-surface`, `site-chip`, `site-accent`                       | `#ffffff`, `#f5f5f4`, `#dd2c27`                         | a card, a hovered link, the main button and focus |
+| `landing-page`, `landing-muted`, `landing-warm`, `landing-stone` | `#fffdf9`, `#57534e`, `#faf7f2`, `#f3f1ee`              | the landing: its page, a hint, two bands          |
+| `landing-on-night`, `-night-muted`, `-night-faint`               | `#fafaf9`, `#d6d3d1`, `#a8a29e`                         | text on the dark cards and the one-liner          |
+| `landing-cta`, `-cta-*`                                          | `#c8211d`, and the fade and the outline of the red band | the red band                                      |
+| `docs-page`, `docs-inset`, `docs-muted`                          | `#faf9f5`, `#fafaf9`, `#736c67`                         | the guides: the page, a callout, a hint           |
+| `docs-code-surface`, `-code-text`, `-code-comment` to `-code-tag` | `#1c1917`, `#e7e5e4`, the Rouge palette                | a code block, each colour at 4.5:1 or more        |
+| `shadow-landing-*`, `drop-shadow-landing-pin`, `shadow-docs-*`   | see `theme.css`                                         | the frame, a pin, a note, the popup               |
+
+`--spacing` is 4 px there, inline: `p-6` is `24px` in the built sheet, as it was written.
+
 ## The tokens of the first boards (2026-10-07)
 
 The boards of 2026-10-07 use the tokens the widget had then (`packages/widget/src/theme.ts`),
