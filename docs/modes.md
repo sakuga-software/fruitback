@@ -81,8 +81,8 @@ team to deploy nothing when the code is theirs. Extension mode keeps the case te
 nothing to ask anybody to ship.
 
 The two modes of the extension, extension and team, are one field on the site's entry, chosen in the
-popup. The field keeps the value `private` it had before extension mode got its name (FRU-662), so a
-rule saved or imported before that still works, and an entry with no mode reads as extension mode.
+popup. The field keeps the value `private`, the old name of extension mode, so a rule saved or
+imported before the rename still works, and an entry with no mode reads as extension mode.
 
 ## What each one needs
 
