@@ -1,5 +1,5 @@
 {
-  "id": "6f1c1eff-d5f8-44f9-aad7-74aff726360d",
+  "id": "24aeadea-fb22-493f-badd-0239acb9be23",
   "prevId": "2fa26c50-cf0e-4137-9620-d849b36e1f3d",
   "version": "7",
   "dialect": "postgresql",
@@ -3339,12 +3339,17 @@
           "notNull": true,
           "default": "'while-open'"
         },
-        "visitor_notes_per_hour": {
-          "name": "visitor_notes_per_hour",
-          "type": "integer",
+        "script_seen_at": {
+          "name": "script_seen_at",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "default": 10
+          "notNull": false
+        },
+        "extension_seen_at": {
+          "name": "extension_seen_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

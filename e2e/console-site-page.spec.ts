@@ -346,6 +346,74 @@ test('a site with no note yet is « Not seen yet », never « Installed », and 
   ]);
 });
 
+test('a site the widget was seen on is « Installed », with its oldest open note and its notes of 30 days (FRU-721)', async ({
+  page,
+}) => {
+  const HOUR = 3_600_000;
+  const now = Date.now();
+  const base = {
+    visibility: 'members',
+    destinations: [{ connector: 'c1', teamId: 't1', label: 'Linear · Web' }],
+    via: ['script'],
+    notes: { new: 3, todo: 1, progress: 1, done: 4, closed: 1 },
+    undelivered: 0,
+    lastNoteAt: new Date(now - 3 * HOUR).toISOString(),
+  };
+  await stubWorker(page, {
+    workspaces: [ACME],
+    sites: [
+      {
+        ...base,
+        id: 's4',
+        origin: 'https://shop.acme.dev',
+        seen: { script: new Date(now - 2 * HOUR - 60_000).toISOString() },
+        oldestOpenAt: new Date(now - 5 * 24 * HOUR - HOUR).toISOString(),
+        recent: { days: 30, notes: 10, undelivered: 0 },
+      },
+      {
+        ...base,
+        id: 's5',
+        origin: 'https://blog.acme.dev',
+        seen: { extension: new Date(now - 30 * 60_000).toISOString() },
+        oldestOpenAt: new Date(now - HOUR).toISOString(),
+        recent: { days: 30, notes: 8, undelivered: 2 },
+      },
+    ],
+  });
+
+  await page.goto(`${CONSOLE}/w/w1/sites/s4`);
+  const card = page.getByRole('region', { name: 'Install on shop.acme.dev' });
+  await expect(card.locator('[data-install-state]')).toHaveText('Installed');
+  await expect(card.locator('[data-install-seen]')).toHaveText('Seen on the site 2 h ago.');
+  await expect(page.locator('[data-figure]')).toHaveText([
+    'Notes10',
+    'Open3 newoldest 5 days',
+    'Delivered100 %last 30 days',
+  ]);
+
+  // Seen by the extension only: « Installed » too, and its line says the extension.
+  await page.goto(`${CONSOLE}/w/w1/sites/s5`);
+  const other = page.getByRole('region', { name: 'Install on blog.acme.dev' });
+  await expect(other.locator('[data-install-state]')).toHaveText('Installed');
+  // The script was not seen there since the worker keeps it: its line says the notes that came by it.
+  await expect(other.locator('[data-install-seen]')).toHaveText(
+    'Notes came through the script. The last note of the site came 3 h ago.',
+  );
+  await other
+    .locator('label')
+    .filter({ has: page.getByRole('radio', { name: 'Extension', exact: true }) })
+    .click();
+  await expect(other.locator('[data-install-seen]')).toHaveText('Seen with the extension 30 min ago.');
+  // Two of the 8 notes of 30 days did not arrive: 75 %, and a link to them.
+  const figures = page.locator('[data-figure]');
+  await expect(figures.nth(1)).toHaveText('Open3 newoldest today');
+  await expect(figures.nth(2)).toHaveText('Delivered75 %2 not delivered in 30 days');
+  await expect(page.getByRole('link', { name: '2 not delivered in 30 days' })).toHaveAttribute(
+    'href',
+    '/w/w1/notes?site=s5&undelivered=1',
+  );
+});
+
 test('a site that everyone reads takes a note from anybody, and says so', async ({ page }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);

@@ -24,6 +24,7 @@ import { PAIR_PATH } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { KvError } from './kv.ts';
 import { type Channel, type NoteIndex } from './notes-index.ts';
+import { seeSite } from './site-seen.ts';
 import { sessionStillValid } from './session-check.ts';
 import { ATTACHMENTS_PATH } from './attachments.ts';
 import { handleAttachment } from './attachment-routes.ts';
@@ -626,6 +627,22 @@ async function routed(
     visitorOf: visitorDigestOf,
     visitorMay,
     done,
+    // FRU-721: when the widget was last seen on a site, by which way.
+    ...(accounts === undefined
+      ? {}
+      : {
+          pageRead: (each: Request, policy: ClientPolicy, site: string, origins: readonly string[]) => {
+            const token = readBearerToken(each.headers.get('Authorization'));
+
+            return seeSite(
+              accounts,
+              site,
+              token === undefined ? 'script' : 'extension',
+              () => readBy(each, policy, origins, token),
+              Date.now(),
+            );
+          },
+        }),
   };
 
   // FRU-604: the address a visitor with no account gives for the note they just sent.
@@ -1082,6 +1099,30 @@ async function authorizeRead(
   if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
 
   return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
+}
+
+/**
+ * FRU-721: whether a read of the pins is the widget on a page of the site, by the way it claims. With
+ * no token, the script: the `Origin` of the site. With a token, the extension: a session of the
+ * workspace that the worker verifies. Anything else says nothing of the site (another origin, a token
+ * that does not verify, a token the site signed).
+ */
+async function readBy(
+  request: Request,
+  policy: ClientPolicy,
+  origins: readonly string[],
+  token: string | undefined,
+): Promise<boolean> {
+  if (token === undefined) {
+    const origin = request.headers.get('Origin');
+
+    return origin !== null && origins.includes(origin);
+  }
+  const verified = await verifyForClient(token, policy);
+  // Written apart from the guard of FRU-330 above, which `visitor.test.ts` finds by its text.
+  const session = verified?.ok === true ? verified.session : undefined;
+
+  return session === true;
 }
 
 /**

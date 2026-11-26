@@ -1073,6 +1073,27 @@ whole.
   The other reads of the sites of the console are narrowed the same way: a page of the
   list, the sites to choose from (`…/sites/choices`), and one site (`…/sites/<id>`, `404` for a site
   not shared). test:`lets the guest read a site not shared with them in the reads of FRU-497 without their filter`.
+- The counts of the bar of the console (`GET /console/workspaces/<id>/rail`) are of the
+  same reads, for the same roles: the sites the caller reads, the notes of those sites that are not
+  done nor closed, the tasks of the caller, and the notes left since an instant. A guest counts the
+  sites shared with them and their notes; the sends of the connectors that did not arrive (`failing`)
+  and the notes whose delivery did not arrive (`views.undelivered`) are about the tracker, and only a
+  role with `see-tracker` gets them
+  (test:`counts for a guest the sites shared with them and their notes, and no delivery`). A person
+  of another workspace gets `404`, as for a workspace that does not exist, and a caller with no
+  session `401` (test:`answers 404 to a person who is not a member, 401 to nobody, 405 to a write`).
+- The page of one site in the console (`GET /console/workspaces/<id>/sites/<site>`) also says when
+  the widget was last seen on it, the oldest open note, and the notes of the last 30 days, to the
+  same roles as the counts above; how many of those 30 days did not arrive is about the tracker,
+  and only a role with `see-tracker` gets it
+  (test:`says the oldest open note, the notes of 30 days, and those not delivered to whoever sees the tracker`).
+- When the widget was last seen on a site proves nothing, and gives no right. A read of the pins
+  of a page writes it, at most once an hour: by the script when the read has no token and the
+  `Origin` of the site, by the extension when its token is a session of the workspace that the worker
+  verifies. Any program can send the `Origin` of a site, so a person who knows the id of a site can
+  make the console say « Seen on the site » now; nothing else reads the date
+  (test:`writes nothing for a read with no Origin, or another one`). A write that fails costs the
+  date, never the read (test:`answers the read of the pins when the write fails`).
 - An anonymous reader of a public page writes to the index: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.
@@ -1097,7 +1118,8 @@ tell it which note carries which reference (raised by the heavy review of #306; 
   on the sites shared with them only: the list, its counts and its search are of those
   sites, whatever `site` the query names. Where a note went is read with `see-tracker` only: the place and the
   connector, the reference and its link in the tracker, the delivery that did not arrive, and the
-  counts by place. A guest gets none of it, and a `place` filter is `403` to it. A person of another
+  counts by place. A guest gets none of it, and a `place` or an `undelivered` filter is `403` to it
+  (test:`is refused to a guest, who does not see where a note went, and takes 1 only`). A person of another
   workspace gets `404`, a caller with no session `401`, and the token of an extension `401`.
 - The name of an author is the name its account has now, for a member of the workspace only;
   a member who left is shown with no name. A name a reporter typed is not in the index, so it is
@@ -2655,7 +2677,7 @@ the widget says « Send it again later » with the text kept.
   `incr` takes no amount below one. A visitor whose tracker fails spends a note of the hour at each
   try; the widget keeps the text for the try after.
   A database that does not answer refuses the note with `503 limiter-unavailable`.
-- The default. 10, the value of the mockup, for a new site and, by `0055`, for every site of before:
+- The default. 10, the value of the mockup, for a new site and, by `0056`, for every site of before:
   Fruitback has no users yet. A value out of the list is refused by the console API
   (test:`refuses a value that is not one of the list, and changes nothing`), and a row that holds one
   counts as 10, never as « No limit ».

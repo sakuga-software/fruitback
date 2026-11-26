@@ -121,7 +121,11 @@ export const sites = pgTable(
     // the next one, as the mockup does. `addSite` writes the value in any case.
     visitor_edit: text('visitor_edit').notNull().default('while-open'),
     visitor_delete: text('visitor_delete').notNull().default('while-open'),
-    // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0055` adds it
+    // FRU-721: the last time the widget read a page of the site, by the script or by the extension,
+    // written at most once an hour (`site-seen.ts`). A date and nothing else: no page, no address.
+    script_seen_at: instant('script_seen_at'),
+    extension_seen_at: instant('extension_seen_at'),
+    // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0056` adds it
     // with 10, the value of the mockup, for every site, those of before included.
     visitor_notes_per_hour: integer('visitor_notes_per_hour').notNull().default(10),
     // FRU-704: « Hold new visitor notes ». Off by default, as the mockup draws it.
