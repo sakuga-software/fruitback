@@ -128,6 +128,8 @@ export const sites = pgTable(
     // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0056` adds it
     // with 10, the value of the mockup, for every site, those of before included.
     visitor_notes_per_hour: integer('visitor_notes_per_hour').notNull().default(10),
+    // FRU-704: « Hold new visitor notes ». Off by default, as the mockup draws it.
+    hold_visitor_notes: boolean('hold_visitor_notes').notNull().default(false),
   },
   (table) => [
     foreignKey({
@@ -1023,6 +1025,38 @@ export const note_index = pgTable(
       sql`"site_id" COLLATE "C" DESC`,
       sql`"note_id" COLLATE "C" DESC`,
     ),
+  ],
+);
+
+/**
+ * The notes of visitors that wait for a member (FRU-704): `held-notes.ts`. A row goes when a member
+ * approves or rejects it, when it waited 30 days, and with its site.
+ */
+export const held_notes = pgTable(
+  'held_notes',
+  {
+    site_id: text('site_id').notNull(),
+    note_id: text('note_id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    // The note as the route would have sent it, in JSON, read back with `noteSchema`.
+    payload: text('payload').notNull(),
+    // The digest of the key of the browser (FRU-700), never the key. NULL: no key came.
+    author_visitor: text('author_visitor'),
+    held_at: instant('held_at').notNull(),
+    // Until when a member's approval is sending it: the row stays until the note is in its place, and
+    // a process that stops meanwhile leaves it to the next approval once this runs out. NULL: nobody.
+    claimed_until: instant('claimed_until'),
+  },
+  (table) => [
+    primaryKey({ name: 'held_notes_pkey', columns: [table.site_id, table.note_id] }),
+    foreignKey({
+      name: 'held_notes_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    // The queue of a workspace, newest first, and the sweep of the notes that waited too long.
+    index('held_notes_by_workspace').on(table.workspace_id, table.held_at),
+    index('held_notes_by_time').on(table.held_at),
   ],
 );
 

@@ -91,6 +91,9 @@ export const FRENCH: Catalog = {
   'composer.sending': 'Envoi…',
   'composer.sent': 'Envoyée',
   'composer.sentAs': 'Envoyée : {identifier}',
+  'composer.held': 'Envoyée pour relecture',
+  'composer.heldFollows':
+    'L’équipe de ce site relit les notes avant de les transmettre. Son repère s’affiche ici une fois approuvée.',
   'composer.sentFollows': 'Le repère reste ici et suit le statut du ticket.',
   'composer.sentOpen': 'Ouvrir →',
   'composer.notifyTitle': 'Être prévenu quand ce sera corrigé ?',

@@ -59,6 +59,7 @@ import {
   type NotifyOffer,
   type SendFailure,
   type SentAs,
+  type SentHeld,
   type SentWithoutPicture,
   createComposer,
 } from './composer.ts';
@@ -1175,6 +1176,8 @@ export function init(given: FruitbackOptions): Fruitback {
       const sent = await submitOne(note, reporter, chosen, attachments);
       if (typeof sent === 'string') return sent;
       const missed = sent.picture === 'missed' ? { picture: 'missed' as const } : {};
+      // FRU-704: a member approves it first. No question of an address: there is no issue to watch yet.
+      if (sent.held === true) return { sentAs: {}, held: true, ...missed };
       // FRU-604: « Want to know when it's fixed? », for a visitor the worker gave a token to, once
       // per browser. A member, a reporter the site names, and a widget the extension mounts
       // (`askForAddress: false`) are never asked.
@@ -1219,7 +1222,9 @@ export function init(given: FruitbackOptions): Fruitback {
     reporter: NoteReporter | undefined,
     chosen: string | undefined,
     attachments: readonly string[],
-  ): Promise<SendFailure | { id?: string; sentAs?: SentAs['sentAs']; picture?: 'missed'; token?: string }> {
+  ): Promise<
+    SendFailure | { id?: string; sentAs?: SentAs['sentAs']; picture?: 'missed'; token?: string; held?: true }
+  > {
     const destination = destinationToSend(destinations.get(), chosen);
     // The element this note is about, as it was sent: the composer may stand on another by the answer.
     const about = typingPlace;
@@ -1240,6 +1245,14 @@ export function init(given: FruitbackOptions): Fruitback {
       onPlaceHelp: (help) => (placeHelp = help),
     });
     if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
+    // FRU-704: kept for a member. No read: the page has no pin of it until a member approves it.
+    if (typeof planted === 'object' && 'held' in planted) {
+      return {
+        ...(noteId === undefined ? {} : { id: noteId }),
+        held: true,
+        ...(planted.picture === 'missed' ? { picture: 'missed' as const } : {}),
+      };
+    }
     if (typeof planted === 'string') {
       // The worker refuses a place the site no longer has, or a reader who lost the right to
       // choose. The list on screen is then old, and a second try would be refused like the first.
@@ -1787,7 +1800,7 @@ export async function plant({
   onNotify?: (token: string) => void;
   /** What to do about a place that is gone (FRU-640), told at each answer that failed. */
   onPlaceHelp?: (help: PlaceHelp | undefined) => void;
-}): Promise<true | SentWithoutPicture | SendFailure> {
+}): Promise<true | SentWithoutPicture | SentHeld | SendFailure> {
   const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
   const { note: built, missedPicture } = made;
@@ -1811,8 +1824,19 @@ export async function plant({
   }
   const token = notifyTokenOf(response.body);
   if (token !== undefined) onNotify?.(token);
+  // FRU-704: the site holds the notes of its visitors, and a member approves this one first.
+  if (heldIn(response.body)) return missedPicture ? { held: true, picture: 'missed' } : { held: true };
 
   return missedPicture ? { picture: 'missed' } : true;
+}
+
+/** Whether the worker kept the note for a member to approve (FRU-704): `202` with `held: true`. */
+function heldIn(body: string): boolean {
+  try {
+    return (JSON.parse(body) as { held?: unknown } | null)?.held === true;
+  } catch {
+    return false;
+  }
 }
 
 /** The `localStorage` of the page, or `null` when the browser refuses it (a sandbox, a setting). */

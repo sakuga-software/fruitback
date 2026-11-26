@@ -46,8 +46,8 @@ async function write(page: Page, text: string): Promise<void> {
 test.describe.configure({ mode: 'serial' });
 
 test.afterAll(async () => {
-  // The site goes back to « No limit », so a spec run after this one starts from nothing counted.
-  await guards({ visitorNotesPerHour: 0 });
+  // The site goes back to « No limit » and holds nothing, so a spec run after this one starts clean.
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false });
 });
 
 test('a visitor leaves the notes of the hour, then the widget asks them to wait, with their text kept (FRU-704)', async ({
@@ -81,4 +81,29 @@ test('a visitor leaves the notes of the hour, then the widget asks them to wait,
   await guards({ visitorNotesPerHour: 0 });
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(6);
+});
+
+test('a note of a visitor waits for a member on a site that holds them, and the widget says so (FRU-704)', async ({
+  page,
+}) => {
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: true });
+  await mount(page, `/?widget=off&case=${caseOf('visitor-held')}`);
+  const sent = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/feedback' && response.request().method() === 'POST',
+  );
+
+  await write(page, 'Une note qu’un membre relit d’abord');
+
+  const answer = await sent;
+  expect(answer.status()).toBe(202);
+  expect(await answer.json()).toMatchObject({ held: true });
+  await expect(page.getByText('Sent for review')).toBeVisible();
+  await expect(
+    page.getByText('The team of this site reviews notes before they go on. Its pin shows here once approved.'),
+  ).toBeVisible();
+  // In no tracker yet: no pin on the page, after a reload too.
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+  await mount(page, `/?widget=off&case=${caseOf('visitor-held')}`);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+  await guards({ holdVisitorNotes: false });
 });

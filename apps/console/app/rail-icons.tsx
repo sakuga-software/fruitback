@@ -25,6 +25,8 @@ const PATHS = {
   instance:
     'M5 3.5h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM5 13.5h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM7 7h.01M7 17h.01',
   // Four squares: the workspaces of the instance.
+  // FRU-704: « To approve », the notes of visitors that wait for a member: a tray.
+  inbox: 'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',
   workspaces: 'M4 4h6v6H4zM14 4h6v6h-6zM14 14h6v6h-6zM4 14h6v6H4z',
   // An arrow to the start of the line: back to the workspaces of the person (FRU-476).
   back: 'M19 12H5M11 6l-6 6 6 6',

@@ -5,6 +5,7 @@ import {
   type Me,
   type Role,
   type Workspace,
+  call,
   callUntilAnswered,
   knownMe,
   logoSource,
@@ -52,9 +53,14 @@ type WorkspaceContext = {
    * may be wrong now (a task was written), and the bar shows none.
    */
   viewCounted: (view: ViewId, count: number | undefined) => void;
+  /**
+   * The screen « To approve » read the notes that wait for a member (FRU-704): the count of its entry
+   * in the bar follows it.
+   */
+  approveCounted: (count: number) => void;
 };
 
-type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted'>;
+type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted' | 'approveCounted'>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -133,15 +139,28 @@ export default function WorkspaceFrame() {
   // a view. Its answer does not write over them, as a screen read them at the same time or later, and
   // a count a screen dropped after a write must stay dropped.
   const told = useRef<{ workspace: string | undefined; what: Set<string> }>({ workspace: undefined, what: new Set() });
+  // FRU-704: the notes of visitors that wait for a member, read once by workspace and again by the
+  // screen « To approve ». A guest is refused the read, and the bar shows the entry to nobody else
+  // while nothing waits.
+  const [toApprove, setToApprove] = useState<{ workspace: string; count: number } | undefined>();
   useEffect(() => {
     // A change of workspace forgets the counts: back in the first one, a count read before would be
     // old (raised in review). The read of the bar, then the screens of the workspace, say them again.
     setCounts(undefined);
     setFailing(undefined);
     setViewCounts(undefined);
+    setToApprove(undefined);
     if (id === undefined) return;
     told.current = { workspace: id, what: new Set() };
     let current = true;
+    // FRU-704: the notes of visitors that wait for a member. A guest is refused it, quietly.
+    void call<{ count: number }>('GET', `/console/workspaces/${id}/held/count`, undefined, { quiet: true }).then(
+      (answer) => {
+        if (current && answer.ok && typeof answer.data?.count === 'number') {
+          setToApprove({ workspace: id, count: answer.data.count });
+        }
+      },
+    );
     void railCounts(id, weekStart()).then((read) => {
       if (!current || read === undefined) return;
       const said = told.current.what;
@@ -228,6 +247,7 @@ export default function WorkspaceFrame() {
       if (told.current.workspace === context.workspace.id) told.current.what.add('failing');
       setFailing({ workspace: context.workspace.id, count });
     },
+    approveCounted: (count) => setToApprove({ workspace: context.workspace.id, count }),
     viewCounted: (view, count) => {
       const workspace = context.workspace.id;
       if (told.current.workspace === workspace) told.current.what.add(view);
@@ -271,6 +291,8 @@ export default function WorkspaceFrame() {
           account={context.me.account}
           {...(counts?.workspace === context.workspace.id ? { counts: counts.counts } : {})}
           {...(failing?.workspace === context.workspace.id ? { failing: failing.count } : {})}
+          {...(toApprove?.workspace === context.workspace.id ? { toApprove: toApprove.count } : {})}
+          approveCurrent={pathname === `/w/${context.workspace.id}/approve`}
         />
       }
     >
@@ -380,6 +402,13 @@ type RailProps = {
   currentView?: ViewId;
   /** The count of each view, when the Notes screen read it. A view with no count shows none. */
   viewCounts?: Readonly<Partial<Record<ViewId, number>>>;
+  /**
+   * FRU-704: how many notes of visitors wait for a member. The entry « To approve » shows while some
+   * wait, or while its screen is on screen. Absent: not read, or a guest.
+   */
+  toApprove?: number;
+  /** The screen « To approve » is on screen. */
+  approveCurrent?: boolean;
 };
 
 /**
@@ -513,8 +542,12 @@ export function Rail({
   views = [],
   currentView,
   viewCounts = {},
+  toApprove,
+  approveCurrent = false,
 }: RailProps) {
   useLocale();
+  // FRU-704: « To approve », while notes wait or while its screen is on screen.
+  const showsApprove = approveCurrent || (toApprove !== undefined && toApprove > 0);
   const name = (
     <>
       <WorkspaceMark workspace={workspace} size={20} />
@@ -593,18 +626,31 @@ export function Rail({
           ...(section.path === 'connectors' && failing > 0 ? { alert: failing } : {}),
         }))}
       />
-      {views.length === 0 ? null : (
+      {views.length === 0 && !showsApprove ? null : (
         <RailNav
           label={t('Views')}
           heading
-          entries={views.map((view) => ({
-            to: viewAddress(workspace.id, view),
-            label: t(VIEW_LABELS[view.id]),
-            current: view.id === currentView,
-            mark: <ViewMark view={view.id} account={account} />,
-            ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
-            ...(view.alert === true ? { redCount: true } : {}),
-          }))}
+          entries={[
+            ...views.map((view) => ({
+              to: viewAddress(workspace.id, view),
+              label: t(VIEW_LABELS[view.id]),
+              current: view.id === currentView,
+              mark: <ViewMark view={view.id} account={account} />,
+              ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
+              ...(view.alert === true ? { redCount: true } : {}),
+            })),
+            ...(showsApprove
+              ? [
+                  {
+                    to: `/w/${workspace.id}/approve`,
+                    label: t('To approve'),
+                    current: approveCurrent,
+                    icon: 'inbox' as const,
+                    ...(toApprove === undefined ? {} : { count: toApprove }),
+                  },
+                ]
+              : []),
+          ]}
         />
       )}
       {admin ? (

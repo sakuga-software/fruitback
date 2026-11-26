@@ -6,6 +6,7 @@ import { CONSOLE_URL, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
 import { SESSION_COOKIE, workerOf } from './auth-worker.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
+import { createPostgresHeldNotes } from './held-notes-postgres.ts';
 import { createMigratedPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 
 /**
@@ -58,6 +59,8 @@ export function worlds(): (more?: { env?: Partial<WorkerEnv> }) => Promise<World
         instanceAdmin: worker.instanceAdmin,
         // FRU-237: the index of the notes, on the database of the world.
         noteIndex: createPostgresNoteIndex(worker.database),
+        // FRU-704: the notes of visitors that wait for a member, on the same database.
+        heldNotes: createPostgresHeldNotes(worker.database),
       },
     };
   };

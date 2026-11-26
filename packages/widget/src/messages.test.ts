@@ -771,6 +771,12 @@ describe('every word the widget shows', () => {
     answer({ sentAs: { identifier: 'ID-1', url: 'https://…', number: 1 } });
     await settle();
     snapshots.push(...shown(host.root));
+    // Kept for a member to approve first (FRU-704).
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
+    send.click();
+    answer({ sentAs: {}, held: true });
+    await settle();
+    snapshots.push(...shown(host.root));
     // Kept for later rather than sent (FRU-124).
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
     (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();

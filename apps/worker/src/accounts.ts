@@ -403,6 +403,8 @@ export type Site = {
   visitorDelete: VisitorRight;
   /** The notes a visitor with no account leaves in an hour, `0` for no limit (FRU-704). */
   visitorNotesPerHour: VisitorNoteLimit;
+  /** Whether a note of a visitor waits for a member before it goes to its place (FRU-704). */
+  holdVisitorNotes: boolean;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -789,7 +791,7 @@ export type AccountStore = {
    * absent: `defaultWriters` for a new site, and what it was for a site that exists (FRU-330), so a
    * caller that does not know the field opens nothing and closes nothing. The same for
    * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
-   * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`.
+   * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`, and `holdVisitorNotes`, off.
    */
   addSite(
     workspace: string,
@@ -801,6 +803,7 @@ export type AccountStore = {
       visitorEdit?: VisitorRight;
       visitorDelete?: VisitorRight;
       visitorNotesPerHour?: VisitorNoteLimit;
+      holdVisitorNotes?: boolean;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
@@ -1290,6 +1293,8 @@ export function clientOf(site: Site): ClientMap[string] {
           visitorEdit: site.visitorEdit,
           visitorDelete: site.visitorDelete,
           ...(site.visitorNotesPerHour > 0 ? { visitorNotesPerHour: site.visitorNotesPerHour } : {}),
+          // FRU-704: a note of a visitor waits for a member. Absent: it goes at once.
+          ...(site.holdVisitorNotes ? { holdVisitorNotes: true as const } : {}),
         }
       : {}),
     // The first place is where the client routes, as when a site had one destination.

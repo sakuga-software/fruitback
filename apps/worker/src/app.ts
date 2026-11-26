@@ -32,7 +32,7 @@ import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
 import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
 import { EDIT_PATH, PLACE_PATH, WITHDRAW_PATH, postEdit, postMove, postWithdraw } from './edit-routes.ts';
-import { getFeedback, postFeedback, readPage } from './feedback-routes.ts';
+import { getFeedback, postFeedback, readPage, sendHeldNote } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
 import { KEY_PREFIX, resolveAgentKey } from './agent-keys.ts';
 import { handleOAuth, isOAuthRoute, issuerOf, resolveAccessToken, resourceMetadataUrl } from './oauth.ts';
@@ -67,6 +67,8 @@ export {
   connectStoreFor,
   deliverPending,
   sweepDoneNotices,
+  sweepHeldNotes,
+  heldNotesFor,
   instanceAdminFor,
   kvFor,
   mailerFor,
@@ -477,6 +479,19 @@ async function routed(
 
         return issues.find((issue) => issue.note.id === note);
       },
+      // FRU-704: a note of a visitor that a member approved goes to its place, as at once. Its site is
+      // read again, with no `Origin`, as for `readNote`: the console checked the rights before.
+      sendHeld: async (held) =>
+        sendHeldNote(
+          {
+            store: watchedStore(storeOfRequest(), accounts),
+            kv,
+            noteIndex,
+            accounts,
+            route: await routeFor(new Request(request.url), served, held.site),
+          },
+          held,
+        ),
       served,
       context,
       accounts,
