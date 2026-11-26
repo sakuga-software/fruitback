@@ -1428,8 +1428,14 @@ and accepted (point 3 of 2026-10-11):
   carries no token, no account and no address. A tab that hears it asks `GET /console/me` with the
   cookie, and goes on only if the worker answers a session: `e2e/console-sign-in.spec.ts` has a page
   of the console say the word while nobody is signed in, and the tab that waits does not move.
+  A tab that waits also holds the shared Web Lock `fruitback:sign-in-waiting`, so that the
+  tab of the link waits longer for its answer
+  (test:`gives « heard » the time of a call when a tab holds the lock of the tabs that wait (FRU-732)`).
+  The lock is a name only: it carries no token, no account and no address. Web Locks are scoped to
+  their origin by the browser, so a page of another origin neither sees nor holds it.
   What this does not hold: a script that runs in the origin of the console can say the word, as
-  it can do everything else there; all it gets is one question to the worker.
+  it can do everything else there; all it gets is one question to the worker. It can hold the lock
+  too; all it gets is a tab of the link that waits the time of a call before it is the console.
 - The database keeps the link as a digest of a digest of a digest, and a copy of the row opens
   nothing: test:`keeps the link as a digest of a digest, which opens nothing when a copy presents
   it`. The value of the row is the address it was sent to.
