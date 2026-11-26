@@ -34,6 +34,11 @@ function textFiles(folder: string): string[] {
  * The old name, and the phrasings that used it as the name of a mode: « a private rule », « a
  * private site », a « Private » cell of a table. The stored value `private` in code, and « private »
  * in another sense (a private repository, a private network), are not the name of the mode.
+ *
+ * **A list, not a reading of the sentence.** These are the phrasings the tree held before FRU-662,
+ * each found by a search of the repository. A new phrasing (« a private reviewer ») passes until it
+ * is added here: « private » and « privé » alone are too common to forbid (« private ones first »,
+ * « réseau privé »). Raised in review of #967.
  */
 const OLD_NAMES = [
   /\bprivate[ -]mode\b/i,
