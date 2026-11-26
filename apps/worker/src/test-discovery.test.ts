@@ -396,6 +396,16 @@ const REAL_SERVER =
 const REAL_SERVER_FIXTURES = ['apps/worker/src/postgres.fixture.ts', 'apps/worker/src/auth.fixture.ts'];
 const WORKER = 'apps/worker';
 
+/**
+ * `source` with its comments blanked out, line for line: a word in a comment names no subject
+ * (review of #968). A block comment, and a line that is a comment alone.
+ */
+function withoutComments(source: string): string {
+  const blank = (comment: string) => comment.replace(/[^\n]/g, ' ');
+
+  return source.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/^[ \t]*\/\/[^\n]*/gm, blank);
+}
+
 /** The files that a `test:postgres` script names, from the root of the repository. */
 function postgresFiles(script: string): string[] {
   return script
@@ -409,7 +419,7 @@ function realServerGaps(
   sources: Record<string, string>,
   listed: string[],
 ): { unlisted: string[]; listedWithoutCases: string[]; fixtures: string[] } {
-  const real = (file: string) => REAL_SERVER.test(sources[file] ?? '');
+  const real = (file: string) => REAL_SERVER.test(withoutComments(sources[file] ?? ''));
   const files = Object.keys(sources).filter((file) => file.startsWith(`${WORKER}/`));
 
   return {
@@ -445,6 +455,8 @@ describe('each test file with cases on a real PostgreSQL runs in the job « post
       'apps/worker/src/left-out-too.test.ts': "describe('x', { skip: NO_REAL_POSTGRES !== false }, () => {});",
       'apps/worker/src/pglite-only.test.ts': "import { createMigratedPgliteDatabase } from './postgres.fixture.ts';",
       'apps/worker/src/listed-pglite.test.ts': 'createPgliteDatabase()',
+      'apps/worker/src/says-it.test.ts':
+        '/** Unlike DATABASES of auth.fixture.ts, */\n  // or createRealDatabase,\ncreatePgliteDatabase()',
       'apps/worker/src/postgres.fixture.ts': 'export const NO_REAL_POSTGRES = false;',
       'apps/worker/src/hidden.fixture.ts': 'export const SERVERS = [createRealDatabase];',
       'apps/console/app/zz.test.ts': 'DATABASES',
@@ -534,7 +546,7 @@ function pgliteSkipGaps(
       .map(([file]) => file),
   ];
   const notOnPglite = Object.entries(sources).flatMap(([file, source]) =>
-    pgliteSkips(source)
+    pgliteSkips(withoutComments(source))
       .filter(({ around }) => !/pglite/i.test(around) || ON_A_SERVER.test(around))
       .map(({ index }) => `${file}:${source.slice(0, index).split('\n').length}`),
   );
@@ -569,7 +581,10 @@ describe('the job « postgres » skips the subjects on PGlite, which the jobs «
       'no workflow found',
     );
     assert.ok(POSTGRES_REQUIRED.test(scripts[`${WORKER}/package.json`]?.['test:postgres'] ?? ''));
-    const skips = Object.values(sources).reduce((count, source) => count + pgliteSkips(source).length, 0);
+    const skips = Object.values(sources).reduce(
+      (count, source) => count + pgliteSkips(withoutComments(source)).length,
+      0,
+    );
     assert.ok(skips >= 12, `only ${skips} subjects on PGlite take PGLITE_ELSEWHERE`);
 
     assert.deepEqual(pgliteSkipGaps(scripts, others, sources), { setters: [], notOnPglite: [] });
@@ -594,6 +609,7 @@ describe('the job « postgres » skips the subjects on PGlite, which the jobs «
         "contract('PostgreSQL (PGlite)', pglite.connect, { skip: PGLITE_ELSEWHERE, closed: pglite.closed });",
         "const ON = on('the store, on a real server', createPgliteDatabase, PGLITE_ELSEWHERE);",
         "describe('the store', { skip: PGLITE_ELSEWHERE !== false }, () => {});",
+        '// A real server never takes PGLITE_ELSEWHERE.',
       ].join('\n'),
       'apps/worker/src/b.test.ts': [
         "import { NO_REAL_POSTGRES, PGLITE_ELSEWHERE, createRealDatabase } from './postgres.fixture.ts';",
