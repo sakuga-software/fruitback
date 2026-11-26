@@ -1319,7 +1319,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   « heard » at once, asks `GET /console/me`, and on a session says « carried-on » and goes on: the
   sign-in page to the front door, the setup to its next step. The tab of the link then shows « You
   are signed in »; with no « heard » in 400 ms, or no « carried-on » in 5 s, it is the console, as
-  before. **A message is a hint, never a proof**: it carries no token and no account, and a tab goes
+  before. **A tab that waits holds a Web Lock** (`fruitback:sign-in-waiting`, shared, FRU-732), and
+  the tab of the link reads it before it speaks: when a tab holds it, « heard » gets 5 s, the time of
+  a call, and a link opened alone still costs 400 ms. Measured on a busy Mac of GitHub (3 CPUs, a load
+  of 10 to 20): the browser delivered « signed-in » to the tab that waited 0.43 s, 1.6 s and 2.8 s
+  after it was said, and with 400 ms the tab of the link had become the console. The browser frees
+  the lock of a tab that closes; a browser with no `navigator.locks` keeps the 400 ms. **A message is
+  a hint, never a proof**: it carries no token and no account, and a tab goes
   on only on the answer of the worker. A browser that tells a tab nothing: the tab asks the worker
   when it comes back to the front. **A link opened in the tab that asked for it changes the part
   after the `#` only**, so the page is not loaded again: `sign-in.tsx` reads the code on
