@@ -1029,10 +1029,14 @@ describe('what the panel does with an answer of the widget (raised in review)', 
   });
 
   it('takes a reply of the length the worker takes, read in the worker', () => {
-    const worker = readFileSync(fileURLToPath(new URL('../../worker/src/app.ts', import.meta.url)), 'utf8');
+    // In `reply-text.ts` since FRU-712: the widget, `/mcp` and the console read it there.
+    const worker = readFileSync(fileURLToPath(new URL('../../worker/src/reply-text.ts', import.meta.url)), 'utf8');
     const length = /export const REPLY_LENGTH = (\d+);/.exec(worker)?.[1];
 
-    assert.ok(length !== undefined, 'apps/worker/src/app.ts no longer names REPLY_LENGTH: this check reads nothing');
+    assert.ok(
+      length !== undefined,
+      'apps/worker/src/reply-text.ts no longer names REPLY_LENGTH: this check reads nothing',
+    );
     assert.equal(REPLY_MAX_LENGTH, Number(length));
   });
 });

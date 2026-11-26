@@ -43,6 +43,7 @@
   "console-moves.spec.ts": 10.9,
   "console-narrow.spec.ts": 28.9,
   "console-no-sign-in.spec.ts": 3.2,
+  "console-note-reply.spec.ts": 5.0,
   "console-note-status.spec.ts": 16.4,
   "console-notes-board.spec.ts": 24.8,
   "console-notes-pages.spec.ts": 20.5,
