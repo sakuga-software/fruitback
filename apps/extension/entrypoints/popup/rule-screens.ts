@@ -110,6 +110,8 @@ async function sayRemedy(
   const onCloud = CLOUD !== undefined && site.endpoint === CLOUD;
   // Asked only of an account on the Cloud: the sites that its workspaces list.
   const offer = onCloud && signedIn ? await offerFor(origin, cloudSeams()).catch(() => undefined) : undefined;
+  // Kentō #42b8f6: the popup drew again while the workspaces were read. That draw asks again.
+  if (!line.isConnected) return;
   const remedy = memberRemedy(answer, { onCloud, signedIn, member: offer !== undefined });
   line.append(t(remedy.sentence));
 
