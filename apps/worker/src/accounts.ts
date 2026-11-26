@@ -1137,6 +1137,20 @@ export type AccountStore = {
   /** The deliveries of a connector that did not arrive yet, newest first. */
   deliveries(workspace: string, connector: string): Promise<PendingDelivery[]>;
   /**
+   * What the bar of the console counts beside the notes (FRU-711), in one statement: the sites of a
+   * workspace (`only`: those sites, for a guest), and the deliveries of its connectors that did not
+   * arrive yet, notes and calls of a trigger, as the Connectors screen adds them up.
+   */
+  frameCounts(workspace: string, only?: readonly string[]): Promise<{ sites: number; waiting: number }>;
+  /**
+   * FRU-721: the widget read a page of this site, by this way, at `now`. Written only when the date it
+   * holds is an hour old or more, so a site seen at every page view costs one write an hour at most.
+   * A site that is gone writes nothing.
+   */
+  markSiteSeen(site: string, channel: 'script' | 'extension', now: number): Promise<void>;
+  /** FRU-721: the last time the widget read a page of a site of this workspace, by each way. */
+  siteSeen(workspace: string, site: string): Promise<{ script?: number; extension?: number }>;
+  /**
    * How many deliveries did not arrive yet, for each connector of this workspace that has one
    * (FRU-714): notes, events and calls, tried again or given up. A connector with none is absent.
    */

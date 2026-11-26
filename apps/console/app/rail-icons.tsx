@@ -44,6 +44,12 @@ const PATHS = {
   help: 'M12 21a9 9 0 1 0 0-18a9 9 0 1 0 0 18M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01',
   // Three lines: the bar folded under 1024 px opens.
   menu: 'M4 7h16M4 12h16M4 17h16',
+  // FRU-722, the views of the mockup. A circle of dashes: what came in, new this week.
+  fresh:
+    'M12.56 4.02A8 8 0 0 1 15.85 4.99M18.04 6.75A8 8 0 0 1 19.68 9.76M19.98 12.56A8 8 0 0 1 19.01 15.85M17.25 18.04A8 8 0 0 1 14.24 19.68M11.44 19.98A8 8 0 0 1 8.15 19.01M5.96 17.25A8 8 0 0 1 4.32 14.24M4.02 11.44A8 8 0 0 1 4.99 8.15M6.75 5.96A8 8 0 0 1 9.76 4.32',
+  // Two braces: what a connector was sent, and did not take.
+  braces:
+    'M9 4c-2 0-3 1-3 3v2c0 1.2-.8 2.4-2 3 1.2.6 2 1.8 2 3v2c0 2 1 3 3 3M15 4c2 0 3 1 3 3v2c0 1.2.8 2.4 2 3-1.2.6-2 1.8-2 3v2c0 2-1 3-3 3',
 } as const;
 
 export type RailIconName = keyof typeof PATHS;
