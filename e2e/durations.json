@@ -126,6 +126,7 @@
   "popup-sign-in.spec.ts": 36.6,
   "popup-workspace.spec.ts": 30.5,
   "pressed-target.spec.ts": 2.8,
+  "public-guards.spec.ts": 4,
   "read-failure.spec.ts": 9.6,
   "reanchor.spec.ts": 8.6,
   "safari-build.spec.ts": 4.2,

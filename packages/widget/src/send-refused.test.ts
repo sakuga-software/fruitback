@@ -125,6 +125,33 @@ describe('a send refused for who the reader is (FRU-394)', () => {
   });
 });
 
+describe('a send refused for the notes of the hour of a visitor (FRU-704)', () => {
+  it('says to send it again later, not in a minute, and keeps the text', async () => {
+    const said = await sendThrough(answering(429, JSON.stringify({ error: 'visitor-limit', perHour: 10 })));
+
+    assert.equal(
+      said,
+      'You sent as many notes as this site takes in an hour. Your text is still here. Send it again later.',
+    );
+    assert.doesNotMatch(said, /minute/);
+  });
+
+  it('says it in French', async () => {
+    const said = await sendThrough(answering(429, JSON.stringify({ error: 'visitor-limit', perHour: 10 })), 'fr-FR');
+
+    assert.equal(
+      said,
+      'Vous avez envoyé autant de notes que ce site en accepte en une heure. Votre texte est toujours là. Renvoyez-le plus tard.',
+    );
+  });
+
+  it('still says a minute on the 429 of the requests of an address', async () => {
+    const said = await sendThrough(answering(429, JSON.stringify({ error: 'rate-limited' })));
+
+    assert.equal(said, 'Too many notes just now. Your text is still here. Send it again in a minute.');
+  });
+});
+
 describe('a read refused for who the reader is (FRU-394)', () => {
   async function widgetReading(status: number, body: string, locale = 'en-US') {
     const requests: TransportRequest[] = [];

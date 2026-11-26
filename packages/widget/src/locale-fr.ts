@@ -134,6 +134,8 @@ export const FRENCH: Catalog = {
   'composer.kept': 'Ajoutée au lot',
   'composer.failed': 'Pas envoyée. Votre texte est toujours là. Réessayez.',
   'composer.failedWait': 'Trop de notes en ce moment. Votre texte est toujours là. Renvoyez-le dans une minute.',
+  'composer.failedVisitorLimit':
+    'Vous avez envoyé autant de notes que ce site en accepte en une heure. Votre texte est toujours là. Renvoyez-le plus tard.',
   'composer.failedRefused':
     'Ce site a refusé la note depuis cette adresse. Votre texte est toujours là. Prévenez l’équipe du site.',
   'composer.failedSignedOut':

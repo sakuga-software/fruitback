@@ -741,6 +741,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Votre serveur signe qui est le visiteur. Pour les personnes connectées à votre application.',
   Later: 'Plus tard',
   'What a visitor sees': 'Ce que voit un visiteur',
+  Safeguards: 'Garde-fous',
+  'Notes per visitor': 'Notes par visiteur',
+  'Per hour, then the widget asks to wait': 'Par heure, puis le widget demande d’attendre',
+  'No limit': 'Sans limite',
+  '{count} / hour': '{count} / heure',
   'Cannot be changed once sent': 'Ne se modifie plus une fois envoyée',
   'Editable while the note is open': 'Modifiable tant que la note est ouverte',
   'The order form rejects postcodes with a space.':

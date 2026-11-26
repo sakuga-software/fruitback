@@ -193,6 +193,8 @@ for (const { label, open, skip } of DATABASES) {
           // FRU-703: a visitor of a site of before changes and takes back nothing, as before.
           visitorEdit: 'never',
           visitorDelete: 'never',
+          // FRU-704: 10 notes of a visitor an hour, for a site of before too.
+          visitorNotesPerHour: 10,
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);
