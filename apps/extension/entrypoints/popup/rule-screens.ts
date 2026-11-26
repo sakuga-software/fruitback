@@ -119,8 +119,10 @@ async function sayRemedy(
   const onCloud = CLOUD !== undefined && site.endpoint === CLOUD;
   // Asked only of an account on the Cloud: the sites that its workspaces list.
   const offer = onCloud && signedIn ? await offerFor(origin, cloudSeams()).catch(() => undefined) : undefined;
-  // Kentō #42b8f6, #4ec7d7: the popup drew again while the workspaces were read. That draw asks again.
-  if (drawn !== draws.drawn) return;
+  // Kentō #42b8f6, #4ec7d7, #f700c4: a later draw replaced this screen while the workspaces were
+  // read, and asks again. A later draw that did not replace it (one that threw) leaves this line on
+  // screen, and the line still says it.
+  if (drawn !== draws.drawn && !line.isConnected) return;
   const remedy = memberRemedy(answer, { onCloud, signedIn, member: offer !== undefined });
   line.append(t(remedy.sentence));
 
