@@ -23,6 +23,7 @@
   "console-connect-worker.spec.ts": 42.9,
   "console-connect.spec.ts": 32,
   "console-connectors-catalogue.spec.ts": 23.2,
+  "console-connectors-narrow.spec.ts": 4.0,
   "console-connectors-table.spec.ts": 35.0,
   "console-cookie-session.spec.ts": 45,
   "console-domains.spec.ts": 3.7,
