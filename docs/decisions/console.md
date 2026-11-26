@@ -618,7 +618,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   image when there is one.
   **The worker answers the search and the pages** (FRU-497): the search keeps the sites whose address
   holds what is typed, is written in the address (`q`) 300 ms after the last key (`useTypedSearch`),
-  and goes back to the first page. A page is 25 rows, as a page of the notes, with the pages of the
+  and goes back to the first page. A page is 25 rows, with the pages of the
   Notes page (`NotePages`), and lives in the address (`page`); a page past the last shows the last.
   A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
   page is shown, with no search.
@@ -750,26 +750,42 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and a refusal is said under the note. **The worker reads the table by status** (`order=status` of
   `GET …/notes`, the route of the console only; `/mcp` and the extension read by date), so a group
   goes on from one page to the next and the cursor holds the rank of the stage. A cursor of one order
-  is refused in the other, and « Table » and « Board » start again on the first page. The board reads
-  by date: its columns are those of a page. **A note whose status changes during a walk of the pages
-  is where its status is when its page is read**: the key of the order changes with it, as no
-  cursor on a status can avoid. Moved to a group already read, it is not on the pages still to come
-  (« Previous » finds it); moved from a group already read to one still to come, it is read again
-  there. Every note whose status does not change is on one page, and one only
-  (`notes-list.test.ts`, every role and filter crossed). The console reads the page in view again
-  after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
+  is refused in the other, and « Table » and « Board » start again from their first notes. The board
+  reads by date: its columns are those of the notes read. **A note whose status changes while the list
+  is read is where its status is when its chunk is read**: the key of the order changes with it, as no
+  cursor on a status can avoid. Moved to a group already read, it is not in the chunks still to come;
+  moved from a group already read to one still to come, it is read again there, and the screen keeps
+  the later read only (`appended` of `notes-chunks.ts`): one note is one row. Every note whose status
+  does not change is in one chunk, and one only (`notes-list.test.ts`, every role and filter crossed).
+  The console reads the list again after a status it saves, as many notes as it shows, so the person
+  sees the note in its new group and stays where they were. The chips are every note and each place that has notes, in the order
   of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
   counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
   them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
   mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
-  filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
-  keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
-  page. **A search field takes the address only on a navigation** (`app/typed-search.ts`,
+  filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, and the fields of the tasks):
+  a reload keeps the view, the search reads 300 ms after the last key, and a filter starts the list
+  again from its first notes. **A search field takes the address only on a navigation** (`app/typed-search.ts`,
   FRU-279): a key can come after the field writes the address and before the screen draws it, and
   a field that took every new address lost that key. The three search fields of the console, here,
-  on Notes of the instance and on the lists of the administration, use it. The route pages by a cursor: the screen keeps the cursors of the pages before for
-  « Previous », and a reload starts that list again. **A read again keeps the rows on the screen**
+  on Notes of the instance and on the lists of the administration, use it. **The notes of a workspace scroll with no end** (FRU-724, Mathieu on 2026-11-26), in place of
+  the pages: the next 25 notes are read by the cursor of the last answer when the end of the list
+  comes within 720 px of the bottom of the window (an `IntersectionObserver`), and again while it stays
+  there. « Load more » under the list reads them too, for the keyboard, a screen reader, and a browser
+  whose observer does not fire; a screen reader hears « 25 more notes. 50 of 263 shown. » (`role="status"`).
+  The total stays in the bar of the filters, and « 50 of 263 » under the list. One read of the next
+  notes at a time: a press or the observer while it is on its way asks nothing. A filter, the search, a
+  view, the table or the board, or another workspace is a new list: it is read from its first notes and
+  drawn from its top, and the answer of a read of the list of before, the next notes included, is
+  dropped. A read of the next notes that failed says so under the list with « Try again », and leaves
+  the notes above it on the screen (FRU-682). Only the chunks after the first are read with
+  `counts=none` (FRU-502). The address holds no cursor: a reload, or a link, starts the list again, and
+  opening a task and closing its panel reads nothing, so the list and its scroll stay where they were.
+  **The screen keeps 500 notes at most** (`NOTES_KEPT`): past them it says that a filter or the search
+  finds the others. A read again, after a write, reads back the notes shown, in reads of 50 (the most
+  the worker reads at once), so 10 reads at most. `e2e/console-notes-pages.spec.ts` holds it, with
+  the races. **A read again keeps the rows on the screen**
   until its answer replaces them: only the first read says « Loading… », and nothing a pointer can
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
   « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
@@ -786,15 +802,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   are small icon buttons (`IconButton`), and between them the numbers of the first page, the last,
   and the pages beside the one shown (`pageWindow` of `page-window.ts`, which has its own test), the
   one shown in ink and `aria-current`; a press on a number keeps the focus on it. `NotePages` is the
-  same on the notes, the sites, the members and the invitations. **The notes are read by a cursor,
-  so a number is offered only for a page whose cursor the screen knows**: the first, the next, and the
-  pages shown since the filter, their cursors kept by page number, for the filters and the view of the address only, and not as a pile, so that the
-  Back button of the browser, which changes the address and nothing the screen holds, leaves each
-  number with its own page; « … » stands for the others. Opened from a link past the second page, the page before has no known cursor: the left arrow is then « First page », two chevrons, and goes there. Numbering a page asks a size of
-  page, so the console asks `limit=25` by name, the default of the worker. A jump to any page would
-  take an offset in the index of the worker, which the walk by cursor was chosen against (FRU-551:
-  a note is on one page and one only). The Notes of the instance keep « Previous » and « Next » only.
-  `e2e/console-notes-pages.spec.ts` holds it. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  same on the sites, the members, the invitations and the Notes of the instance, which keep
+  « Previous » and « Next » only (they are read by a cursor). Since FRU-724 the notes of a workspace
+  have no pages: see their bullet above. A jump to any page would take an offset in the index of the
+  worker, which the walk by cursor was chosen against (FRU-551: a note is in one read and one only).
+  `e2e/console-notes-pages.spec.ts` holds the pages of the sites. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
 - **The Notes list is one line of 36 px per note, as Linear draws its issues** (FRU-685, the
   mockup « Notes après » of 2026-11-25): fourteen notes at 1440 × 900, where the rows of one to three
