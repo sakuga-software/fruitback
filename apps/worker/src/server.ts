@@ -9,6 +9,7 @@ import {
   deliverPending,
   recheckPending,
   sweepDoneNotices,
+  sweepHeldNotes,
 } from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
@@ -205,11 +206,15 @@ export function startServer(env: WorkerEnv = process.env): Server {
     const sweep = setInterval(() => {
       if (sweeping) return;
       sweeping = true;
-      void sweepDoneNotices(env)
-        .catch((error: unknown) =>
+      // FRU-704: and the notes of visitors that waited 30 days for a member.
+      void Promise.all([
+        sweepDoneNotices(env).catch((error: unknown) =>
           console.error('[fruitback] a pass over the addresses of the notes done did not finish', error),
-        )
-        .finally(() => (sweeping = false));
+        ),
+        sweepHeldNotes(env).catch((error: unknown) =>
+          console.error('[fruitback] a pass over the notes that wait for a member did not finish', error),
+        ),
+      ]).finally(() => (sweeping = false));
     }, DONE_SWEEP_MS);
     sweep.unref();
     server.on('close', () => clearInterval(sweep));

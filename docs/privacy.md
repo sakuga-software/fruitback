@@ -265,6 +265,11 @@ The table `done_notices` keeps one row for each note that waits:
   one-minute windows, and keeps a window for two. It is a row of the table `kv` of the database,
   so that the replicas share one limit: the address is in the database for those two
   minutes, and in a backup taken during them. Expired rows are removed as requests come.
+- The note of a visitor that waits for a member, on a site that holds the notes of its visitors: its
+  text, its page, its anchor, the name the visitor typed and the digest of the key of their browser,
+  in the table `held_notes` of the database. It goes when a member approves it (it then goes to the
+  tracker, as any note) or rejects it, and after 30 days with no answer. The site chooses this in its
+  tab « Access », so that nothing a visitor writes reaches the tracker unseen.
 - The address and the key of a visitor, for two hours, on a site that limits the notes of a
   visitor in an hour (10 by default). The worker counts the notes of each visitor with no
   account by the digest of the key of their browser and by their address, on that site, over

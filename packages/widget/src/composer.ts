@@ -98,6 +98,9 @@ export type BatchSeam = {
 /** Sent, without the picture the reporter asked for (FRU-238). */
 export type SentWithoutPicture = { picture: 'missed' };
 
+/** Kept by the worker for a member to approve first (FRU-704), as `plant` answers it. */
+export type SentHeld = { held: true; picture?: 'missed' };
+
 /**
  * Sent, and what the worker gave back for it (FRU-305): the identifier in the store, its address when
  * the reader may open it, and the number of its new pin. The card of a sent note shows them.
@@ -105,6 +108,11 @@ export type SentWithoutPicture = { picture: 'missed' };
 export type SentAs = {
   sentAs: { identifier?: string | undefined; url?: string | undefined; number?: number | undefined };
   picture?: 'missed';
+  /**
+   * The site holds the notes of its visitors (FRU-704): the worker kept this one for a member to
+   * approve, and it is in no tracker yet. The card says so, and no pin is promised.
+   */
+  held?: true;
   /** The question « Want to know when it's fixed? », under the card (FRU-604). Absent: not asked. */
   notify?: NotifyOffer;
 };
@@ -181,7 +189,7 @@ export type ComposerOptions = {
     destination?: string,
     /** The ids in transit of the files of the note (FRU-332), in their order. Empty: none. */
     attachments?: readonly string[],
-  ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>;
+  ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentHeld | SentAs>;
   onClose?: () => void;
   /**
    * What to do about a place of the site that its tracker no longer has (FRU-640), as the last answer
@@ -1107,15 +1115,13 @@ export function createComposer(options: ComposerOptions): Composer {
    * sentence that says the pin follows the issue, and « Open → » when the reader may open the issue.
    * Without an identifier, « Sent » alone.
    */
-  function showSent(sentAs: SentAs['sentAs'] | undefined, withoutPicture: boolean): void {
+  function showSent(sentAs: SentAs['sentAs'] | undefined, withoutPicture: boolean, waits = false): void {
     const identifier = sentAs?.identifier;
-    sentTitle.textContent =
-      identifier === undefined || identifier === ''
-        ? t.text('composer.sent')
-        : t.text('composer.sentAs', { identifier });
+    sentTitle.textContent = sentTitleOf(t, identifier, waits);
     // The identifier stays in the title: the note is planted. The picture it lacks is said under it,
-    // in place of the sentence that the pin follows the issue, which the new sentence ends with.
-    sentText.textContent = t.text(withoutPicture ? 'composer.sentWithoutPicture' : 'composer.sentFollows');
+    // in place of the sentence that the pin follows the issue, which the new sentence ends with. A note
+    // a member approves first has no pin yet (FRU-704): the card says that, and nothing of a pin.
+    sentText.textContent = t.text(sentLineOf(withoutPicture, waits));
     // The number rides in its own span, turned back upright, as on a pin.
     const number = document.createElement('span');
     number.textContent = sentAs?.number === undefined ? '' : String(sentAs.number);
@@ -1137,6 +1143,7 @@ export function createComposer(options: ComposerOptions): Composer {
     let withoutPicture = false;
     let sentAs: SentAs['sentAs'] | undefined;
     let notify: NotifyOffer | undefined;
+    let waits = false;
     try {
       // The files still on their way go first: the note names the ones the worker took. Awaited
       // only then: a note with no file in flight is sent in the same turn, as before FRU-332. A note
@@ -1158,6 +1165,8 @@ export function createComposer(options: ComposerOptions): Composer {
           sentAs = result.sentAs;
           notify = result.notify;
         }
+        // FRU-704: kept for a member to approve first, as `plant` answers it or with a card.
+        waits = 'held' in result && result.held === true;
       }
     } catch {
       failure = 'retry';
@@ -1192,7 +1201,7 @@ export function createComposer(options: ComposerOptions): Composer {
     }
     held = [];
     drawAttachments();
-    showSent(sentAs, withoutPicture);
+    showSent(sentAs, withoutPicture, waits);
     // FRU-604: a question waits for its answer. The composer does not close by itself under it.
     if (notify !== undefined) {
       showNotify(notify);
@@ -2175,6 +2184,24 @@ const STATUS = {
   sent: 'composer.sent',
   kept: 'composer.kept',
 } as const satisfies Record<Exclude<ComposerState, 'idle' | 'failed' | 'receipt'>, MessageKey>;
+
+/** The title of the card of a sent note: « Sent for review » for a held note (FRU-704), else « Sent » or « Sent as ». */
+function sentTitleOf(t: Translator, identifier: string | undefined, waits: boolean): string {
+  if (waits) return t.text('composer.held');
+  if (identifier === undefined || identifier === '') return t.text('composer.sent');
+
+  return t.text('composer.sentAs', { identifier });
+}
+
+/** The line under that title: what becomes of the pin, or that there is none yet (FRU-704). */
+function sentLineOf(
+  withoutPicture: boolean,
+  waits: boolean,
+): 'composer.heldFollows' | 'composer.sentWithoutPicture' | 'composer.sentFollows' {
+  if (waits) return 'composer.heldFollows';
+
+  return withoutPicture ? 'composer.sentWithoutPicture' : 'composer.sentFollows';
+}
 
 /** Past this many notes, the receipt offers the list of every note too (FRU-608). */
 const RECEIPT_ROWS = 5;

@@ -37,6 +37,8 @@ export default [
       route('w/:workspace/sites/:site/advanced', 'routes/site-advanced.tsx'),
     ]),
     route('w/:workspace/notes', 'routes/notes.tsx'),
+    // FRU-704: the notes of visitors that wait for a member.
+    route('w/:workspace/approve', 'routes/approve.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),
     // The shell of the settings (FRU-692): the pages of the person, then the ones of the workspace.

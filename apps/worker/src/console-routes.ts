@@ -29,7 +29,9 @@ import type { NoteIndex } from './notes-index.ts';
 import { withoutAddress } from './postgres.ts';
 import type { RequestContext, Served } from './request-context.ts';
 import { StoreError } from './store.ts';
-import { connectStoreFor, instanceAdminFor, mailerFor, sessionStoreFor } from './worker-stores.ts';
+import { connectStoreFor, heldNotesFor, instanceAdminFor, mailerFor, sessionStoreFor } from './worker-stores.ts';
+import type { HeldNote } from './held-notes.ts';
+import type { HeldSent } from './feedback-routes.ts';
 
 /**
  * The routes of the console (FRU-363), out of `app.ts` so that a review reads them in one file: the
@@ -56,10 +58,13 @@ export type ConsoleSeams = {
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
   /** FRU-712: writes a reply under a note of a page, by the way of a reply of the widget. */
   replyToNote?: ReplyToNote;
+  /** FRU-704: sends a note of a visitor that a member approved to its place: `sendHeldNote`. */
+  sendHeld?: (held: HeldNote) => Promise<HeldSent>;
 };
 
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote, replyToNote } = seams;
+  const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote, replyToNote, sendHeld } = seams;
+  const heldNotes = context.heldNotes ?? heldNotesFor(served);
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -227,6 +232,9 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(readNote === undefined ? {} : { readNote }),
         ...(replyToNote === undefined ? {} : { replyToNote }),
         ...(noteIndex === undefined ? {} : { noteIndex }),
+        // FRU-704: the queue « To approve ».
+        ...(heldNotes === undefined ? {} : { heldNotes }),
+        ...(sendHeld === undefined ? {} : { sendHeld }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),

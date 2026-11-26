@@ -14,6 +14,7 @@ import type { Kv } from './kv.ts';
 import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { DoneNoticeSeams, DoneNotices } from './done-notices.ts';
+import type { HeldNotes } from './held-notes.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
@@ -69,6 +70,8 @@ export type RequestContext = {
   noteIndex?: NoteIndex;
   /** Who to tell when a note is done (FRU-604). A suite hands over one on PGlite. */
   doneNotices?: DoneNotices;
+  /** The notes of visitors that wait for a member (FRU-704). A suite hands over one on PGlite. */
+  heldNotes?: HeldNotes;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
   /**
