@@ -30,9 +30,10 @@ export type HeldNotes = {
   count(workspace: string, sites: readonly string[] | undefined, now: number): Promise<number>;
   /**
    * Takes the note out of the queue, and answers it: `undefined` when it is not there, or another call
-   * took it first. Two members who approve at once send it once.
+   * took it first. Two members who approve at once send it once. A note that waited longer than
+   * `HELD_NOTE_KEEP_MS` is not taken: it is gone, though the sweep did not pass yet.
    */
-  take(workspace: string, site: string, note: string): Promise<HeldNote | undefined>;
+  take(workspace: string, site: string, note: string, now: number): Promise<HeldNote | undefined>;
   /** Removes the notes that waited longer than `HELD_NOTE_KEEP_MS`. Answers how many went. */
   sweep(now: number): Promise<number>;
 };

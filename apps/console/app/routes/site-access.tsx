@@ -72,7 +72,8 @@ export default function SiteAccessPage() {
       data?.id !== site.id ||
       data.visitorEdit !== body.visitorEdit ||
       data.visitorDelete !== body.visitorDelete ||
-      (body.visitorNotesPerHour !== undefined && data.visitorNotesPerHour !== body.visitorNotesPerHour)
+      (body.visitorNotesPerHour !== undefined && data.visitorNotesPerHour !== body.visitorNotesPerHour) ||
+      (body.holdVisitorNotes !== undefined && data.holdVisitorNotes !== body.holdVisitorNotes)
     ) {
       return setProblem(ACCESS_NOT_CHANGED);
     }

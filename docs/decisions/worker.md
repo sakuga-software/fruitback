@@ -1599,7 +1599,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-two BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1868,6 +1868,23 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 - **The site `playground` of the dev worker says « No limit »**: every spec of the suite sends to it
   from one address. `POST /__dev/guards` makes a site `guards` in a workspace of its own, at the same
   origin, for the specs of the safeguards.
+
+## The notes of visitors that wait for a member (FRU-704)
+
+- **`hold_visitor_notes` of `sites`, off by default**, the line « Hold new visitor notes » of the
+  card « Safeguards ». `clientOf` gives `holdVisitorNotes` to the routes only where `writers` is
+  `anyone`.
+- **`held_notes` holds the note as the route would have sent it**, in JSON (`noteSchema` reads it
+  back), with the digest of the browser key and the moment. Its key is the site and the id of the
+  note, so a note sent again is held once. It goes with its site (`ON DELETE CASCADE`).
+- **`POST /feedback` holds after the count of the hour** and before any file or write: `202`,
+  `held: true`. A note that names files goes the usual way, which refuses it (a visitor sends none).
+- **The console answers through `console-held.ts`**, and an approval sends through `sendHeldNote` of
+  `feedback-routes.ts`, built in `app.ts` as `readNote` is: the site read again with no `Origin`, the
+  routed store, the first place. `take` deletes the row with `RETURNING` first, and a failure of the
+  place puts it back. No e-mail of a note done is offered, and no agent starts: the visitor left.
+- **30 days, `HELD_NOTE_KEEP_MS`**: the reads ignore an older row at once, and `sweepHeldNotes` runs
+  on the timer of `sweepDoneNotices` (`server.ts`).
 
 ## The notes in PostgreSQL (FRU-218)
 
@@ -3381,7 +3398,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-two BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.

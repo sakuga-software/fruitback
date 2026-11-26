@@ -95,6 +95,8 @@ export type Site = {
    * before sends nothing: it counted nothing, « No limit ».
    */
   visitorNotesPerHour?: VisitorNoteLimit;
+  /** FRU-704: « Hold new visitor notes ». A worker of before sends nothing: off, what it did. */
+  holdVisitorNotes?: boolean;
   destination?: Destination;
   destinations?: Destination[];
   /**

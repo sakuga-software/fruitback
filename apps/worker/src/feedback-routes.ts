@@ -1100,3 +1100,56 @@ async function statusesOfSite(
     return [];
   }
 }
+
+/** What became of a held note a member approved (FRU-704). */
+export type HeldSent =
+  | { ok: true; issue: CreatedIssue }
+  /** The site no longer takes notes, or holds none of this id: nothing is sent. */
+  | { ok: false; reason: 'site-gone' }
+  /** The place or its tracker refused or did not answer: the note waits again. */
+  | { ok: false; reason: 'place-gone' | 'store-unavailable' | 'no-destination' };
+
+/**
+ * Sends a note that waited for a member to its place (FRU-704), as `postFeedback` would have sent it
+ * at once: the first place of the site, its index row with the digest of the visitor's browser, the
+ * place marked as working, the cache of its page dropped. The route of the console takes the note out
+ * of the queue first, and puts it back when this answers a failure of the place.
+ *
+ * No e-mail of a note done is offered: that question is asked in the browser of the visitor, right
+ * after the note, and the visitor left long ago. An agent is not started either, as for any note of
+ * a visitor (`verifiedNotesArrived`).
+ */
+export async function sendHeldNote(
+  seams: {
+    store: NoteStore;
+    kv: Kv;
+    noteIndex: NoteIndex | undefined;
+    accounts: AccountStore | undefined;
+    route: ClientResolution;
+  },
+  held: { site: string; workspace: string; note: Note; visitor?: string },
+): Promise<HeldSent> {
+  const { store, kv, noteIndex, accounts, route } = seams;
+  if (!route.ok || route.client === undefined || route.client.workspace !== held.workspace) {
+    return { ok: false, reason: 'site-gone' };
+  }
+  const target = route.client;
+  try {
+    const { files: _files, ...issue } = await store.create(held.note, target, route.policy);
+    await notePlaceWorks(accounts, held.site, target);
+    await invalidatePages(kv, [held.note.page.url]);
+    const entry = noteEntry(held.workspace, held.site, held.note, 'script', target, issue, held.visitor);
+    await indexed(noteIndex, (index) => index.record([entry], Date.now()));
+
+    return { ok: true, issue };
+  } catch (error) {
+    if (error instanceof PlaceUnavailable) {
+      await notePlaceGone(accounts, held.site, target, error);
+
+      return { ok: false, reason: 'place-gone' };
+    }
+    if (error instanceof NoDestination) return { ok: false, reason: 'no-destination' };
+    if (error instanceof StoreError) return { ok: false, reason: 'store-unavailable' };
+    throw error;
+  }
+}

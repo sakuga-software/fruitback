@@ -91,13 +91,18 @@ export function createPostgresHeldNotes(database: Database): HeldNotes {
       return Number(row?.count ?? 0);
     },
 
-    async take(workspace, site, note) {
+    async take(workspace, site, note, now) {
       // One statement takes the row: a second member who approves at the same moment finds nothing.
       const [row] = await run((db) =>
         db
           .delete(held_notes)
           .where(
-            and(eq(held_notes.workspace_id, workspace), eq(held_notes.site_id, site), eq(held_notes.note_id, note)),
+            and(
+              eq(held_notes.workspace_id, workspace),
+              eq(held_notes.site_id, site),
+              eq(held_notes.note_id, note),
+              gt(held_notes.held_at, now - HELD_NOTE_KEEP_MS),
+            ),
           )
           .returning(),
       );
