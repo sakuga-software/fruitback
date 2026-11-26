@@ -1,11 +1,6 @@
 import { browser } from 'wxt/browser';
-import {
-  MODES_GUIDE,
-  NOTES_NEED_SESSION,
-  READ_NEEDS_SESSION,
-  WORKER_NOT_FOUND,
-  probeRead,
-} from '../../src/read-probe.ts';
+import { MODES_GUIDE, WORKER_NOT_FOUND, memberRemedy, probeRead } from '../../src/read-probe.ts';
+import { cloudEntry, offerFor } from '../../src/cloud.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { complaint, pairingFragment, pairingLinkIn, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
@@ -17,7 +12,8 @@ import { type Account, problem, visibilityButton } from '../../src/popup-view.ts
 import { hostOf, make } from '../../src/kit.ts';
 
 import { activateOpenTabs, turnOn, visibility } from './site-actions.ts';
-import { actions, failed, field, openSettings, refused, render } from './context.ts';
+import { CLOUD, actions, cloudSeams, draws, failed, field, openSettings, refused, render } from './context.ts';
+import { signIn } from './sign-in.ts';
 
 /** The screens of a rule typed in the popup (FRU-41, FRU-43): its form, its switch, its access (FRU-560). */
 
@@ -70,10 +66,28 @@ export const NO_RULE = msg('No rule covers this origin, so Fruitback does nothin
  *
  * The line is empty until the worker answers, and stays empty unless the answer is a `401`. The
  * popup does not wait for it: the switch must not sit behind a worker that is slow.
+ *
+ * FRU-663: on the Fruitback of this build, the line offers what fixes it. Signed out, « Sign in to
+ * Fruitback ». Signed in, « Turn on with my account » when a workspace of the account lists the
+ * site, which stores the site of the workspace in its place; otherwise, who to ask. Nothing typed is
+ * on this screen, so neither button can lose a draft (review of #897).
+ *
+ * The line and the place of its button are made here, before the probe answers, so what the answer
+ * adds never depends on the screen being in the document yet (review of #976).
  */
-export function readability(site: SiteConfig, pageUrl: string): HTMLElement {
+export function readability(
+  site: SiteConfig,
+  pageUrl: string,
+  where: { origin: string; signedIn: boolean },
+): DocumentFragment {
   const line = make(document, 'p', 'problem');
-  if (!site.enabled) return line;
+  const fix = actions();
+  const said = make(document, 'p', 'problem');
+  const parts = document.createDocumentFragment();
+  parts.append(line, fix, said);
+  if (!site.enabled) return parts;
+  // The draw this line belongs to: a later one has its own line, and asks again.
+  const drawn = draws.drawn;
 
   // FRU-395: in both modes, a worker that is not at the address of the rule. The client is the one
   // the widget reads with, when the rule names one.
@@ -88,17 +102,49 @@ export function readability(site: SiteConfig, pageUrl: string): HTMLElement {
       if (site.mode !== 'private') return;
       if (answer !== 'wants-a-session' && answer !== 'members-only') return;
 
-      const guide = make(document, 'a', '', t('Which mode can read it'));
-      guide.href = MODES_GUIDE;
-      guide.target = '_blank';
-      guide.rel = 'noreferrer';
-      // FRU-330: a site whose notes are « Members only » refuses the notes of extension mode too.
-      const sentence = answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION;
-      line.append(`${t(sentence)} `, guide);
+      void sayRemedy({ line, fix, said, drawn }, answer, site, where);
     },
   );
 
-  return line;
+  return parts;
+}
+
+/** The sentence of a refused read, with its guide or its button (FRU-66, FRU-330, FRU-663). */
+async function sayRemedy(
+  { line, fix, said, drawn }: { line: HTMLElement; fix: HTMLElement; said: HTMLElement; drawn: number },
+  answer: 'members-only' | 'wants-a-session',
+  site: SiteConfig,
+  { origin, signedIn }: { origin: string; signedIn: boolean },
+): Promise<void> {
+  const onCloud = CLOUD !== undefined && site.endpoint === CLOUD;
+  // Asked only of an account on the Cloud: the sites that its workspaces list.
+  const offer = onCloud && signedIn ? await offerFor(origin, cloudSeams()).catch(() => undefined) : undefined;
+  // Kentō #42b8f6, #4ec7d7, #f700c4: a later draw replaced this screen while the workspaces were
+  // read, and asks again. A later draw that did not replace it (one that threw) leaves this line on
+  // screen, and the line still says it.
+  if (drawn !== draws.drawn && !line.isConnected) return;
+  const remedy = memberRemedy(answer, { onCloud, signedIn, member: offer !== undefined });
+  line.append(t(remedy.sentence));
+
+  if (remedy.guide === true) {
+    const guide = make(document, 'a', '', t('Which mode can read it'));
+    guide.href = MODES_GUIDE;
+    guide.target = '_blank';
+    guide.rel = 'noreferrer';
+    line.append(' ', guide);
+  }
+  if (remedy.action === 'sign-in') {
+    const button = make(document, 'button', '', t('Sign in to Fruitback'));
+    button.addEventListener('click', () => signIn(origin, false));
+    fix.append(button);
+  }
+  if (remedy.action === 'turn-on' && offer !== undefined) {
+    const button = make(document, 'button', '', t('Turn on with my account'));
+    // The rule of the workspace takes the place of the rule of extension mode, under the origin.
+    const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(said, turn), failed(said));
+    button.addEventListener('click', turn);
+    fix.append(button);
+  }
 }
 
 /**

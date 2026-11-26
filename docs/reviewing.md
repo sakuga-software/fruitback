@@ -169,6 +169,16 @@ The widget offers no note there. An admin of the site adds its address again on 
 the console with « Anyone on the page » (the site keeps its notes and its id), or the reviewer
 connects the browser and uses team mode.
 
+On a site of Fruitback Cloud, the popup says what fixes it instead. Signed out, it says
+`Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member.`
+(or `Only the members of this site see its notes here. Sign in to Fruitback to review it as a member.`
+when the site takes a note from anybody), with « Sign in to Fruitback ». Signed in as a member of the
+site, it says `You are a member of this site. Turn it on with your account to see its notes and leave one.`,
+and « Turn on with my account » turns the site of your workspace on in place of the extension-mode
+rule. Signed in with an account that is not a member, it says
+`Only the members of this site see its notes, and your account is not one of them. Ask its team to invite you.`
+Extension mode stays available on the Cloud, for a site that says « Anyone on the page ».
+
 A team-mode endpoint must be `https`, or loopback for the dev loop: a session is a bearer
 credential and it does not cross plain `http`, so the popup refuses the entry rather than storing one
 that would be shown as « On » and refuse every call. Extension mode accepts plain `http://`, and

@@ -873,6 +873,13 @@ same database since FRU-142: see the section after this one.
 - **`postgres.ts` is the one file that names the driver**, as types, and it loads `pg` at the first
   call. A lint rule holds the import. A test held the rest in a process of its own, for a worker with
   no database, until FRU-225 made that worker refuse to start. `/health` opens no database.
+- **A route gets the accounts of its request from `app.ts`, never from the context of the
+  transport** (FRU-730). `server.ts` hands `handleRequest` no store of the accounts: `app.ts` resolves
+  them once (`context.accounts ?? accountStoreFor`) and passes them on, to `getFeedback` as to
+  `postFeedback`. Before FRU-730 the read took the bare context, and in production it gave no status
+  that a team added, no colour of a tracker and no line of an agent, while every suite was green: the
+  suites put `accounts` in the context by hand. `read-accounts.test.ts` reads a page through
+  `createFruitbackServer`, the handler of `server.ts`.
 - **`Database` is the seam**: `run`, `transaction`, `alone` and `close`. It hands a store the `Db` of
   Drizzle (FRU-180: see _The database in Drizzle_). `createPgDatabase` is the one implementation
   that ships. The tests have a second one on PGlite, in `postgres.fixture.ts`.

@@ -478,6 +478,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ce site prend les notes de ses membres seulement, et le mode extension ne porte aucune session : aucune note ne peut partir d’ici. Pour le relire en mode extension, un admin du site choisit « Toute personne sur la page » sous « Qui peut laisser une note ? » dans la console.',
   'This server answers a signed-in reader only, and in extension mode the extension holds no session. Notes do not show on this site.':
     'Ce serveur ne répond qu’à un lecteur connecté, et le mode extension ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
+  // FRU-663: the same refusals, on the Fruitback of this build.
+  'Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member.':
+    'Seuls les membres de ce site voient ses notes et en laissent ici. Connectez-vous à Fruitback pour le relire en tant que membre.',
+  'Only the members of this site see its notes here. Sign in to Fruitback to review it as a member.':
+    'Seuls les membres de ce site voient ses notes ici. Connectez-vous à Fruitback pour le relire en tant que membre.',
+  'You are a member of this site. Turn it on with your account to see its notes and leave one.':
+    'Vous êtes membre de ce site. Activez-le avec votre compte pour voir ses notes et en laisser une.',
+  'Only the members of this site see its notes, and your account is not one of them. Ask its team to invite you.':
+    'Seuls les membres de ce site voient ses notes, et votre compte n’en fait pas partie. Demandez à son équipe de vous inviter.',
+  'Sign in to Fruitback': 'Se connecter à Fruitback',
+  'Turn on with my account': 'Activer avec mon compte',
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the server says the domain is proven.':
     'L’espace de travail ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le serveur dira que le domaine est prouvé.',
   'This rule is too large for the account of this browser, which keeps at most 8 KB for one rule. It is not copied there, and it stays and works in this browser.':
