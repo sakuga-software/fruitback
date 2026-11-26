@@ -31,7 +31,8 @@ import {
  * `GET /console/workspaces/<id>/notes?site=&stage=&place=&mine=1&since=&undelivered=1&q=&cursor=&limit=` reads one page of
  * the index of the notes (FRU-237), the newest first. `counts=none` leaves out `total` and `counts`,
  * which read the whole filter: the console asks for them on the first page only (FRU-502). `POST …/notes/<note>/retry` sends again a note
- * whose delivery to a receiving connector did not arrive. `POST …/notes/<note>/status` puts a note the
+ * whose delivery to a receiving connector did not arrive, and `POST …/sites/<site>/retry` those of
+ * every note of one site, `SITE_RETRY_LIMIT` at a time (FRU-717). `POST …/notes/<note>/status` puts a note the
  * worker keeps in a status of its site (FRU-384). `POST …/notes/<note>/replies` writes a reply under a
  * note, in the name of the caller (FRU-712, `console-replies.ts`).
  *
@@ -43,7 +44,7 @@ import {
  * - `see-tracker` (not a guest) reads where each note went: the place, the reference and its link in
  *   the tracker, the delivery that did not arrive, and the counts by place. A guest gets none of it,
  *   and a `place` filter is refused to it, as the list of the sites hides it the destinations;
- * - `manage-sites` sends a note again;
+ * - `manage-sites` sends a note again, or the notes of a site;
  * - the author of a note the worker keeps, or `manage-sites`, chooses its status (FRU-384): the list
  *   says which notes the caller may change (`canSetStatus`), with the statuses of their sites. The
  *   status of a note in a tracker is the tracker's, and is not changed here.
@@ -75,6 +76,8 @@ export type NotesContext = {
   accounts: Pick<
     AccountStore,
     | 'retryDelivery'
+    | 'retryDeliveries'
+    | 'site'
     | 'setNoteStatus'
     | 'siteStatuses'
     | 'agentTrigger'
@@ -98,6 +101,14 @@ export type NotesContext = {
 
 const ID = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * How many deliveries one press of « Send again » on a site makes due (FRU-717). The loop of the
+ * worker sends 20 of them each 15 seconds (`deliverDue`, `DELIVERY_PASS_MS`): 100 leave in 75
+ * seconds, and the deliveries of the other workspaces wait that long at most. The rest of the site
+ * is answered as `left`, and a press again sends it.
+ */
+export const SITE_RETRY_LIMIT = 100;
+
 /** The route, or `undefined` for a path that is not one of the notes. */
 export async function handleNotes(
   rest: string,
@@ -112,12 +123,14 @@ export async function handleNotes(
   if (reply !== null) return postConsoleReply(reply[1] as string, request, context, noteKeyOf);
   const retry = /^\/notes\/([A-Za-z0-9_-]+)\/retry$/.exec(rest);
   const status = /^\/notes\/([A-Za-z0-9_-]+)\/status$/.exec(rest);
-  if (rest !== '/notes' && retry === null && status === null) return undefined;
+  const resend = /^\/sites\/([A-Za-z0-9_-]+)\/retry$/.exec(rest);
+  if (rest !== '/notes' && retry === null && status === null && resend === null) return undefined;
 
   const { headers } = context;
   const index = context.noteIndex;
 
   if (status !== null) return setStatus(status[1] as string, request, context);
+  if (resend !== null) return retrySite(resend[1] as string, request, context);
 
   if (retry !== null) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
@@ -179,6 +192,34 @@ export async function handleNotes(
     },
     headers,
   );
+}
+
+/**
+ * « Send again » on the row of a site (FRU-717): the deliveries that did not arrive of its notes are
+ * due now, each with its whole series of attempts again, as `…/notes/<note>/retry` makes one. The
+ * same right (`manage-sites`), and the same deliveries: the one `deliveryOf` finds for each note.
+ *
+ * It sends nothing itself: the loop of the worker does, one pass at a time, and a delivery that
+ * arrived is gone. So a second press while they leave makes the same rows due again, and nothing
+ * goes twice. Answers `sent`, how many are due now, and `left`, how many of the site wait for a
+ * press again (past `SITE_RETRY_LIMIT`).
+ */
+async function retrySite(site: string, request: Request, context: NotesContext): Promise<Response> {
+  const { headers } = context;
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+  if (!context.allowed('manage-sites')) return forbidden(context);
+  const index = context.noteIndex;
+  if (index === undefined) return json(404, { error: 'not-found' }, headers);
+  // A site of another workspace answers like one that does not exist.
+  if ((await context.accounts.site(context.workspace, site)) === undefined) {
+    return json(404, { error: 'not-found' }, headers);
+  }
+  const late = await answered(() => index.undeliveredOfSite(context.workspace, site, SITE_RETRY_LIMIT));
+  if (late === failed) return json(503, { error: 'index-unavailable' }, headers);
+  const ids = late.deliveries.map((delivery) => delivery.id);
+  const sent = ids.length === 0 ? 0 : await context.accounts.retryDeliveries(context.workspace, ids, context.now);
+
+  return json(200, { sent, left: late.total - ids.length }, headers);
 }
 
 /** The total and the counts of the filter: absent from a page read with `counts=none` (FRU-502). */

@@ -3075,6 +3075,30 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return set.length === 1;
     },
 
+    async retryDeliveries(workspace, ids, now) {
+      given(workspace, 'retryDeliveries: workspace');
+      given(now, 'retryDeliveries: now');
+      if (ids.length === 0) return 0;
+      // One statement, as `retryDelivery`: only the deliveries of a connector of this workspace.
+      const set = await run((db) =>
+        db
+          .update(deliveries)
+          .set({ next_at: now, attempts: 0 })
+          .where(
+            and(
+              inArray(deliveries.id, [...ids]),
+              inArray(
+                deliveries.connector_id,
+                db.select({ id: connectors.id }).from(connectors).where(eq(connectors.workspace_id, workspace)),
+              ),
+            ),
+          )
+          .returning({ id: deliveries.id }),
+      );
+
+      return set.length;
+    },
+
     async dropAbandonedDeliveries(before) {
       given(before, 'dropAbandonedDeliveries: before');
       const dropped = await run((db) =>

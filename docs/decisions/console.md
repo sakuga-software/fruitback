@@ -611,9 +611,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   know has no mark, and its name before the place), then the places on one line: « Team Acme web » for
   one place of a Linear, « Acme web, Support » for several. The labels of the worker are whole in a
   tooltip. The team of one Linear place is a link to its page at Linear (FRU-574). Notes an address did
-  not take yet add **the icon of a retry in red**, a link to the notes of the site, where each one is
-  sent again (`…/notes/<id>/retry`): the worker has no route that sends again every note of a site, and
-  FRU-688 adds none. A site with no tracker says « Kept in Fruitback » after the drop, and **a band in
+  not take yet add **the icon of a retry in red**. To an owner or an admin it is **a button that sends
+  them all again** (FRU-717, `POST …/sites/<site>/retry`): disabled while it asks, so two presses ask
+  once, and its answer under the row, « 4 notes of this site are on their way again. », « Press again
+  to send the 20 others. » past 100, or a refusal as a problem. Its count stays the one of the list: it
+  goes down when the notes arrive, at the next read. To a member it is a link to the notes of the
+  site, where each one shows where it went. A disabled button of HeroUI lets a press through to its
+  row, so its wrapper is one of the controls a press on the row leaves alone (`[data-resend]`). A site with no tracker says « Kept in Fruitback » after the drop, and **a band in
   dashes under the table** names the sites of the page that keep their notes in Fruitback, with
   « Connect a tracker » (the dialog « Add a connector » of the Connectors screen, FRU-571). **Who sees
   the notes** is « Members only » or « Everyone who visits » after its icon, and names no workspace

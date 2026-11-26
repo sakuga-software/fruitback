@@ -585,6 +585,29 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       });
     },
 
+    async undeliveredOfSite(workspace, site, limit) {
+      return run(async (db) => {
+        // The deliveries of this site only. The notes of the site are then read by the key of those,
+        // hashed once (`undeliveredOf`): two statements, whatever the number of notes.
+        const pending = new Map([...(await pendingOf(db, workspace))].filter(([, each]) => each.key[1] === site));
+        if (pending.size === 0) return { deliveries: [], total: 0 };
+        const rows = await db
+          .select({ connector: note_index.connector_id, site: note_index.site_id, reference: note_index.reference })
+          .from(note_index)
+          .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), undeliveredOf(pending)))
+          .orderBy(note_index.created_at, note_index.note_id);
+        // Two notes with one reference share one delivery: it is sent once.
+        const found = new Map<string, { connector: string; id: string }>();
+        for (const row of rows) {
+          const delivery = pending.get(JSON.stringify([row.connector, row.site, row.reference]));
+          if (delivery !== undefined) found.set(delivery.id, { connector: delivery.connector, id: delivery.id });
+        }
+        const deliveries = [...found.values()];
+
+        return { deliveries: deliveries.slice(0, limit), total: deliveries.length };
+      });
+    },
+
     async pageOfNote(workspace, site, note) {
       const rows = await run((db) =>
         db

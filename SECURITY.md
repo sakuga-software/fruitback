@@ -1126,6 +1126,20 @@ tell it which note carries which reference (raised by the heavy review of #306; 
   not in the list.
 - « Send again » is `manage-sites`, and reaches only a delivery of a connector of the workspace
   in the address: the note of another workspace is `404`.
+- « Send again » on the row of a site (`POST …/sites/<site>/retry`) is `manage-sites`
+  too, an owner or an admin: a member and a guest are `403`, a person of another workspace and a site
+  of another workspace `404`, no session `401`
+  (test:`is for whoever manages the sites, of this workspace, and a site of it`). It reaches the
+  deliveries that « Send again » reaches on each note of that site, and no other: a delivery that
+  names the site but no note of the index stays given up, and the sites around it are not touched
+  (test:`makes due the deliveries of the notes of this site, and of no other`). The write is one
+  statement that also checks the workspace of each connector
+  (test:`starts the attempts of several deliveries again in one write, of this workspace only (FRU-717)`).
+  It sends nothing itself: it makes at most 100 deliveries due now, and the loop of the worker sends
+  them, one pass at a time. A second press, before or during the pass, makes the same rows due
+  again, and no note goes twice
+  (test:`sends nothing twice when somebody presses again, before or during the pass`). It answers
+  two counts, `sent` and `left`, and nothing of a note.
 
 The extension reads the same rows for one whole site, for the scope « Whole site » of
 its side panel: `GET /session/notes?site=<id>&stage=&q=&cursor=&limit=`, the same query of the index

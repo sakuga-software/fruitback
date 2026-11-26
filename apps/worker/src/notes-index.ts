@@ -215,6 +215,16 @@ export type NoteIndex = {
   toCheck(workspace: string, account: string): Promise<Map<string, number>>;
   /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
   deliveryOf(workspace: string, site: string, note: string): Promise<{ connector: string; id: string } | undefined>;
+  /**
+   * FRU-717: the deliveries that did not arrive of the notes of one site, for « Send again » on its
+   * row: each one is the delivery `deliveryOf` finds for its note, so a press on the row sends again
+   * what a press on each note would. The oldest note first, `limit` of them, and `total` in all.
+   */
+  undeliveredOfSite(
+    workspace: string,
+    site: string,
+    limit: number,
+  ): Promise<{ deliveries: { connector: string; id: string }[]; total: number }>;
   /** The page of one note of a site of the workspace (FRU-463), or `undefined` for a note it does not hold. */
   pageOfNote(workspace: string, site: string, note: string): Promise<string | undefined>;
   /**
