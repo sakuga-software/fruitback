@@ -137,10 +137,15 @@ export type NoteIndex = {
    * count is the `total` that `list` answers for the same filter, so the bar and the Notes screen
    * never say two numbers for one list.
    * - `open`: the notes that are not done nor closed (`unresolved`);
-   * - `assigned`: the tasks of `account` (`assignee`).
+   * - `assigned`: the tasks of `account` (`assignee`);
+   * - `fresh`, when `since` is asked: the notes left at that instant or after it (`since`, FRU-722);
+   * - `undelivered`, when asked: the notes whose delivery did not arrive (`undelivered`, FRU-722).
    * `sites`: only those sites, as `NoteQuery.sites` (a guest).
    */
-  frameCounts(workspace: string, asked: { account: string; sites?: readonly string[] }): Promise<FrameCounts>;
+  frameCounts(
+    workspace: string,
+    asked: { account: string; sites?: readonly string[]; since?: number; undelivered?: boolean },
+  ): Promise<FrameCounts>;
   /**
    * The deliveries of each site of a workspace that are not delivered: waiting for an attempt, or
    * given up (FRU-122). A delivery that arrived is removed, so it is not counted. `sites`: only those
@@ -209,7 +214,7 @@ export type NoteIndex = {
 };
 
 /** What `frameCounts` answers (FRU-711). */
-export type FrameCounts = { open: number; assigned: number };
+export type FrameCounts = { open: number; assigned: number; fresh?: number; undelivered?: number };
 
 /** The smallest and the largest page of `list`, and the page when none is asked. */
 export const PAGE_SIZES = { min: 8, max: 50, default: 25 } as const;
@@ -249,6 +254,11 @@ export type NoteQuery = {
   after?: NoteCursor;
   /** The notes left at this instant or after it, in milliseconds (FRU-463). */
   since?: number;
+  /**
+   * FRU-722: the notes whose delivery did not arrive: one waits for its next attempt, or was given
+   * up. A caller who does not see the tracker must not ask it: a delivery names a connector.
+   */
+  undelivered?: true;
   /**
    * FRU-657: the notes of a page only, not the tasks written by hand. The side panel of the extension
    * opens the page of each note it lists.

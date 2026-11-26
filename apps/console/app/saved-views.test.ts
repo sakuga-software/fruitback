@@ -33,16 +33,35 @@ describe('the views of the bar (FRU-697)', () => {
     assert.equal(viewOf({ assignee: 'a2' }), undefined);
   });
 
-  it('give no view of the tasks to a guest, who is never given one (FRU-673)', () => {
+  it('give a guest « New this week » alone: no task is theirs (FRU-673), nor where a note went (FRU-722)', () => {
     assert.deepEqual(
       viewsFor('guest').map((view) => view.id),
-      [],
+      ['new'],
     );
     for (const role of ['owner', 'admin', 'member']) {
       assert.deepEqual(
         viewsFor(role).map((view) => view.id),
-        ['assigned'],
+        ['new', 'assigned', 'undelivered'],
       );
     }
+  });
+
+  it('name the filters of « New this week » and « Not delivered » (FRU-722)', () => {
+    assert.equal(viewOf(new URLSearchParams('created=week'))?.id, 'new');
+    assert.equal(viewOf(new URLSearchParams('undelivered=1'))?.id, 'undelivered');
+    assert.equal(viewOf(new URLSearchParams('created=week&undelivered=1')), undefined);
+    const fresh = VIEWS.find((view) => view.id === 'new');
+    assert.ok(fresh);
+    assert.equal(viewAddress('w1', fresh), '/w/w1/notes?created=week');
+  });
+});
+
+describe('where « This week » starts (FRU-722)', () => {
+  it('is midnight of the day of the person, six days ago: the week ends today', async () => {
+    const { weekStart } = await import('./parts/notes-model.ts');
+    const now = new Date(2026, 10, 26, 15, 30);
+    assert.equal(weekStart(now), new Date(2026, 10, 20, 0, 0).getTime());
+    // Across the start of a month, and at the first instant of a day.
+    assert.equal(weekStart(new Date(2026, 11, 2, 0, 0)), new Date(2026, 10, 26, 0, 0).getTime());
   });
 });

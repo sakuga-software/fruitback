@@ -101,11 +101,12 @@ describe('the counts of the bar of the console (FRU-711)', () => {
     // is archived.
     const owner = await railOf(world, workspace, alice.token);
     assert.equal(owner.status, 200);
-    assert.deepEqual(owner.body, { sites: 3, notes: 16, failing: 3, views: { assigned: 3 } });
+    // The three deliveries name no note (FRU-722): no note is undelivered.
+    assert.deepEqual(owner.body, { sites: 3, notes: 16, failing: 3, views: { assigned: 3, undelivered: 0 } });
 
     // The tasks are of the caller: Bob has one.
     const member = await railOf(world, workspace, bob.token);
-    assert.deepEqual(member.body, { sites: 3, notes: 16, failing: 3, views: { assigned: 1 } });
+    assert.deepEqual(member.body, { sites: 3, notes: 16, failing: 3, views: { assigned: 1, undelivered: 0 } });
   });
 
   it('says the total the list of the notes answers for the same filter', async () => {
@@ -208,6 +209,6 @@ describe('the counts of the bar of the console (FRU-711)', () => {
     const workspace = await workspaceIn(world, alice.token);
 
     const { body } = await railOf(world, workspace, alice.token);
-    assert.deepEqual(body, { sites: 0, notes: 0, failing: 0, views: { assigned: 0 } });
+    assert.deepEqual(body, { sites: 0, notes: 0, failing: 0, views: { assigned: 0, undelivered: 0 } });
   });
 });

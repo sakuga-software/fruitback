@@ -281,9 +281,9 @@ test('the bar is as high as the window and stays while the screen scrolls; under
   await stubWorker(page);
   // A window lower than « My account »: the document scrolls. At 1100 px its cards are one column
   // (FRU-692), about 860 px high; at 1440 px they are two, and 537 px high with these stubs. The window
-  // is as high as the whole bar, its views of FRU-697 with it (about 410 px), so the bar itself does
-  // not scroll.
-  const high = 440;
+  // is as high as the whole bar, its three views of FRU-722 with it (about 470 px), so the bar itself
+  // does not scroll.
+  const high = 500;
   await page.setViewportSize({ width: 1100, height: high });
   await open(page, 'account');
   expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(high + 200);
@@ -459,8 +459,10 @@ test('a section under the pointer takes the hover, and the keyboard walks the ba
     switcher(page),
     rail(page).getByRole('link', { name: 'Search notes' }),
     ...SECTIONS.map((name) => sections(page).getByRole('link', { name, exact: true })),
-    // FRU-697: the views, under the sections.
-    rail(page).getByRole('navigation', { name: 'Views' }).getByRole('link', { name: 'Assigned to me' }),
+    // FRU-697, FRU-722: the views, under the sections, in the order of the mockup.
+    ...['New this week', 'Assigned to me', 'Not delivered'].map((name) =>
+      rail(page).getByRole('navigation', { name: 'Views' }).getByRole('link', { name }),
+    ),
     rail(page).getByRole('link', { name: /^What's new/ }),
     rail(page).getByRole('link', { name: 'Install the extension (beta)' }),
     rail(page).getByRole('link', { name: 'Help and docs' }),

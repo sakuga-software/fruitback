@@ -3869,6 +3869,14 @@ refused by its sentence. What follows is the history.
   `\` escaped. Never the rest of a text, never a name a reporter typed: neither is kept.
 - **Filters**: `site`, `stage`, `place` (`fruitback`, a connector id, or `removed`), `mine` (the
   notes whose author is the account that asks). Anything that is not one of these values is `400`.
+- **`since` and `undelivered`, for the views of the bar (FRU-722), on the route of the console only**
+  (`queryOf` with `console`; the list of the extension and `/mcp` do not read them). `since` is an
+  instant in milliseconds, the notes left at it or after it: the console says the start of « This
+  week » on the day of the person, which the worker cannot know. `undelivered=1` is the notes whose
+  delivery did not arrive, waiting or given up: their key (connector, site, reference) is one of
+  the deliveries of the workspace that `list` reads first, sent as three arrays that `unnest` makes
+  into rows, so PostgreSQL hashes them once. It is about the tracker: `403` to a role without
+  `see-tracker`, as `place`. `total` and `counts` follow both.
 - **Pages of 8 to 50 notes (25 by default), the newest first, after an opaque cursor.** The order is
   the date the worker took the note, then the site and the note ids in their bytes (`COLLATE "C"`),
   so it is total and the same on every server. A cursor is the place of the last note shown, so a
@@ -3902,13 +3910,15 @@ refused by its sentence. What follows is the history.
 
 ### The rules, in short
 
-- **`GET /console/workspaces/<id>/rail` answers `{ sites, notes?, views?: { assigned }, failing? }`**
+- **`GET /console/workspaces/<id>/rail` answers `{ sites, notes?, views?: { assigned, new?, undelivered? }, failing? }`**
   (`console-rail.ts`): the counts at the right of the entries of the bar. The console reads it when
   the frame of a workspace mounts and at each change of workspace, never for a screen.
 - **Each count is a list the worker already answers, with the same filter**: `sites` the sites the
   caller reads (the `total` of a page of `GET …/sites`), `notes` the notes that are not done nor
   closed and not archived (`GET …/notes?unresolved=1`), `views.assigned` the tasks of the caller
-  (`GET …/notes?assignee=me`), and `failing` the deliveries of the connectors that did not arrive, of
+  (`GET …/notes?assignee=me`), `views.new` the notes left since `?since=` of the read (FRU-722),
+  `views.undelivered` the notes whose delivery did not arrive (`GET …/notes?undelivered=1`, for
+  `see-tracker` only), and `failing` the deliveries of the connectors that did not arrive, of
   notes and of calls of a trigger, as the Connectors screen adds them up from
   `GET …/connectors/<id>/deliveries`. `NoteIndex.frameCounts` reads the notes with `filtered`, the
   condition of `list` itself, so the bar and the Notes screen cannot say two numbers for one list
@@ -3931,6 +3941,13 @@ of the caller, one in 50 archived), 300 deliveries that did not arrive, and 50 o
 | `GET …/rail`, a guest of one site     | 8.1 to 13.7 ms  | 12.1 to 19.5 ms | 5              |
 | `GET …/notes?unresolved=1`, for scale | 26.3 to 28.1 ms | 37.6 to 53.8 ms | 9              |
 | `GET …/sites?limit=24`, for scale     | 13.1 to 18.3 ms | 20.3 to 38.3 ms | 7              |
+
+With FRU-722, on the same workspace with 300 of its notes not delivered (three runs, 60 calls):
+`GET …/rail?since=` 15.0 to 16.1 ms median, 17.0 to 19.7 ms p95, 7 statements (the deliveries, then
+the count of the notes not delivered in a statement of its own); a guest 7.6 to 7.8 ms, 5 statements;
+`GET …/notes?undelivered=1` 11.4 to 11.9 ms; `GET …/notes?since=` 7.6 to 9.6 ms; `GET …/notes`, for
+scale, 14.5 to 15.4 ms. Counted in a `FILTER` beside the others, the notes not delivered took 150 ms:
+the keys were matched again for each note; in a `WHERE` they are hashed once.
 
 The count of the notes is one pass over the rows of the workspace by `note_index_by_workspace`
 (9.1 to 11.4 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make;
