@@ -12,7 +12,7 @@ import { type Account, problem, visibilityButton } from '../../src/popup-view.ts
 import { hostOf, make } from '../../src/kit.ts';
 
 import { activateOpenTabs, turnOn, visibility } from './site-actions.ts';
-import { CLOUD, actions, cloudSeams, failed, field, openSettings, refused, render } from './context.ts';
+import { CLOUD, actions, cloudSeams, draws, failed, field, openSettings, refused, render } from './context.ts';
 import { signIn } from './sign-in.ts';
 
 /** The screens of a rule typed in the popup (FRU-41, FRU-43): its form, its switch, its access (FRU-560). */
@@ -71,14 +71,23 @@ export const NO_RULE = msg('No rule covers this origin, so Fruitback does nothin
  * Fruitback ». Signed in, « Turn on with my account » when a workspace of the account lists the
  * site, which stores the site of the workspace in its place; otherwise, who to ask. Nothing typed is
  * on this screen, so neither button can lose a draft (review of #897).
+ *
+ * The line and the place of its button are made here, before the probe answers, so what the answer
+ * adds never depends on the screen being in the document yet (review of #976).
  */
 export function readability(
   site: SiteConfig,
   pageUrl: string,
   where: { origin: string; signedIn: boolean },
-): HTMLElement {
+): DocumentFragment {
   const line = make(document, 'p', 'problem');
-  if (!site.enabled) return line;
+  const fix = actions();
+  const said = make(document, 'p', 'problem');
+  const parts = document.createDocumentFragment();
+  parts.append(line, fix, said);
+  if (!site.enabled) return parts;
+  // The draw this line belongs to: a later one has its own line, and asks again.
+  const drawn = draws.drawn;
 
   // FRU-395: in both modes, a worker that is not at the address of the rule. The client is the one
   // the widget reads with, when the rule names one.
@@ -93,16 +102,16 @@ export function readability(
       if (site.mode !== 'private') return;
       if (answer !== 'wants-a-session' && answer !== 'members-only') return;
 
-      void sayRemedy(line, answer, site, where);
+      void sayRemedy({ line, fix, said, drawn }, answer, site, where);
     },
   );
 
-  return line;
+  return parts;
 }
 
 /** The sentence of a refused read, with its guide or its button (FRU-66, FRU-330, FRU-663). */
 async function sayRemedy(
-  line: HTMLElement,
+  { line, fix, said, drawn }: { line: HTMLElement; fix: HTMLElement; said: HTMLElement; drawn: number },
   answer: 'members-only' | 'wants-a-session',
   site: SiteConfig,
   { origin, signedIn }: { origin: string; signedIn: boolean },
@@ -110,8 +119,8 @@ async function sayRemedy(
   const onCloud = CLOUD !== undefined && site.endpoint === CLOUD;
   // Asked only of an account on the Cloud: the sites that its workspaces list.
   const offer = onCloud && signedIn ? await offerFor(origin, cloudSeams()).catch(() => undefined) : undefined;
-  // Kentō #42b8f6: the popup drew again while the workspaces were read. That draw asks again.
-  if (!line.isConnected) return;
+  // Kentō #42b8f6, #4ec7d7: the popup drew again while the workspaces were read. That draw asks again.
+  if (drawn !== draws.drawn) return;
   const remedy = memberRemedy(answer, { onCloud, signedIn, member: offer !== undefined });
   line.append(t(remedy.sentence));
 
@@ -125,16 +134,14 @@ async function sayRemedy(
   if (remedy.action === 'sign-in') {
     const button = make(document, 'button', '', t('Sign in to Fruitback'));
     button.addEventListener('click', () => signIn(origin, false));
-    line.after(actions(button));
+    fix.append(button);
   }
   if (remedy.action === 'turn-on' && offer !== undefined) {
-    const problem = make(document, 'p', 'problem');
     const button = make(document, 'button', '', t('Turn on with my account'));
     // The rule of the workspace takes the place of the rule of extension mode, under the origin.
-    const turn = (): void =>
-      void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
+    const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(said, turn), failed(said));
     button.addEventListener('click', turn);
-    line.after(actions(button), problem);
+    fix.append(button);
   }
 }
 
