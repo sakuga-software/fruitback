@@ -185,6 +185,28 @@ describe('the choices sent to the account (FRU-716)', () => {
     await ana;
   });
 
+  it('a choice of the next person made while the request of before flies is busy again, and answered by its own request', async () => {
+    const sent: (Appearance | null)[] = [];
+    const answers: ((heard: boolean) => void)[] = [];
+    const save = (appearance: Appearance | null) => {
+      sent.push(appearance);
+      return new Promise<boolean>((resolve) => answers.push(resolve));
+    };
+    const sender = appearanceSender(save);
+    void sender.send(ALICE);
+    sender.drop();
+    assert.equal(sender.busy(), false);
+    const ben: Appearance = { ...DEFAULT_APPEARANCE, accent: 'indigo' };
+    const his = sender.send(ben);
+    assert.equal(sender.busy(), true, 'an older /console/me would draw over the choice of Ben');
+    // The request of before fails late: the answer Ben gets is the one of his own request.
+    answers[0]?.(false);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(sent, [ALICE, ben]);
+    answers[1]?.(true);
+    assert.equal(await his, true);
+  });
+
   it('says that the account did not take the last choice: a refusal, or no answer', async () => {
     const refused = appearanceSender(async () => false);
     assert.equal(await refused.send(ALICE), false);

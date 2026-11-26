@@ -611,6 +611,9 @@ export function appearanceSender(save: SaveAppearance): {
   // Every caller gets the answer to the last request of the run, which carries the last choice.
   const send = (appearance: Appearance): Promise<boolean> => {
     waiting = appearance;
+    // A choice of the next person joins the run of before the sign-out: that run carries it now, so
+    // it is busy again, and an older `/console/me` does not draw over it.
+    if (flight !== undefined && flight === dropped) dropped = undefined;
     flight ??= drain().finally(() => {
       flight = undefined;
     });
