@@ -151,7 +151,7 @@ export async function getFeedback(
     const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'withdraw'));
     const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-718: and change the status of a note from its thread, with the rights of the route of a status.
-    const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, context?.accounts, checks);
+    const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, checks);
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -908,17 +908,19 @@ async function statusSetterOf(
   store: NoteStore,
   client: ClientConfig | undefined,
   site: string | undefined,
-  accounts: AccountStore | undefined,
   checks: CallerChecks,
 ): Promise<'every' | 'own' | 'none'> {
   const workspace = client?.workspace;
-  if (accounts === undefined || workspace === undefined || site === undefined) return 'none';
+  // `reachIn` of the served configuration, as `memberOf` reads it: the transport of a server hands the
+  // read no store of the accounts (`context.accounts` is a seam of the tests).
+  const { reachIn } = config;
+  if (reachIn === undefined || workspace === undefined || site === undefined) return 'none';
   if ((client?.destinations?.length ?? 0) > 1) return 'none';
   try {
     const account = await checks.memberOf(request, config, workspace, site);
     if (account === undefined) return 'none';
     if (!(await takesStatuses(store, client))) return 'none';
-    const reach = await accounts.reach(workspace, account);
+    const reach = await reachIn(workspace, account);
 
     return reach !== undefined && can(reach.role, 'manage-sites') ? 'every' : 'own';
   } catch (error) {
