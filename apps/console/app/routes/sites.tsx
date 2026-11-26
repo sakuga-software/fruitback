@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { STAGES, STAGE_NAMES, type Stage } from '../stages';
 import { type Destination, type Site, type Visibility, type Workspace, type Writers, call, placesOf } from '../api';
-import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
+import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf, writeProblemOf } from '../problems';
 import { type Fetched, listedOf } from '../listed';
 import {
   Button,
@@ -481,7 +481,8 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
     if (event.metaKey || event.ctrlKey) globalThis.open(page, '_blank', 'noopener');
     else navigate(page);
   };
-  const notices = seesTracker ? noticesOf(site) : [];
+  const resend = useResend(workspace.id, site.id);
+  const notices = seesTracker ? [...noticesOf(site), ...resend.notices] : [];
 
   return (
     <tbody data-site={site.id}>
@@ -529,7 +530,12 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
         {seesTracker ? (
           <td data-column="sent" className={`${CELL} ${GONE.sent}`}>
             <span className={`${LINE} gap-[6px] px-[12px] text-ink-soft`}>
-              <SentTo site={site} name={name} notes={notesOf(workspace.id, site.id)} />
+              <SentTo
+                site={site}
+                name={name}
+                notes={notesOf(workspace.id, site.id)}
+                resend={manages ? resend : undefined}
+              />
             </span>
           </td>
         ) : null}
@@ -789,9 +795,21 @@ const KIND_OF_NAME: Readonly<Record<string, MarkedKind>> = { Linear: 'linear', G
  * no tracker keeps them in Fruitback. The labels of the worker are whole in a tooltip.
  *
  * Notes that an address did not take yet (REST, FRU-122) add the icon of a retry in red after the
- * places: it leads to the notes of the site, where each one is sent again.
+ * places. To whoever manages the sites it is a button that sends them all again (FRU-717); to a
+ * member it leads to the notes of the site, where each one is shown.
  */
-function SentTo({ site, name, notes }: { site: Site; name: string; notes: string }) {
+function SentTo({
+  site,
+  name,
+  notes,
+  resend,
+}: {
+  site: Site;
+  name: string;
+  notes: string;
+  /** « Send again » of the row: none for whoever does not manage the sites. */
+  resend: Resend | undefined;
+}) {
   useLocale();
   const places = placesOf(site);
   if (places.length === 0)
@@ -848,7 +866,32 @@ function SentTo({ site, name, notes }: { site: Site; name: string; notes: string
           </a>
         )}
       </Tip>
-      {late === 0 ? null : (
+      {late > 0 && resend !== undefined ? (
+        // The red arrow of the mockup, as the link a member has: a button, named for a screen reader.
+        <button
+          type="button"
+          aria-label={
+            late === 1
+              ? t('Send again the note of {site} not delivered yet', { site: name })
+              : t('Send again the {count} notes of {site} not delivered yet', { count: late, site: name })
+          }
+          title={resend.sending ? t('Sending…') : lateWords}
+          aria-busy={resend.sending}
+          disabled={resend.sending}
+          onClick={() => void resend.send()}
+          data-resend=""
+          className={`${LATE} cursor-pointer border-0 bg-transparent p-0 disabled:cursor-progress disabled:text-muted disabled:hover:bg-transparent`}
+        >
+          <NoteIcon name="retry" />
+        </button>
+      ) : null}
+      {resend === undefined ? null : (
+        // Said to a screen reader when it changes: the line under the row is for the eye.
+        <span role="status" className="sr-only">
+          {resend.said}
+        </span>
+      )}
+      {late === 0 || resend !== undefined ? null : (
         <Link
           to={notes}
           aria-label={
@@ -857,7 +900,7 @@ function SentTo({ site, name, notes }: { site: Site; name: string; notes: string
               : t('{count} not delivered yet: see the notes of {site}', { count: late, site: name })
           }
           title={lateWords}
-          className="inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]"
+          className={LATE}
         >
           <NoteIcon name="retry" />
         </Link>
@@ -865,6 +908,65 @@ function SentTo({ site, name, notes }: { site: Site; name: string; notes: string
     </>
   );
 }
+
+/** The red arrow of the notes not delivered yet (FRU-688): a link to a member, a button to who manages. */
+const LATE =
+  'inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]';
+
+/** « Send again » of the row of a site (FRU-717): its state, and what to say under the row. */
+type Resend = { sending: boolean; said: string; send: () => Promise<void>; notices: ReactNode[] };
+
+/**
+ * « Send again » on the row of a site (FRU-717): `POST …/sites/<site>/retry` makes the deliveries
+ * that did not arrive of its notes due now, and the loop of the worker sends them in the seconds that
+ * follow. One call at a time: a press while one runs asks nothing. The answer is said under the row,
+ * a refusal as a problem. The count of the row is the one of the list: it goes down when the notes
+ * have arrived, at its next read, and not when they are asked for.
+ */
+function useResend(workspace: string, site: string): Resend {
+  useLocale();
+  const [sending, setSending] = useState(false);
+  const [answer, setAnswer] = useState<{ sent: number; left: number } | { refused: string } | undefined>();
+  const running = useRef(false);
+  const send = async () => {
+    if (running.current) return;
+    running.current = true;
+    setSending(true);
+    setAnswer(undefined);
+    const asked = await call<{ sent?: unknown; left?: unknown }>(
+      'POST',
+      `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}/retry`,
+    );
+    running.current = false;
+    setSending(false);
+    if (!asked.ok) return setAnswer({ refused: writeProblemOf(asked, problemOf(asked, {}, RESEND_REFUSED)) });
+    const { sent, left } = asked.data;
+    if (typeof sent !== 'number' || typeof left !== 'number') return setAnswer({ refused: RESEND_REFUSED });
+    setAnswer({ sent, left });
+  };
+  let said = '';
+  if (answer !== undefined && 'refused' in answer) said = t(answer.refused);
+  else if (answer !== undefined) {
+    const { sent, left } = answer;
+    if (sent === 0) said = t('No note of this site waits to be sent.');
+    else if (sent === 1) said = t('1 note of this site is on its way again.');
+    else said = t('{count} notes of this site are on their way again.', { count: sent });
+    if (left > 0) said = `${said} ${t('Press again to send the {count} others.', { count: left })}`;
+  }
+  const notices: ReactNode[] = [];
+  if (answer !== undefined && 'refused' in answer) notices.push(<Problem key="resend">{said}</Problem>);
+  else if (said !== '')
+    notices.push(
+      <span key="resend" data-resent="" className="text-body text-ink-soft">
+        {said}
+      </span>,
+    );
+
+  return { sending, said, send, notices };
+}
+
+/** A « Send again » of a site that the worker refused, for a cause no other sentence says. */
+const RESEND_REFUSED = msg('The notes of this site were not sent again. Reload the page, then try again.');
 
 /**
  * Who reads the notes of a site (FRU-688): an icon and « Members only » or « Everyone who visits »,

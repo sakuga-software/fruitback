@@ -1160,6 +1160,12 @@ export type AccountStore = {
    * workspace and connector.
    */
   retryDelivery(workspace: string, connector: string, delivery: string, now: number): Promise<boolean>;
+  /**
+   * FRU-717: makes these deliveries due now, each with its whole series of attempts again, as
+   * `retryDelivery` does one, in one write. A delivery of a connector of another workspace, or one
+   * that is gone, is left. Answers how many are due.
+   */
+  retryDeliveries(workspace: string, deliveries: readonly string[], now: number): Promise<number>;
   /** Removes the deliveries that were given up before `before`. Answers how many. */
   dropAbandonedDeliveries(before: number): Promise<number>;
   /**

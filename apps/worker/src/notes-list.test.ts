@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
-import { cursorOf, noteIdOf } from './console-notes.ts';
+import { SITE_RETRY_LIMIT, cursorOf, noteIdOf } from './console-notes.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import type { NoteEntry, Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
@@ -785,5 +785,209 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
 
     assert.equal(answer.status, 404);
     assert.equal((await listOf(world, workspace, alice.token)).counts.undelivered, 1);
+  });
+});
+
+describe('« Send again » on the row of a site (FRU-717)', () => {
+  /**
+   * The notes of the REST connector that did not arrive, given up: one delivery each, and one more
+   * that names the first site but no note of the index, which « Send again » on a note never finds.
+   * Queued now: a pass drops a delivery given up 30 days ago (`ABANDONED_KEPT_DAYS`).
+   */
+  async function undelivered() {
+    const planted = await sixtyNotes();
+    const { world, workspace, rest } = planted;
+    for (const note of planted.planted.filter((each) => each.place === rest.id)) {
+      await world.accounts.enqueueDelivery(
+        rest.id,
+        deliveryBody({
+          workspace,
+          site: { id: note.site },
+          identifier: note.reference,
+          note: noteFixture({ id: note.id }),
+        }),
+        Date.now(),
+      );
+    }
+    const site = planted.sites[0] as { id: string };
+    await world.accounts.enqueueDelivery(
+      rest.id,
+      deliveryBody({
+        workspace,
+        site: { id: site.id },
+        identifier: 'FB-nowhere',
+        note: noteFixture({ id: 'sd_gone' }),
+      }),
+      Date.now(),
+    );
+    await rowsOf(world.database, `UPDATE deliveries SET next_at = NULL, attempts = 6, last_status = 503`);
+    const own = planted.planted.filter((each) => each.place === rest.id && each.site === site.id);
+
+    return { ...planted, site, own };
+  }
+
+  /**
+   * One pass of the loop of the worker: the ids of the deliveries it sent, in `sent` as they start.
+   * `gate` holds each answer.
+   */
+  async function pass(world: World, gate?: Promise<void>, sent: string[] = []): Promise<string[]> {
+    await deliverDue({
+      accounts: world.accounts,
+      secretsKey: SECRETS_KEY,
+      send: async (_url, headers) => {
+        sent.push(headers['X-Fruitback-Delivery'] as string);
+        await gate;
+
+        return { status: 200 };
+      },
+      now: () => Date.now() + 1_000,
+    });
+
+    return sent;
+  }
+
+  /** The deliveries due now, by the site their body names. */
+  async function dueBySite(world: World): Promise<Record<string, number>> {
+    const rows = (await rowsOf(
+      world.database,
+      `SELECT body::jsonb -> 'site' ->> 'id' AS site, count(*)::int AS due FROM deliveries WHERE next_at IS NOT NULL GROUP BY 1`,
+    )) as { site: string; due: number }[];
+
+    return Object.fromEntries(rows.map((row) => [row.site, Number(row.due)]));
+  }
+
+  it('makes due the deliveries of the notes of this site, and of no other', async () => {
+    const { world, alice, workspace, site, own } = await undelivered();
+    assert.equal(own.length, 10);
+
+    const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites/${site.id}/retry`, {
+      token: alice.token,
+    });
+
+    assert.equal(answer.status, 200);
+    assert.deepEqual(await answer.json(), { sent: 10, left: 0 });
+    // The delivery with no note of the index stays given up, as « Send again » on a note leaves it.
+    assert.deepEqual(await dueBySite(world), { [site.id]: 10 });
+    const sent = await pass(world);
+    assert.equal(sent.length, 10);
+    assert.equal(new Set(sent).size, 10, 'each note once');
+    assert.deepEqual(await dueBySite(world), {});
+  });
+
+  it('sends nothing twice when somebody presses again, before or during the pass', async () => {
+    const { world, alice, workspace, site } = await undelivered();
+    const path = `/console/workspaces/${workspace}/sites/${site.id}/retry`;
+    const press = async () => (await callOn(world, 'POST', path, { token: alice.token })).json();
+
+    // Two presses at once.
+    assert.deepEqual(await Promise.all([press(), press()]), [
+      { sent: 10, left: 0 },
+      { sent: 10, left: 0 },
+    ]);
+    // A third while the pass is sending: the attempts are under way, and their rows still there.
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const started: string[] = [];
+    const running = pass(world, gate, started);
+    await expect.poll(() => started.length).toBe(10);
+    assert.deepEqual(await press(), { sent: 10, left: 0 });
+    open();
+    const sent = await running;
+
+    assert.equal(sent.length, 10);
+    assert.equal(new Set(sent).size, 10, 'each note once');
+    assert.deepEqual(await pass(world), [], 'the next pass has nothing left to send');
+    assert.deepEqual(await press(), { sent: 0, left: 0 });
+  });
+
+  it(`makes ${SITE_RETRY_LIMIT} due at most, the oldest notes first, and says how many are left`, async () => {
+    const { world, alice, workspace, rest, site } = await undelivered();
+    const extra = SITE_RETRY_LIMIT + 5 - 10;
+    // Older notes than the planted ones, each with its delivery given up.
+    await rowsOf(
+      world.database,
+      `INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, channel, author_kind, place, connector_id, reference, created_at, checked_at)
+       SELECT '${site.id}', 'sd_old_' || n, '${workspace}', 'https://acme.dev/old', 'Old ' || n, 'new', 'script', 'visitor', 'connector', '${rest.id}', 'OLD-' || n, ${BASE} - 1000000 + n, ${BASE}
+       FROM generate_series(1, ${extra}) AS n`,
+    );
+    for (let n = 1; n <= extra; n += 1) {
+      await world.accounts.enqueueDelivery(
+        rest.id,
+        deliveryBody({
+          workspace,
+          site: { id: site.id },
+          identifier: `OLD-${n}`,
+          note: noteFixture({ id: `sd_old_${n}` }),
+        }),
+        Date.now(),
+      );
+    }
+    await rowsOf(world.database, `UPDATE deliveries SET next_at = NULL, attempts = 6`);
+    const path = `/console/workspaces/${workspace}/sites/${site.id}/retry`;
+
+    const first = await callOn(world, 'POST', path, { token: alice.token });
+
+    assert.deepEqual(await first.json(), { sent: SITE_RETRY_LIMIT, left: 5 });
+    const due = (await rowsOf(
+      world.database,
+      `SELECT body::jsonb ->> 'identifier' AS identifier FROM deliveries WHERE next_at IS NOT NULL`,
+    )) as { identifier: string }[];
+    assert.equal(due.filter((row) => row.identifier.startsWith('OLD-')).length, extra, 'the oldest first');
+    await pass(world);
+    await pass(world);
+    await pass(world);
+    await pass(world);
+    await pass(world);
+    const second = await callOn(world, 'POST', path, { token: alice.token });
+    assert.deepEqual(await second.json(), { sent: 5, left: 0 });
+  });
+
+  it('is for whoever manages the sites, of this workspace, and a site of it', async () => {
+    const { world, alice, bob, gina, zed, workspace, site, sites } = await undelivered();
+    const path = `/console/workspaces/${workspace}/sites/${site.id}/retry`;
+
+    assert.equal((await callOn(world, 'POST', path, { token: bob.token })).status, 403, 'a member');
+    assert.equal((await callOn(world, 'POST', path, { token: gina.token })).status, 403, 'a guest of the site');
+    assert.equal((await callOn(world, 'POST', path, { token: zed.token })).status, 404, 'another workspace');
+    assert.equal((await callOn(world, 'POST', path, {})).status, 401, 'no session');
+    assert.equal((await callOn(world, 'GET', path, { token: alice.token })).status, 405);
+    const zedsOwn = (await (await callOn(world, 'GET', '/console/me', { token: zed.token })).json()) as {
+      workspaces: { id: string }[];
+    };
+    const theirs = zedsOwn.workspaces[0]?.id as string;
+    // Zed manages his workspace: a site of Acme named under it is not one of his.
+    const crossed = await callOn(world, 'POST', `/console/workspaces/${theirs}/sites/${site.id}/retry`, {
+      token: zed.token,
+    });
+    assert.equal(crossed.status, 404);
+    assert.equal(
+      (await callOn(world, 'POST', `/console/workspaces/${workspace}/sites/st_nowhere/retry`, { token: alice.token }))
+        .status,
+      404,
+    );
+    assert.deepEqual(await dueBySite(world), {}, 'nothing was made due');
+    // A site with no delivery that waits: nothing to send.
+    const quiet = sites[1] as { id: string };
+    await rowsOf(world.database, `DELETE FROM deliveries WHERE body::jsonb -> 'site' ->> 'id' = '${quiet.id}'`);
+    const none = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites/${quiet.id}/retry`, {
+      token: alice.token,
+    });
+    assert.deepEqual(await none.json(), { sent: 0, left: 0 });
+  });
+
+  it('answers 503 when the index does not answer, and makes nothing due', async () => {
+    const { world, alice, workspace, site, index } = await undelivered();
+    world.context = {
+      ...world.context,
+      noteIndex: { ...index, undeliveredOfSite: async () => Promise.reject(new Error('down')) },
+    };
+
+    const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites/${site.id}/retry`, {
+      token: alice.token,
+    });
+
+    assert.equal(answer.status, 503);
+    assert.deepEqual(await answer.json(), { error: 'index-unavailable' });
+    assert.deepEqual(await dueBySite(world), {});
   });
 });

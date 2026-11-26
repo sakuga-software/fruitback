@@ -1132,6 +1132,34 @@ export function accountCases(it: Declare<AccountStore>): void {
     ]);
   });
 
+  it('starts the attempts of several deliveries again in one write, of this workspace only (FRU-717)', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+    const hook = await store.addConnector(acme.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const theirs = await store.addConnector(globex.id, { kind: 'rest', label: 'Theirs', sealed: 'sealed' });
+    const first = await store.enqueueDelivery(hook.id, '{"n":1}', 0);
+    const second = await store.enqueueDelivery(hook.id, '{"n":2}', 0);
+    const other = await store.enqueueDelivery(theirs.id, '{"n":3}', 0);
+    // Each one given up after an attempt: no next one, and a count of one.
+    for (const id of [first, second, other]) {
+      await store.settleDelivery(id, { delivered: false, attempts: 0, at: 1_000, status: 500 });
+    }
+    assert.deepEqual(await store.dueDeliveries(Number.MAX_SAFE_INTEGER, 10), []);
+
+    assert.equal(await store.retryDeliveries(acme.id, [], 2_000), 0);
+    // A delivery of another workspace, and one that is gone, are left and not counted.
+    assert.equal(await store.retryDeliveries(acme.id, [first, second, other, 'dl_gone'], 2_000), 2);
+    assert.equal(await store.retryDeliveries(globex.id, [first], 2_000), 0);
+
+    assert.deepEqual(
+      (await store.dueDeliveries(2_000, 10)).map((due) => [due.id, due.attempts]).sort(),
+      [
+        [first, 0],
+        [second, 0],
+      ].sort(),
+    );
+  });
+
   it('lists the deliveries of a connector newest first, without their body, to its workspace only', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);

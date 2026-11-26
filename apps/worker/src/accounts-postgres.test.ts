@@ -449,6 +449,8 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
       ['noteDelivered: at', () => store.noteDelivered(hook.id, none)],
       ['noteDelivered: connector', () => store.noteDelivered(none, 1_000)],
       ['retryDelivery: now', () => store.retryDelivery(workspace.id, hook.id, second, none)],
+      ['retryDeliveries: now', () => store.retryDeliveries(workspace.id, [second], none)],
+      ['retryDeliveries: workspace', () => store.retryDeliveries(none, [second], 1_000)],
       ['dropAbandonedDeliveries: before', () => store.dropAbandonedDeliveries(none)],
     ];
     for (const [what, call] of calls) {
