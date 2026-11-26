@@ -10,6 +10,7 @@ import type { Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from '
  * - `notifyDone`: the e-mail when a note is done (FRU-604), offered where anybody writes.
  * - `visitorNotesPerHour`: the notes a visitor leaves in an hour, `0` for no limit (FRU-704), a line
  *   of the card « Safeguards ». It counts where anybody writes; a level does not change it.
+ * - `holdVisitorNotes`: a note of a visitor waits for a member before it goes on (FRU-704), the same.
  */
 export type Access = {
   visibility: Visibility;
@@ -18,6 +19,7 @@ export type Access = {
   visitorDelete: VisitorRight;
   notifyDone: boolean;
   visitorNotesPerHour: VisitorNoteLimit;
+  holdVisitorNotes: boolean;
 };
 
 /**
@@ -29,7 +31,9 @@ export type Level = (typeof LEVELS)[number];
 export type ChosenLevel = Exclude<Level, 'collaborate'>;
 
 /** What each level that can be chosen sets: the table of the mockup. */
-export const LEVEL_ACCESS: Readonly<Record<ChosenLevel, Omit<Access, 'notifyDone' | 'visitorNotesPerHour'>>> = {
+export const LEVEL_ACCESS: Readonly<
+  Record<ChosenLevel, Omit<Access, 'notifyDone' | 'visitorNotesPerHour' | 'holdVisitorNotes'>>
+> = {
   closed: { visibility: 'members', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
   'read-only': { visibility: 'everyone', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
   contribute: { visibility: 'everyone', writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'while-open' },
@@ -48,6 +52,7 @@ export function accessOf(site: Site): Access {
     visitorDelete: site.visitorDelete ?? 'never',
     notifyDone: site.notifyDone === true,
     visitorNotesPerHour: site.visitorNotesPerHour ?? 0,
+    holdVisitorNotes: site.holdVisitorNotes === true,
   };
 }
 
@@ -88,7 +93,9 @@ export function sameAccess(draft: Access, stored: Access): boolean {
     sent.visitorEdit === stored.visitorEdit &&
     sent.visitorDelete === stored.visitorDelete &&
     (draft.writers === 'members' ||
-      (draft.notifyDone === stored.notifyDone && draft.visitorNotesPerHour === stored.visitorNotesPerHour))
+      (draft.notifyDone === stored.notifyDone &&
+        draft.visitorNotesPerHour === stored.visitorNotesPerHour &&
+        draft.holdVisitorNotes === stored.holdVisitorNotes))
   );
 }
 
@@ -120,7 +127,13 @@ export function accessBody(origin: string, access: Access): Record<string, unkno
     visitorEdit: writes ? access.visitorEdit : 'never',
     visitorDelete: writes ? access.visitorDelete : 'never',
     // FRU-704: as the e-mail: where only members write, no visitor is counted, and the value stays.
-    ...(writes ? { notifyDone: access.notifyDone, visitorNotesPerHour: access.visitorNotesPerHour } : {}),
+    ...(writes
+      ? {
+          notifyDone: access.notifyDone,
+          visitorNotesPerHour: access.visitorNotesPerHour,
+          holdVisitorNotes: access.holdVisitorNotes,
+        }
+      : {}),
   };
 }
 

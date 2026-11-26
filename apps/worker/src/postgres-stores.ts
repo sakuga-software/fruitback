@@ -3,6 +3,7 @@ import type { Kv } from './kv.ts';
 import type { InstanceAdminReads } from './instance-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
+import type { HeldNotes } from './held-notes.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { AttachmentStore } from './attachments.ts';
@@ -289,6 +290,21 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     toCheck: true,
     pageOfNote: true,
     taskOf: true,
+  });
+}
+
+/** The notes of visitors that wait for a member (FRU-704): `held-notes-postgres.ts`, loaded at the first call. */
+export function postgresHeldNotes(url: string, schema: string): HeldNotes {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./held-notes-postgres.ts')).createPostgresHeldNotes(database), {
+    hold: true,
+    list: true,
+    count: true,
+    take: true,
+    done: true,
+    release: true,
+    sweep: true,
   });
 }
 

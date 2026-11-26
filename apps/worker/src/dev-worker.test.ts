@@ -287,7 +287,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
 
     const made = await set({ visitorNotesPerHour: 5 });
     assert.equal(made.status, 200);
-    assert.deepEqual(await made.json(), { id: DEV_GUARDS_SITE, visitorNotesPerHour: 5 });
+    assert.deepEqual(await made.json(), { id: DEV_GUARDS_SITE, visitorNotesPerHour: 5, holdVisitorNotes: false });
     const answers: number[] = [];
     for (let index = 0; index < 6; index += 1) answers.push((await send(DEV_GUARDS_SITE, `g_${index}`)).status);
     assert.deepEqual(answers, [201, 201, 201, 201, 201, 201].fill(429, 5));
@@ -298,8 +298,16 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.deepEqual(await (await set({ visitorNotesPerHour: 0 })).json(), {
       id: DEV_GUARDS_SITE,
       visitorNotesPerHour: 0,
+      holdVisitorNotes: false,
     });
     assert.equal((await send(DEV_GUARDS_SITE, 'g_after')).status, 201);
+    // FRU-704: « Hold new visitor notes »: the next note of a visitor waits for a member.
+    assert.equal(
+      ((await (await set({ holdVisitorNotes: true })).json()) as { holdVisitorNotes: boolean }).holdVisitorNotes,
+      true,
+    );
+    assert.equal((await send(DEV_GUARDS_SITE, 'g_held')).status, 202);
+    assert.equal((await set({ holdVisitorNotes: 'yes' })).status, 400);
   });
 
   it('does not start under NODE_ENV=production', async () => {

@@ -1,5 +1,5 @@
 {
-  "id": "9c8ed238-41a8-4ec7-b35e-f568b8849f51",
+  "id": "7a8a2cbf-b13a-42cf-9719-ace2d0187056",
   "prevId": "a416d586-ab9b-4c00-b418-7dfd2a88b61f",
   "version": "7",
   "dialect": "postgresql",
@@ -1485,6 +1485,120 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.held_notes": {
+      "name": "held_notes",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note_id": {
+          "name": "note_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_visitor": {
+          "name": "author_visitor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "held_at": {
+          "name": "held_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "held_notes_by_workspace": {
+          "name": "held_notes_by_workspace",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "held_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "held_notes_by_time": {
+          "name": "held_notes_by_time",
+          "columns": [
+            {
+              "expression": "held_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "held_notes_site_id_fkey": {
+          "name": "held_notes_site_id_fkey",
+          "tableFrom": "held_notes",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "held_notes_pkey": {
+          "name": "held_notes_pkey",
+          "columns": [
+            "site_id",
+            "note_id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -3357,6 +3471,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 10
+        },
+        "hold_visitor_notes": {
+          "name": "hold_visitor_notes",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -4230,12 +4351,6 @@
         "locale": {
           "name": "locale",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "appearance": {
-          "name": "appearance",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

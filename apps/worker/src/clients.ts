@@ -152,6 +152,11 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * site of a workspace where anybody writes says it. Absent: no limit of the hour.
    */
   visitorNotesPerHour?: number;
+  /**
+   * FRU-704: a note of a visitor with no account waits for a member before it goes to its place
+   * (`held-notes.ts`). Only a site of a workspace where anybody writes says it. Absent: it goes at once.
+   */
+  holdVisitorNotes?: true;
 };
 export type ClientMap = Record<string, ClientConfig>;
 

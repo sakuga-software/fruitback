@@ -181,6 +181,8 @@ clear unless this list says otherwise:
   the address of the session only to a session of a member of the workspace whose role sees the
   tracker. It is added to each answer after the cache, so a reader never gets it from the answer
   of another; and only an `https` address is given.
+- The notes of visitors that wait for a member, on a site that holds them: the note and the digest
+  of the key of the browser, in `held_notes`, until a member answers it, and 30 days at most.
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit. For the notes of
   a visitor in an hour, the address and the digest of the key of the browser, with the
   site, for two hours.
@@ -2711,6 +2713,48 @@ the widget says « Send it again later » with the text kept.
   limit of the requests of an address (`RATE_LIMIT_PER_MINUTE`) still holds under it.
 - The guard is taken out of a copy of `feedback-routes.ts`, and the 11th note goes:
   test:`fails without the count of the route (planted violation)`.
+
+### The notes of visitors that wait for a member (FRU-704)
+
+The line « Hold new visitor notes » of the card « Safeguards » keeps a note of a visitor out of the
+tracker until a member approves it. Off by default, as the mockup draws it.
+
+- Which notes. A note or a batch sent with no token, on a site that takes the notes of anybody and
+  holds them. `POST /feedback` answers `202` with `held: true`, after the count of the hour, and
+  writes nothing to the tracker. A member, and a page that signs its reporter, send at once.
+  test:`keeps a note of a visitor out of the tracker, answers 202, and shows it in the queue « To approve »`.
+  test:`sends a note of a member at once, and holds nothing of it`.
+- What is kept, and where. The note as the route would have sent it (its text, its page, its anchor,
+  the name the visitor typed) and the digest of the key of the browser, never the key, in the table
+  `held_notes` of the database of the worker. A visitor sends no file.
+- Who reads and answers it. `GET /console/workspaces/<id>/held` and `POST …/held/<site>/<note>/approve`
+  or `reject`, for a role that sees the tracker (a member, an admin, an owner), on a site it reads. A
+  guest is refused: it reads no note of a visitor that nobody approved.
+  test:`refuses a guest, and a person of another workspace reads nothing`.
+- Approved, the note goes to the first place of the site as it would have gone at once, and is the
+  visitor's own in the index. One statement claims it first, for an hour, so two members who approve
+  at once send it once; the row goes only once the note is in its place, and only by the claim that
+  sent it. A tracker that refuses it or does not answer, an error, or an approval that stops half way
+  leaves it in the queue. A database that does not take the removal after the send leaves the row
+  claimed: the answer is still `200`, and the note shows again after the hour.
+  test:`lets a late approval neither release nor remove the claim of the next one (review of #987)`.
+  test:`answers 200 for a note sent to its place even when its row is not removed at once (review of #987)`.
+  A release that the database does not take after a failed send leaves the row claimed for the
+  hour too, and the answer still says why the note did not go; a reject that does not remove the
+  row answers an error, as nothing was rejected, and frees its claim, so the note shows again at once
+  (test:`shows a note again at once when its reject does not remove it (review of #987)`).
+  test:`still says why an approval failed when the database does not take the release (review of #987)`.
+  test:`sends an approved note to its place, as the visitor’s own, once`.
+  test:`keeps the note in the queue when its tracker does not answer the approval`.
+  test:`keeps the note when its send throws, and gives it back when an approval stops half way (review of #987)`.
+- Rejected, the row goes, and nothing is sent.
+  test:`removes a rejected note, and sends it nowhere`.
+- How long. 30 days, then the note goes, unanswered: the queue does not show it and an approval does
+  not send it from then, and the sweep of the worker deletes the row within the hour. A site removed
+  takes its held notes with it.
+  test:`forgets a note that waited 30 days, in the queue at once and in the table at the sweep`.
+- The guard is taken out of a copy of `feedback-routes.ts`, and the note goes at once:
+  test:`fails when the route does not hold (planted violation)`.
 
 ### « Looks fixed » and « Still wrong », from the extension (FRU-294)
 

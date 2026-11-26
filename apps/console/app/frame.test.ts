@@ -64,8 +64,12 @@ describe('the sections of the bar (FRU-234, FRU-684)', () => {
     const account = /export const ACCOUNT = '([a-z]+)';/.exec(frame)?.[1];
     assert.equal(account, 'account');
     assert.ok(frame.includes('/${ACCOUNT}`'), 'the menu of the person leads to « My account »');
+    // FRU-704: « To approve » is an entry of « Views », not a section: the bar leads to it.
+    assert.ok(frame.includes('/approve`'), 'the bar leads to « To approve »');
     assert.deepEqual(
-      screens.filter((path) => path !== account && !sections(frame).some((section) => section.path === path)),
+      screens.filter(
+        (path) => path !== account && path !== 'approve' && !sections(frame).some((section) => section.path === path),
+      ),
       [],
     );
     assert.ok(screens.includes('account'), 'the control: « My account » is a screen of a build');

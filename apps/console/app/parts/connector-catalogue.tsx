@@ -1,7 +1,7 @@
 import { type ReactNode, type Ref, useState } from 'react';
 import type { Connector } from '../api';
 import { msg, t } from '../i18n';
-import { Button, Field, IconButton, Menu, ViewTab, folded } from '../ui';
+import { Button, Field, Menu, ViewTab, folded } from '../ui';
 import { useLocale } from '../use-locale';
 import { ConnectorLogo } from '../connector-logos';
 import type { LogoKind } from '../connector-logo-kinds.ts';
@@ -71,6 +71,22 @@ const GROUPS: readonly { id: Group | 'all'; label: string }[] = [
   { id: 'developers', label: msg('Developers') },
 ];
 
+/**
+ * Under 560 px (FRU-727, the phone of the mockup): the search takes a line of its own, 44 px high and
+ * in 16 px, and the groups the next one, which scrolls sideways rather than going on two lines.
+ */
+const NARROW_SEARCH =
+  '@max-[560px]:max-w-none @max-[560px]:basis-full @max-[560px]:[&_input]:h-[44px] @max-[560px]:[&_input]:text-[16px]';
+const NARROW_GROUPS =
+  '@max-[560px]:ml-0 @max-[560px]:w-full @max-[560px]:overflow-x-auto @max-[560px]:[scrollbar-width:none] @max-[560px]:[&_button]:h-[44px]';
+
+/**
+ * A press of a finger reaches a control of 44 px (FRU-727): a button of a tile (24 px) takes presses 10 px
+ * above and under its box, inside the 64 px of the tile.
+ */
+const TOUCH =
+  'pointer-coarse:[&_button]:relative pointer-coarse:[&_button]:after:absolute pointer-coarse:[&_button]:after:-inset-y-[10px] pointer-coarse:[&_button]:after:inset-x-0';
+
 /** The id of the title « Add a connector », which « New connector » scrolls to. */
 export const ADD_TITLE = 'add-title';
 
@@ -113,7 +129,7 @@ export function Catalogue({
   available: boolean;
   /** The kind whose form is open in its tile. */
   adding: Connector['kind'] | undefined;
-  /** The kinds of the connectors of the workspace: their tiles say « Connected ». */
+  /** The kinds of the connectors of the workspace, once for each connector: their tiles count them. */
   connectedKinds: readonly string[];
   offerOf: (entry: Entry) => Offer;
   /** What opens in a tile under its line; `[]` for nothing. */
@@ -139,12 +155,17 @@ export function Catalogue({
   );
 
   return (
-    <section aria-labelledby={ADD_TITLE}>
+    // FRU-727: the head and the tiles follow the width of the section, not the one of the window.
+    <section aria-labelledby={ADD_TITLE} className="@container">
       <div className="mb-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
         <h2 id={ADD_TITLE} className="text-body leading-auto font-semibold">
           {t('Add a connector')}
         </h2>
-        <div className="w-[220px] min-w-0 flex-shrink">
+        {/*
+         * The search grows up to 220 px, and the head goes to a second line where it has no room. Under
+         * 560 px it takes the whole width, 44 px high, in 16 px: iOS zooms on a field in a smaller font.
+         */}
+        <div className={`max-w-[220px] min-w-[160px] flex-[1_1_160px] ${NARROW_SEARCH}`}>
           <Field
             label={t('Search trackers and tools')}
             labelHidden
@@ -156,7 +177,11 @@ export function Catalogue({
             onChange={(event) => setTyped(event.target.value)}
           />
         </div>
-        <div role="group" aria-label={t('Kind of connector')} className="ml-auto flex flex-wrap gap-[2px]">
+        <div
+          role="group"
+          aria-label={t('Kind of connector')}
+          className={`ml-auto flex gap-[2px] ${TOUCH} ${NARROW_GROUPS}`}
+        >
           {GROUPS.map((each) => (
             <ViewTab key={each.id} pressed={group === each.id} onChange={() => setGroup(each.id)}>
               {t(each.label)}
@@ -176,12 +201,15 @@ export function Catalogue({
           {t('No connector matches « {search} ».', { search: typed.trim() })}
         </p>
       ) : (
-        // FRU-690: tiles of 64 px, four in a row at 1440 px, one at 390 px. A tile whose form is
-        // open, or that says why it did not connect, takes the whole row.
-        <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[10px]">
+        // FRU-690: tiles of 64 px, one at 390 px. FRU-727: no tile narrower than 260 px, so that its
+        // button never squeezes its words: four in a row at 1440 px, two at 834 px. A tile whose form
+        // is open, or that says why it did not connect, takes the whole row.
+        <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-[10px]">
           {shownEntries.map((entry) => {
             const under = underOf(entry.kind);
-            const isConnected = connectedKinds.includes(entry.kind);
+            // FRU-727: a workspace can connect a kind more than once (two workspaces of Linear,
+            // two addresses), and the tile counts them.
+            const count = connectedKinds.filter((kind) => kind === entry.kind).length;
 
             return (
               <Tile
@@ -189,7 +217,7 @@ export function Catalogue({
                 entry={entry}
                 detail={detailOf(entry.kind)}
                 offer={offerOf(entry)}
-                connected={isConnected}
+                connected={count}
                 cannot={cannot}
                 typing={adding === entry.kind}
                 under={under}
@@ -215,10 +243,44 @@ function Connect({ name }: { name: string }) {
 }
 
 /**
+ * « Add », for a kind already connected (FRU-727): a screen reader hears what it adds and how many
+ * there are, « Add another Linear (2 connected) ».
+ */
+function addLabel(name: string, count: number): string {
+  return count === 1
+    ? t('Add another {source} (1 connected)', { source: name })
+    : t('Add another {source} ({count} connected)', { source: name, count });
+}
+
+/**
+ * The count of the connectors of a kind, on the top right corner of its logo (FRU-727): a green disc.
+ * The button « Add » says the count to a screen reader; with no button, the words under it say it.
+ */
+function Count({ count, said }: { count: number; said: boolean }) {
+  useLocale();
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        data-count
+        className="absolute -top-[6px] -right-[6px] flex h-[16px] min-w-[16px] items-center justify-center rounded-pill bg-done px-[4px] text-[10px] leading-none font-bold text-on-ink tabular-nums ring-2 ring-surface"
+      >
+        {count}
+      </span>
+      {said ? null : (
+        <span className="sr-only">{count === 1 ? t('1 connected') : t('{count} connected', { count })}</span>
+      )}
+    </>
+  );
+}
+
+/**
  * A tile of the catalogue (FRU-690): the logo in its box of 36 px, the name, one line of what a note
- * becomes there, cut at its end, and the state at the right: « Connected », « Connect », « Soon »,
- * or « Not set up ». A tile that is open (its form, a refusal) takes the whole row, and what opened
- * is under its line.
+ * becomes there, cut at its end, and the state at the right: « Connect », « Soon », or « Not set up ».
+ * A kind already connected (FRU-727) has its count on its logo, and « Add » to connect one more; a
+ * person who cannot add one reads « Connected ». A tile that is open (its form, a refusal) takes the
+ * whole row, and what opened is under its line.
  */
 function Tile({
   entry,
@@ -232,7 +294,8 @@ function Tile({
   entry: Entry;
   detail: string;
   offer: Offer;
-  connected: boolean;
+  /** How many connectors of its kind the workspace has. */
+  connected: number;
   /**
    * The person cannot add a source here: a member, or a worker that cannot keep a key. The tile then
    * offers no button: a line above the tiles says why, and a disabled button would say nothing more.
@@ -247,41 +310,51 @@ function Tile({
   const name = t(entry.name);
   const wide = under.length > 0;
   const why = offer.state === 'unset' ? offer.why : undefined;
+  // « Add » takes the place of « Connected »: a workspace can connect a second one (FRU-727).
+  const adds = connected > 0 && offer.state === 'connect' && !cannot && !typing;
 
   return (
     <li
       className={`flex min-w-0 flex-col rounded-card border border-line bg-surface px-[14px] ${wide ? 'col-span-full pb-[14px]' : ''}`}
       data-source={name}
-      data-state={connected ? 'connected' : offer.state}
+      data-state={connected > 0 ? 'connected' : offer.state}
     >
-      <div className="flex h-[62px] min-w-0 items-center gap-[12px]">
-        <ConnectorLogo kind={entry.kind} />
+      {/* At least 62 px and its 2 px of border: every tile has the height of the others. */}
+      <div className="flex min-h-[62px] min-w-0 items-center gap-[12px]">
+        <span className="relative flex-none">
+          <ConnectorLogo kind={entry.kind} />
+          {/* The label of « Add » says the count, except while it is busy (raised in review). */}
+          {connected > 0 ? <Count count={connected} said={adds && offer.busy === undefined} /> : null}
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
           <span className="flex min-w-0 items-center gap-[6px]">
             <span className="truncate text-body leading-auto font-semibold">{name}</span>
-            {entry.fresh === true && !connected ? <Pill tone="alert">{t('New')}</Pill> : null}
+            {entry.fresh === true && connected === 0 ? <Pill tone="alert">{t('New')}</Pill> : null}
           </span>
           {/* One line, cut at its end; the whole sentence is the tooltip. */}
           <span className="truncate text-hint leading-auto text-muted" data-tile-line>
             {why ?? t(entry.short)}
           </span>
         </span>
-        <span className="flex flex-none items-center gap-[4px]">
-          {connected ? <Pill tone="done">{t('Connected')}</Pill> : null}
-          {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
-          {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
-          {/* A workspace can connect a second one: another team of Linear, another address. */}
-          {offer.state === 'connect' && !cannot && !typing && connected ? (
-            <IconButton
+        <span className={`flex flex-none items-center gap-[4px] ${TOUCH}`}>
+          {connected > 0 && !adds ? <Pill tone="done">{t('Connected')}</Pill> : null}
+          {offer.state === 'soon' && connected === 0 ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
+          {offer.state === 'unset' && connected === 0 ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
+          {/* A workspace can connect a second one: another workspace of Linear, another address. */}
+          {adds ? (
+            <Button
+              tone="outline"
               size="small"
-              label={t('Connect another {source}', { source: name })}
+              // While the browser leaves for the service, the button says where it goes (raised in
+              // review): a label would hide its words.
+              {...(offer.busy === undefined ? { label: addLabel(name, connected) } : {})}
               disabled={offer.busy !== undefined}
               onClick={offer.primary}
             >
-              <NoteIcon name="add" />
-            </IconButton>
+              {offer.busy ?? t('Add')}
+            </Button>
           ) : null}
-          {offer.state === 'connect' && !cannot && !typing && !connected ? (
+          {offer.state === 'connect' && !cannot && !typing && connected === 0 ? (
             <>
               <Button tone="outline" size="small" disabled={offer.busy !== undefined} onClick={offer.primary}>
                 {offer.busy ?? <Connect name={name} />}

@@ -918,6 +918,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites,
     and the notes that went there: « 2 sites · 31 notes »; none for a routine), its health, « Last
     delivery », and at its end « Retry » and « … ».
+  - **On a tablet and a phone** (FRU-727, the mockups at 834 and 390 px attached to the ticket). The
+    columns follow the width of the table, a container query as on Sites: under 900 px « Used by » is
+    0 px wide and its head is said to a screen reader only, so « Retry » and « … » stay in the frame
+    at 834 px. Under 680 px a row is a card, drawn on the `data-stacked` of `DataTable` (its values are
+    `!important`, since the kit names the frame in its selectors): the logo of 32 px at its left, the
+    name with « … » at its top right, the account, then the health, the sites and the last delivery
+    on one line (« 2 sites · 31 notes · 12 min ago »; the dot ends the sites, so a line that goes on
+    starts with the time), and « Retry » on a line of its own at the right. With a finger
+    (`pointer: coarse`) « … », « Retry » and the buttons of a tile take a press 10 px around their 24
+    px, so 44 px, and « Retry » and « … » stand 20 px apart. The frame of the console (the bar folded
+    under 1024 px) is not this screen's: the header of the mockups (the path « Acme / Connectors »
+    on a tablet, 56 px and « New connector » as an icon on a phone) is a change of every screen.
   - **The health says only what the worker says.** Since FRU-714 the worker says it with the list:
     `health` of each connector, `{ failing, notes?, lastDeliveredAt? }`. « Needs attention » when the
     tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not delivered »
@@ -946,12 +958,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     another number; before it, the bar shows the count of its own read (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
-    and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box
+    and Developers. Its tiles are 64 px, never narrower than 260 px (FRU-727: a button no longer
+    squeezes their words), four in a row at 1440 px, two at 834 px, one at 390 px. The head goes on a
+    second line where it has no room, and its search grows up to 220 px; under 560 px the search
+    takes the whole width, 44 px high in 16 px (iOS zooms on a smaller font), and the groups stay on
+    one line that scrolls sideways. A tile: the logo in a box
     of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
-    its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
-    can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
+    its tooltip), and its state: « Add » for a kind already connected, « Connect », « Soon » (no connector of this
     kind on this worker), or « Not set up » (the worker has the kind, and its operator did not set
-    it up: the line then says so). The routine says « New » beside its name. Where a tracker
+    it up: the line then says so). The routine says « New » beside its name. **A kind is connected
+    more than once** (FRU-727): two workspaces of Linear, two addresses. The worker already gives one
+    entry of `GET …/connectors` for each connection, with its account (its `label`), so the table has
+    a row for each, and the account tells them apart. The tile of a connected kind counts them in a
+    green disc of 16 px on the top right corner of its logo (`aria-hidden`), and offers « Add » in
+    place of « Connected » and « + »: it does what « Connect » does (the consent of Linear again, the
+    form of an address), and a screen reader hears « Add another Linear (2 connected) ». A person
+    who cannot add one (a member, a worker that cannot keep a key) reads « Connected », and hears the
+    count in words. Where a tracker
     connects two ways (the consent, a key or a token), « Connect » is the consent and a menu beside
     it offers the other. **The form of a source opens in its tile, which then takes the whole row**,
     and so does the sentence of a way back that went wrong (`LINEAR_RETURNS`, `GITHUB_RETURNS`,
@@ -975,7 +998,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     places, read only, with a link to the Sites screen (FRU-399) and « Statuses » on the row of each
     site of a Linear (FRU-478); the notes that did not arrive; « Use an API key ». « Connect » is
     written many times, so each button also holds the name of its source for a screen reader.
-    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe.
+    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe; `console-connectors-narrow.spec.ts` the tablet, the cards of a phone and the presses of a finger (FRU-727).
     **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
     admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
     workspace), and an empty name gives it back the name of its kind. `connectorName` of
@@ -1669,6 +1692,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
+- **« Hold new visitor notes » is the second line of « Safeguards » (FRU-704)**, a switch, sent where
+  anybody writes, « n/a » elsewhere. Its notes wait in the screen « To approve » (`/w/<id>/approve`),
+  an entry of « Views » in the bar for a role that sees the tracker, shown while notes wait or while
+  it is on screen: the bar reads `…/held/count` once by workspace, and the screen tells it each new
+  count. A note shows its site, its page, its author and its age; « Approve » and « Reject » answer
+  it, and a refusal says why, with the note still there.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».
