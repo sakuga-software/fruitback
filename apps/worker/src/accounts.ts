@@ -1,6 +1,7 @@
 import { isOneOf } from './one-of.ts';
 import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
+import type { AppearanceChoice } from './appearance.ts';
 import { NOTE_STAGES, type NoteStage, type TaskIssue } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 import { PLUGIN_KINDS } from './trackers/kinds.ts';
@@ -647,6 +648,13 @@ export type AccountStore = {
   isInstanceAdmin(account: string): Promise<boolean>;
   /** The language the person chose. `undefined` removes the choice. */
   setLocale(account: string, locale: string | undefined): Promise<void>;
+  /**
+   * The look of the console the person chose (FRU-716), as it was kept: an object, or `undefined`
+   * for none. Read for `GET /console/me` alone, so no other answer carries it.
+   */
+  appearanceOf(account: string): Promise<Record<string, unknown> | undefined>;
+  /** Keeps the look of the console the person chose, checked by `readAppearanceChoice`. `undefined` removes it. */
+  setAppearance(account: string, appearance: AppearanceChoice | undefined): Promise<void>;
   /**
    * The name the person chose for their notes (FRU-249), read by `readPersonName`. A later sign-in
    * does not write over it: a provider gives a name only to an account that has none.

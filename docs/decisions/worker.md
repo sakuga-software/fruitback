@@ -4335,6 +4335,25 @@ client map were refused together at boot.
   link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
   `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.
 
+## The look of the console, kept with the account (FRU-716)
+
+### The rules, in short
+
+- `POST /console/me/appearance {appearance}` keeps the look of the console of the person of the
+  cookie, and nobody else, as `/console/me/locale` keeps the language. `{appearance: null}` takes it
+  away: the default look. No `appearance` at all is `400`, as no `locale` is.
+- A write is a whole appearance: the eight fields, each a value of `APPEARANCE_CHOICES` of
+  `appearance.ts`, and no other field (`readAppearanceChoice`). Anything else is `400
+  invalid-appearance`. `apps/console/app/appearance-account.test.ts` holds the lists of the console
+  and of the worker together.
+- It is the column `appearance` of `user` (`jsonb`, migration `user_appearance`), an additional
+  field of better-auth with `input: false`, as `locale`: the comparison of `auth-schema.test.ts`
+  with the migration of better-auth holds it. Empty for every account of before: no row moves.
+- `GET /console/me` answers it in `account.appearance`, read by `appearanceOf` beside the
+  memberships: one query by the primary key, at that route alone. `account(id)`, which every route
+  reads, does not read it, so no other answer carries it. A read gives back what was kept; the
+  console reads each field again, and a field it no longer knows is its default.
+
 ## A provider of another address, confirmed (FRU-415, step 1)
 
 ### The rules, in short

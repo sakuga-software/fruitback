@@ -57,6 +57,7 @@ describe('the body of a route of the console (FRU-506)', () => {
 
     for (const path of [
       '/console/me/locale',
+      '/console/me/appearance',
       '/console/me/name',
       '/console/me/emails',
       '/console/workspaces',

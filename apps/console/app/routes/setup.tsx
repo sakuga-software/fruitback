@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { API, type Me, type Site, type Workspace, call, myInvitations, readSite, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
+import { adoptAppearance } from '../appearance';
 import { InstallOptions } from '../install-options';
 import {
   type SetupCalls,
@@ -73,7 +74,14 @@ let resolving: Promise<Stage> | undefined;
  * `known`, and two resolutions in flight would ask for each twice.
  */
 function resolveOnce(known: string | undefined): Promise<Stage> {
-  resolving ??= resolveStage(CALLS, (me) => adoptLanguage(me.account, saveLanguage), known).finally(() => {
+  resolving ??= resolveStage(
+    CALLS,
+    (me) => {
+      adoptLanguage(me.account, saveLanguage);
+      adoptAppearance(me.account);
+    },
+    known,
+  ).finally(() => {
     resolving = undefined;
   });
 

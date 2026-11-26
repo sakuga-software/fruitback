@@ -20,11 +20,13 @@ import {
   type Tint,
   applyAppearance,
   choosePreset,
+  keepWithAccount,
   keptAppearance,
   presetOf,
   sidebarPalette,
   systemIsDark,
 } from '../appearance';
+import { saveAppearance } from '../api';
 import { msg, t } from '../i18n';
 import { SettingsIcon } from '../settings-icons';
 import { Button, ColourPick, PicturePick, Problem, Segments } from '../ui';
@@ -68,8 +70,8 @@ const DENSITY_NAMES: Readonly<Record<Density, string>> = {
  * Settings › Appearance (FRU-694, the mockup « Apparence »): the look of the console for the person
  * alone. « Theme », five themes drawn in small; « Customize », one row per setting: the mode, the tint
  * of the sidebar, the accent, the density of the rows, the radius and the size of the text, and
- * « Reset ». Each choice shows at once: `appearance.ts` writes the tokens on `<html>`, and keeps the
- * choice in this browser until the account keeps it (FRU-716).
+ * « Reset ». Each choice shows at once: `appearance.ts` writes the tokens on `<html>` and keeps a copy
+ * in this browser, and the account keeps the choice (FRU-716), so another browser shows it too.
  */
 export default function AccountAppearance() {
   useLocale();
@@ -102,10 +104,14 @@ export default function AccountAppearance() {
   // The browser refused to keep the last choice (a private window, a full storage): it shows in this
   // tab only, and the page says so (raised in review).
   const [unkept, setUnkept] = useState(false);
+  // FRU-716: the account did not take the last choice (no answer, a refusal). It shows here, and the
+  // next choice sends the whole appearance again.
+  const [unsaved, setUnsaved] = useState(false);
   const choose = (next: Appearance) => {
     latest.current = next;
     setAppearance(next);
     setUnkept(!applyAppearance(next, document.documentElement, storage(), systemIsDark()));
+    void keepWithAccount(next, saveAppearance).then((heard) => setUnsaved(!heard));
   };
   // A press builds on the last choice known, made here or in another tab, and not on the state drawn,
   // which renders a moment later: the order of the events of a change elsewhere never loses it
@@ -123,6 +129,11 @@ export default function AccountAppearance() {
         {unkept ? (
           <Problem>
             {t('This browser does not keep your choice: it shows in this tab only, until you close it.')}
+          </Problem>
+        ) : null}
+        {unsaved ? (
+          <Problem>
+            {t('Your account did not keep this choice: other browsers do not show it. Choose again to retry.')}
           </Problem>
         ) : null}
         <SettingsCard id="theme-title" icon="appearance" title={t('Theme')}>

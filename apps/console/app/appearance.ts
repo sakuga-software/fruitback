@@ -10,10 +10,13 @@
  * variables `--sidebar-*`, which follow the page unless a tint sets them. So an ink sidebar on a light
  * page writes its words light, and its focus ring stays visible on it.
  *
- * Where the choice is kept: the mockup keeps it with the account (« Only for you, on this account »).
- * The worker keeps no appearance yet, so the choice is kept in this browser (`localStorage`) until
- * FRU-716 adds it to the account. `public/appearance.js` writes the kept tokens on `<html>` before
- * the first paint, so a page never shows Slate first and the chosen theme after.
+ * Where the choice is kept (FRU-716): with the account (« Only for you, on this account »), by
+ * `POST /console/me/appearance`, and `GET /console/me` answers it. Each answer of `/console/me`
+ * writes the choice of the account in this browser (`adoptAppearance`), or takes the one kept here
+ * away when the account has none: the choice of one account never shows for another one in this
+ * browser. A sign-out takes it away too. The copy in this browser (`localStorage`) is what
+ * `public/appearance.js` writes on `<html>` before the first paint, so a page never shows Slate first
+ * and the chosen theme after.
  *
  * Every colour is a value here, in a `.ts` file: a screen writes the name of a token, never a value
  * (`tokens.test.ts`). `appearance.test.ts` computes the contrast of every pair of every theme, tint
@@ -446,7 +449,7 @@ export function variablesOf(appearance: Appearance, preset: PresetId): Record<st
   return written;
 }
 
-/** Where this browser keeps the choice, until the account keeps it (FRU-716). */
+/** Where this browser keeps its copy of the choice of the account, for `public/appearance.js`. */
 export const STORAGE_KEY = 'fruitback.appearance';
 
 /**
@@ -566,4 +569,110 @@ export function followAppearance(): () => void {
     media?.removeEventListener('change', again);
     window.removeEventListener('storage', onStorage);
   };
+}
+
+/** Sends a choice to the account, `null` for the default. `false` when the account did not take it. */
+export type SaveAppearance = (appearance: Appearance | null) => Promise<boolean>;
+
+/**
+ * Sends each choice to the account (FRU-716), one request at a time. A choice made while one is on
+ * its way waits for it, and only the last one waiting leaves: a run of presses on the accents sends
+ * two requests, not one per press, and never lands out of order. Answers whether the account took the
+ * last choice made.
+ */
+export function appearanceSender(save: SaveAppearance): {
+  send: (appearance: Appearance) => Promise<boolean>;
+  /** A choice is on its way, or waits: what the account answers is older than what is on screen. */
+  busy: () => boolean;
+} {
+  let flight: Promise<boolean> | undefined;
+  let waiting: Appearance | undefined;
+  const one = async (appearance: Appearance): Promise<boolean> =>
+    save(isDefault(appearance) ? null : appearance).catch(() => false);
+  const drain = async (): Promise<boolean> => {
+    let heard = false;
+    while (waiting !== undefined) {
+      const next = waiting;
+      waiting = undefined;
+      heard = await one(next);
+    }
+
+    return heard;
+  };
+  // Every caller gets the answer to the last request of the run, which carries the last choice.
+  const send = (appearance: Appearance): Promise<boolean> => {
+    waiting = appearance;
+    flight ??= drain().finally(() => {
+      flight = undefined;
+    });
+
+    return flight;
+  };
+
+  return { send, busy: () => flight !== undefined };
+}
+
+/** The sender of this tab, set by `keepWithAccount`; `adoptAppearance` waits behind it. */
+let sender: ReturnType<typeof appearanceSender> | undefined;
+
+/** Sends `appearance` to the account through the one sender of this tab. */
+export function keepWithAccount(appearance: Appearance, save: SaveAppearance): Promise<boolean> {
+  sender ??= appearanceSender(save);
+
+  return sender.send(appearance);
+}
+
+/**
+ * Writes the choice an account holds on this page and in this browser (FRU-716), or the default when
+ * it holds none: the choice another account left in this browser goes. A choice still on its way to
+ * the account wins: the answer read is older than it. A value the console does not know is read field
+ * by field (`readAppearance`).
+ */
+export function adoptAppearance(
+  account: { appearance?: unknown },
+  root: { style: Pick<CSSStyleDeclaration, 'setProperty' | 'removeProperty'> } | undefined = pageRoot(),
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined = browserStorage(),
+  systemDark = systemIsDark(),
+): void {
+  if (sender?.busy() === true) return;
+  const chosen = readAppearance(account.appearance);
+  // The same choice as the copy of this browser: nothing to write, and no `storage` event elsewhere.
+  if (sameAppearance(chosen, keptAppearance(storage)) && kept(storage) === !isDefault(chosen)) return;
+  applyAppearance(chosen, root ?? NO_ROOT, storage, systemDark);
+}
+
+/** A sign-out (FRU-716): the next person of this browser starts from the default look. */
+export function forgetAppearance(
+  root: { style: Pick<CSSStyleDeclaration, 'setProperty' | 'removeProperty'> } | undefined = pageRoot(),
+  storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = browserStorage(),
+): void {
+  applyAppearance(DEFAULT_APPEARANCE, root ?? NO_ROOT, storage, false);
+}
+
+/** `<html>`, or none outside a page. */
+function pageRoot(): HTMLElement | undefined {
+  return typeof document === 'undefined' ? undefined : document.documentElement;
+}
+
+const NO_ROOT = { style: { setProperty: () => {}, removeProperty: () => '' } };
+
+function sameAppearance(one: Appearance, other: Appearance): boolean {
+  return (Object.keys(DEFAULT_APPEARANCE) as (keyof Appearance)[]).every((key) => one[key] === other[key]);
+}
+
+/** Whether this browser holds a copy at all. */
+function kept(storage: Pick<Storage, 'getItem'> | undefined): boolean {
+  try {
+    return (storage?.getItem(STORAGE_KEY) ?? null) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function browserStorage(): Storage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
 }

@@ -14,6 +14,7 @@ import {
 } from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
+import { adoptAppearance } from '../appearance';
 import { extensionInstallFor } from '../extension-store';
 import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
@@ -139,6 +140,7 @@ export default function WorkspaceFrame() {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/sign-in', { replace: true });
       adoptLanguage(me.data.account, saveLanguage);
+      adoptAppearance(me.data.account);
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });
       setContext({ me: me.data, workspace });

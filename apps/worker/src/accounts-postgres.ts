@@ -110,6 +110,7 @@ import { excerptOf } from './notes-index.ts';
 import { changedTaskFields, ownStatusName } from './note-events.ts';
 import { queueTaskEvents } from './note-events-postgres.ts';
 import { StoreError } from './store.ts';
+import { keptAppearanceOf } from './appearance.ts';
 import { MAX_LABELS, type TaskChange, type TaskLabel } from './task-fields.ts';
 
 /**
@@ -908,6 +909,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .update(user)
           .set({ locale: locale ?? null, updatedAt: new Date() })
+          .where(eq(user.id, person)),
+      );
+    },
+
+    async appearanceOf(person) {
+      const rows = await run((db) => db.select({ appearance: user.appearance }).from(user).where(eq(user.id, person)));
+
+      return keptAppearanceOf(rows[0]?.appearance);
+    },
+
+    async setAppearance(person, appearance) {
+      await run((db) =>
+        db
+          .update(user)
+          .set({ appearance: appearance ?? null, updatedAt: new Date() })
           .where(eq(user.id, person)),
       );
     },
