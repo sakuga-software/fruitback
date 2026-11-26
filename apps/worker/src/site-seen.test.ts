@@ -161,9 +161,11 @@ describe('the figures of the page of a site (FRU-721)', () => {
   it('says the oldest open note, the notes of 30 days, and those not delivered to whoever sees the tracker', async () => {
     const { world, index, alice, gina, workspace, site } = await aSite();
     const hook = await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.test', sealed: 'x' });
-    // Notes 0 to 5, one each 10 days: 0 to 3 are in the last 30 days, note 3 at the first instant of
-    // them. Note 5 (50 days) is done, note 4 (40 days) is the oldest open one. Notes 0 and 4 did not
-    // arrive; of the last 30 days, note 0.
+    // Notes 0 to 5, left 0, 10, 20, 29, 40 and 50 days ago: 0 to 3 are in the last 30 days. Note 5 is
+    // done, note 4 is the oldest open one. Notes 0 and 4 did not arrive; of the last 30 days, note 0.
+    // The route reads the clock of the process: the dates are counted from it, and none is on an edge.
+    const now = Date.now();
+    const ages = [0, 10, 20, 29, 40, 50];
     const stages = ['new', 'todo', 'done', 'progress', 'new', 'done'] as const;
     for (let i = 0; i < 6; i += 1) {
       const note = noteFixture({ id: `sd_fig${i}` });
@@ -180,7 +182,7 @@ describe('the figures of the page of a site (FRU-721)', () => {
             stage: stages[i] as (typeof stages)[number],
           },
         ],
-        NOW - i * 10 * DAY,
+        now - (ages[i] as number) * DAY,
       );
       if (i === 0 || i === 4) {
         await world.accounts.enqueueDelivery(
@@ -190,10 +192,9 @@ describe('the figures of the page of a site (FRU-721)', () => {
         );
       }
     }
-    world.context = { ...world.context, now: NOW };
 
     const owner = await pageOf(world, workspace, site.id, alice.token);
-    assert.equal(owner.oldestOpenAt, new Date(NOW - 40 * DAY).toISOString());
+    assert.equal(owner.oldestOpenAt, new Date(now - 40 * DAY).toISOString());
     assert.deepEqual(owner.recent, { days: 30, notes: 4, undelivered: 1 });
     // A guest: the same notes, nothing of the deliveries.
     const guest = await pageOf(world, workspace, site.id, gina.token);
