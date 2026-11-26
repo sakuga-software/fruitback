@@ -405,6 +405,13 @@ degradation the ticket asked to have written down rather than discovered.
 - **Absent and empty mean different things.** No `comments` field at all means the worker was not
   asked for them, and the widget says nothing; `[]` means it asked and there were none, and the
   widget says so. A client with replies switched off must not read as a team that never answered.
+- **A reply has one way to its store** (FRU-712): `writeReply` of `reply-routes.ts` reads the note in
+  its store, asks whether that store takes a reply, and writes it there. The widget
+  (`POST /feedback/<id>/replies`) and the panel of a note in the console
+  (`POST /console/workspaces/<id>/notes/<note>/replies`, `console-replies.ts`) both call it; the
+  console reaches it through the seam `replyToNote` that `app.ts` hands to `handleConsole`, as
+  `readNote`. Whoever reads the note in the console replies, named by their account; a task written
+  by hand is in no thread and takes none, as for `reply_to_note` of `/mcp`.
 - **`showComments` is on by default and is a real switch**, per client or worker-wide
   (`FRUITBACK_HIDE_COMMENTS=1`). Under `read: 'public'` it is the only thing between an issue thread
   and anyone who can load the client's page; under `read: 'authenticated'` (FRU-40) it is back to

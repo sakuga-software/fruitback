@@ -185,7 +185,7 @@ export type CallerChecks = {
   ) => Promise<string | undefined>;
   /** Whether the caller is a guest, who reads no reference of a tracker: `hidesTracker` of `app.ts`. */
   hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
-  /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
+  /** The longest reply: `REPLY_LENGTH` of `reply-text.ts`, where the side panel of the extension reads it. */
   REPLY_LENGTH: number;
   /**
    * FRU-721: the widget read a page of this site: when it was seen there, and by which way
