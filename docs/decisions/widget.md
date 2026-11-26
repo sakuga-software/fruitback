@@ -139,6 +139,48 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
   from `dom.ts`.
 
+## The keys typed in the widget stay in the widget (FRU-726)
+
+### The rules, in short
+
+- **A key typed in a field of the widget never reaches a shortcut of the page.** A field is a text
+  input, a `textarea`, a `select`, an element you can edit, or a `textbox` or `searchbox`; a box, a
+  radio, a button, and a button that says `combobox` are not. `keepTyping` (`key-guard.ts`), set by
+  `createCaptureHost`, listens on the `window` in the capture phase for `keydown`, `keypress`,
+  `keyup`, `beforeinput` and `input`. For an event whose own target (`composedPath()[0]`) is a field
+  of the root, it calls `stopImmediatePropagation()`, then gives the field a copy of the event.
+- **The copy does not leave the Shadow root** (`composed: false`). The handlers of the widget run on
+  it, and a `preventDefault` of the copy cancels the key. The browser types the text, pastes, and
+  composes with an IME from the key itself: nobody cancelled it, and an untrusted copy types nothing.
+- **A handler of the widget on the document does not hear a key of its fields.** The thread (Escape)
+  and the Tab trap of a modal dialog (a Tab from the search of the list) hear the copy again on the
+  root, through `isTypingCopy`. A new one does the same. The capture mode does not: a field of the
+  widget keeps its arrows during a capture.
+- **The keys of the widget stay off while a field of the page has focus** (`pageFieldHasFocus`): the
+  capture mode leaves the arrows, Enter, Space and Escape to it, and the thread does not close on its
+  Escape. Tab still comes back into an open popover or panel, which are modal.
+- **Covered**: every handler of the page on the document, in either phase, and on the window in the
+  bubble phase, or in the capture phase when set after the widget. That is React, `hotkeys-js`,
+  Mousetrap and the console. **Not covered**: a handler of the page on the window, in the capture
+  phase, set before the widget. It runs first, and nothing can come before it.
+  `e2e/widget-host-shortcuts.spec.ts` measures the five places, and that the widget keeps Escape,
+  Cmd or Ctrl and Enter, a paste and an IME.
+
+### The reasons, and the history
+
+- On the console, « C » opens « New task » (FRU-657). Its test read `event.target`, and the target of
+  a key typed in the Shadow root is the host element, which is no field. So each « c » of a note
+  opened « New task » and was cancelled: Mathieu's note lost its « c ». Most sites and libraries test
+  `event.target` the same way, so the fix belongs to the widget, for every host.
+- **Stopping the key at the Shadow root is not enough.** A handler of the document in the capture
+  phase runs before the key reaches the root. Only the window comes before the document.
+- **`stopImmediatePropagation()` alone on the window kills the keys of the widget too**: the key
+  never reaches the field, so Enter sends nothing and Escape closes nothing. Hence the copy. It
+  carries `key`, `code`, `location`, `repeat`, `isComposing` and the four modifiers. It carries no
+  `keyCode` (the widget reads none) and is not `isTrusted` (the widget tests none).
+- The sidebar search stopped its keys in the bubble phase since FRU-129. That still holds; the
+  capture mode, on the document in the capture phase, heard them before.
+
 ## The look, and the one thing a host may change
 
 - **`theme.ts` owns every colour, shadow, radius, font family and duration** (FRU-35, FRU-36). They were
