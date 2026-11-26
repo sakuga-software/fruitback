@@ -116,7 +116,7 @@ test.describe('the views of the person (FRU-723)', () => {
       await there.click();
       await expect(other.page).toHaveURL(`${CONSOLE}/w/${workspace}/notes?stage=new&q=menu`);
       await expect(there).toHaveAttribute('aria-current', 'page');
-      await expect(other.page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('menu');
+      await expect(other.page.getByRole('searchbox', { name: 'Search notes' })).toHaveValue('menu');
     } finally {
       await finished(other.context, undefined);
       await other.context.close();
