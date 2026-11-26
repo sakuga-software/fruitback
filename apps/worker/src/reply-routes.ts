@@ -18,6 +18,8 @@ import { checkedOf } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
   type CheckVerdict,
+  type NewReply,
+  type NoteLookup,
   type NoteStore,
   StoreError,
   findNote,
@@ -26,7 +28,8 @@ import {
   takesStatuses,
 } from './store.ts';
 import { OWN_SOURCE, isBuiltIn, readSiteStatus } from './site-statuses.ts';
-import { DEFAULT_NOTE_STAGE, type NoteStage } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, type NoteComment, type NoteStage } from '@fruitback/shared';
+import type { ClientConfig, ClientPolicy } from './clients.ts';
 
 /**
  * The routes that write under a note (FRU-363), out of `app.ts` so that a review reads them in one
@@ -91,28 +94,71 @@ export async function postReply(
       if (ended !== undefined) return ended;
     }
 
-    const targets = targetsOf(route.client);
-    for (const target of targets) {
-      const found = await findNote(store, { url, clientId, id: issue, by: 'issue' }, target, route.policy);
-      if (found === undefined) continue;
-      if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+    const written = await writeReply(
+      { store, kv, targets: targetsOf(route.client), policy: route.policy },
+      { url, clientId, id: issue, by: 'issue' },
+      { body, author: who.author },
       // Counted once the reply is one the worker would take: a refusal costs no reply of the minute.
-      if (who.author.kind === 'visitor' && !(await checkReplyLimit(kv, context.clientIp))) {
-        return json(429, { error: 'rate-limited' }, corsHeaders);
-      }
-      const comment = await store.reply?.({ issue, clientId }, { body, author: who.author }, target, route.policy);
-      if (comment === undefined) break;
-      await invalidatePages(kv, [url]);
+      () => (who.author.kind === 'visitor' ? checkReplyLimit(kv, context.clientIp) : Promise.resolve(true)),
+    );
 
-      return json(201, { comment }, corsHeaders);
-    }
-
-    return json(404, { error: 'not-found' }, corsHeaders);
+    return written.ok ? json(201, { comment: written.comment }, corsHeaders) : refusedReply(written.error, corsHeaders);
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
+}
+
+/** What a reply under a note came to (FRU-712): the comment written, or why none was. */
+export type ReplyOutcome =
+  | { ok: true; comment: NoteComment }
+  | { ok: false; error: 'not-found' | 'replies-not-taken' | 'rate-limited' };
+
+/** Where a reply is written: the store, the cache of the reads, and the places of the site of the note. */
+export type ReplyPlaces = {
+  store: NoteStore;
+  kv: Kv;
+  targets: (ClientConfig | undefined)[];
+  policy: ClientPolicy;
+};
+
+/**
+ * Writes a reply under the note that `lookup` names, in the first place of the site that holds it.
+ * This is the one way a reply goes to the store of a note, and so to its tracker: the widget
+ * (`postReply`, FRU-257) and the console (FRU-712) both call it. The caller checks who writes before.
+ *
+ * `admit` is asked once the store would take the reply, before it is written: the limit of the
+ * replies of a visitor. A refusal before that costs nothing.
+ */
+export async function writeReply(
+  places: ReplyPlaces,
+  lookup: NoteLookup,
+  reply: NewReply,
+  admit: () => Promise<boolean> = () => Promise.resolve(true),
+): Promise<ReplyOutcome> {
+  const { store, kv, targets, policy } = places;
+  for (const target of targets) {
+    const found = await findNote(store, lookup, target, policy);
+    if (found === undefined) continue;
+    if (!(await takesReplies(store, target))) return { ok: false, error: 'replies-not-taken' };
+    if (!(await admit())) return { ok: false, error: 'rate-limited' };
+    const comment = await store.reply?.({ issue: found.id, clientId: lookup.clientId }, reply, target, policy);
+    if (comment === undefined) break;
+    await invalidatePages(kv, [lookup.url]);
+
+    return { ok: true, comment };
+  }
+
+  return { ok: false, error: 'not-found' };
+}
+
+/** The answer of a route to a reply that was not written. */
+export function refusedReply(error: Extract<ReplyOutcome, { ok: false }>['error'], headers: Record<string, string>) {
+  if (error === 'replies-not-taken') return json(403, { error }, headers);
+  if (error === 'rate-limited') return json(429, { error }, headers);
+
+  return json(404, { error }, headers);
 }
 
 /** `POST /feedback/<id>/check`: a verdict on a note that the team marked done (FRU-294). */

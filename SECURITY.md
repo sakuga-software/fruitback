@@ -2584,6 +2584,37 @@ the database for a site with no destination.
   session from one address, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
 
+### A reply to a note, from the console (FRU-712)
+
+`POST /console/workspaces/<id>/notes/<note>/replies` with `{ body }` writes a reply under a note,
+from its panel in the console.
+
+- Who. Whoever reads the note in the console: a member of the workspace, of any role, on any site,
+  and a guest only on a site shared with them. A note of another site, a note that is not one and a
+  person of another workspace are `404`, with nothing written, as the read of the note.
+  test:`takes the reply of a guest on a site shared with them, and answers 404 on any other site`.
+- Not a visitor. The route is a route of the console: the cookie of a person, read again in the
+  database at each call, with the `Origin` of the console, as every write of the console. No cookie
+  is `401`, and so is a session of the extension; a cookie sent by another page of the same site, or
+  with no `Origin`, is `403`. A member who left the workspace is `404` with the cookie they held. A
+  suspended workspace writes nothing: the route is behind the one guard of the writes.
+  test:`refuses whoever is not a person of the console of this workspace, and writes nothing`,
+  test:`refuses a member who left the workspace, with the cookie they held`.
+- In whose name. The account of the cookie, as a session of the workspace is named on the page:
+  the name of the account, or its address, and « member of » the workspace. A name in the body is
+  not read. test:`writes the reply of a member in the tracker of the note, named by their account`.
+- Where. The way of a reply from the page (`writeReply` of `reply-routes.ts`): the note is read in
+  its store first, and the reply goes to the place that holds it, its tracker or the database of the
+  worker. There is no second way to send a reply. Where the page takes no reply, the console takes
+  none: a worker or a connector that hides the replies, Slack, GitHub, and a task written by hand,
+  which is in no thread, are `403 replies-not-taken`.
+  test:`answers 403 replies-not-taken when the worker shows no reply, and on a task written by hand`.
+- How much. 1 to 2 000 characters, refused beyond and never cut, as on the page. The reply of a
+  person of the console is not counted apart, as a member's on the page is not: the limit of all the
+  requests applies. test:`takes 1 to 2000 characters, and refuses an empty reply or a longer one, never cut`.
+- Nothing new is kept. The reply is in the tracker or in the database, where a reply from the page
+  is; a store that does not answer is `502`, and the console keeps the text.
+
 ### A visitor known by the key of their browser (FRU-700)
 
 A visitor with no account is told which notes are theirs: « You · this browser ». The worker knows

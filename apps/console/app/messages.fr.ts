@@ -1871,6 +1871,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Note moved by its author': 'Note déplacée par son auteur',
   'Status of the task changed': 'Statut de la tâche changé',
   'Reply to the note': 'Réponse à la note',
+  'Reply to this note': 'Répondre à cette note',
+  'Reply, it posts to {place} too': 'Répondre, la réponse part aussi dans {place}',
+  Send: 'Envoyer',
+  'The reply is too long: {max} characters at most.': 'La réponse est trop longue : {max} caractères au plus.',
+  'This note takes no reply.': 'Cette note ne prend pas de réponse.',
+  'The reply did not leave. Your text is kept: try again in a moment.':
+    'La réponse n’est pas partie. Votre texte est gardé : réessayez dans un instant.',
   'Fields of the task changed': 'Champs de la tâche changés',
   'This address is not in the workspace any more. Choose another one.':
     'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',

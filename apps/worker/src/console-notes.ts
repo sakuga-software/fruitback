@@ -4,6 +4,7 @@ import { json } from './http.ts';
 import { afterStatusMoved, ownKeyOf } from './console-status.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { handleTasks } from './console-tasks.ts';
+import { CONSOLE_REPLY_PATH, type Replier, type ReplyToNote, postConsoleReply } from './console-replies.ts';
 import { isDay, isPriority } from './task-fields.ts';
 import { NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
@@ -31,7 +32,8 @@ import {
  * the index of the notes (FRU-237), the newest first. `counts=none` leaves out `total` and `counts`,
  * which read the whole filter: the console asks for them on the first page only (FRU-502). `POST …/notes/<note>/retry` sends again a note
  * whose delivery to a receiving connector did not arrive. `POST …/notes/<note>/status` puts a note the
- * worker keeps in a status of its site (FRU-384).
+ * worker keeps in a status of its site (FRU-384). `POST …/notes/<note>/replies` writes a reply under a
+ * note, in the name of the caller (FRU-712, `console-replies.ts`).
  *
  * **It answers what the index keeps, and nothing else**: an excerpt of 64 characters at most, never
  * the text of a note, and a search on the fields the index holds (`searched` says which).
@@ -64,6 +66,10 @@ export type NotesContext = {
   tasks: 'on' | 'off';
   /** FRU-653: one note as its page reads it. Absent: `GET …/notes/<note>` answers 404. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
+  /** FRU-712: writes a reply under a note of a page. Absent: `POST …/notes/<note>/replies` answers 404. */
+  replyToNote?: ReplyToNote;
+  /** FRU-712: the caller as a reply names them, read at the call; `undefined` once they left the workspace. */
+  replier?: () => Promise<Replier | undefined>;
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   accounts: Pick<
@@ -101,6 +107,9 @@ export async function handleNotes(
   // FRU-652: the fields of a task, and the labels of the workspace.
   const tasks = await handleTasks(rest, request, context, noteKeyOf);
   if (tasks !== undefined) return tasks;
+  // FRU-712: a reply from the panel of a note.
+  const reply = CONSOLE_REPLY_PATH.exec(rest);
+  if (reply !== null) return postConsoleReply(reply[1] as string, request, context, noteKeyOf);
   const retry = /^\/notes\/([A-Za-z0-9_-]+)\/retry$/.exec(rest);
   const status = /^\/notes\/([A-Za-z0-9_-]+)\/status$/.exec(rest);
   if (rest !== '/notes' && retry === null && status === null) return undefined;

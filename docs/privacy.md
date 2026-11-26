@@ -152,6 +152,11 @@ name of their account and the workspace for a member, the name they typed (or «
 verified » for anybody else. The worker keeps no copy of a reply that went to a tracker. In Linear
 the comment is shown under the app of Fruitback, or under the owner of a personal key.
 
+A reply written from the panel of a note in the console (FRU-712) is the same reply: it goes the same
+way, under the same line, with the name of the account of the person signed in to the console and
+their workspace, a guest included. The worker keeps nothing more for it, and no copy of a reply that
+went to a tracker.
+
 ### « Looks fixed » and « Still wrong » (FRU-294)
 
 A verdict on a note marked done is a reply: it goes where the note went, under the same line as a

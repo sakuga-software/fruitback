@@ -30,7 +30,8 @@ import { ATTACHMENTS_PATH } from './attachments.ts';
 import { handleAttachment } from './attachment-routes.ts';
 import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
-import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
+import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus, writeReply } from './reply-routes.ts';
+import { REPLY_LENGTH } from './reply-text.ts';
 import { EDIT_PATH, PLACE_PATH, WITHDRAW_PATH, postEdit, postMove, postWithdraw } from './edit-routes.ts';
 import { getFeedback, postFeedback, readPage } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
@@ -39,7 +40,7 @@ import { handleOAuth, isOAuthRoute, issuerOf, resolveAccessToken, resourceMetada
 import { agentTools } from './agent-tools.ts';
 import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
-import { placedAt, routingFailure } from './note-helpers.ts';
+import { placedAt, routingFailure, targetsOf } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
 import { visitorAuthor, visitorDigestOf, visitorMay } from './visitor-key.ts';
 
@@ -477,6 +478,29 @@ async function routed(
 
         return issues.find((issue) => issue.note.id === note);
       },
+      // FRU-712: a reply of a person of the console, under a note of a page. It goes the way of a reply
+      // of the widget (`writeReply`), to the place of the site that holds the note: its tracker, or the
+      // store of the worker. The route checked who writes, and their right on the site, before this.
+      replyToNote: async (workspace, site, note, reply) => {
+        const page = await noteIndex?.pageOfNote(workspace, site, note);
+        if (page === undefined) return { ok: false, error: 'not-found' };
+        // FRU-657: a task written by hand is in no thread of a page, as for `reply_to_note` of `/mcp`.
+        if (page === NO_PAGE) return { ok: false, error: 'replies-not-taken' };
+        const route = await routeFor(new Request(request.url), served, site);
+        if (!route.ok) return { ok: false, error: 'not-found' };
+        if (!route.policy.showComments) return { ok: false, error: 'replies-not-taken' };
+
+        return writeReply(
+          {
+            store: watchedStore(storeOfRequest(), accounts),
+            kv,
+            targets: targetsOf(route.client),
+            policy: route.policy,
+          },
+          { url: page, clientId: site, id: note, by: 'note' },
+          reply,
+        );
+      },
       served,
       context,
       accounts,
@@ -778,8 +802,8 @@ async function routed(
       );
 }
 
-/** The longest reply, in characters. A longer one is refused, never cut. */
-export const REPLY_LENGTH = 2000;
+// The longest reply: in `reply-text.ts`, where the console reads it too (FRU-712).
+export { REPLY_LENGTH };
 
 /**
  * Who writes a reply, or why nobody may (FRU-257, the rule of Mathieu of 2026-10-13).

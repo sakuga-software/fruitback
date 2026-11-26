@@ -14,6 +14,7 @@ import {
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { handleEmailRoutes, isEmailRoute } from './account-emails.ts';
 import { handleConsoleApi } from './console-api.ts';
+import type { ReplyToNote } from './console-replies.ts';
 import { SIGN_IN_PROVIDERS } from './console-cors.ts';
 import { handleConsoleConnect } from './connect-routes.ts';
 import { handleConsoleOAuth, issuerOf } from './oauth.ts';
@@ -53,10 +54,12 @@ export type ConsoleSeams = {
   githubApp?: GithubApp;
   /** FRU-653: one note as its page reads it, by the id the widget gave it, or `undefined`. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
+  /** FRU-712: writes a reply under a note of a page, by the way of a reply of the widget. */
+  replyToNote?: ReplyToNote;
 };
 
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote } = seams;
+  const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote, replyToNote } = seams;
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -222,6 +225,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         kv,
         tasks: served.tasks,
         ...(readNote === undefined ? {} : { readNote }),
+        ...(replyToNote === undefined ? {} : { replyToNote }),
         ...(noteIndex === undefined ? {} : { noteIndex }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),

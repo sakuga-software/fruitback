@@ -3,6 +3,7 @@ import type { DoneNoticeSeams } from './done-notices.ts';
 import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
+import type { ReplyToNote } from './console-replies.ts';
 import { handleRail } from './console-rail.ts';
 import { askLinear, handleConnectors, listRepositories } from './console-connectors.ts';
 import { pluginOf } from './trackers/index.ts';
@@ -98,6 +99,8 @@ export type ConsoleApiContext = {
   tasks?: 'on' | 'off';
   /** FRU-653: one note as its page reads it. Absent: the page of a task is not read. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
+  /** FRU-712: writes a reply under a note of a page. Absent: the console writes no reply. */
+  replyToNote?: ReplyToNote;
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
@@ -775,6 +778,17 @@ export async function handleConsoleApi(
     noteIndex: context.noteIndex,
     tasks: context.tasks ?? 'on',
     ...(context.readNote === undefined ? {} : { readNote: context.readNote }),
+    ...(context.replyToNote === undefined ? {} : { replyToNote: context.replyToNote }),
+    // FRU-712: who writes a reply from the console, as the widget names a session of the workspace.
+    replier: async () => {
+      const membership = (await context.accounts.memberships(account.id)).find(
+        (each) => each.workspace.id === workspaceId,
+      );
+
+      return membership === undefined
+        ? undefined
+        : { kind: 'member', name: account.name ?? account.email, workspace: membership.workspace.name };
+    },
     ...(context.done === undefined ? {} : { done: context.done }),
     accounts: context.accounts,
     kv: context.kv,
