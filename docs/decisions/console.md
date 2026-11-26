@@ -964,10 +964,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     takes the whole width, 44 px high in 16 px (iOS zooms on a smaller font), and the groups stay on
     one line that scrolls sideways. A tile: the logo in a box
     of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
-    its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
-    can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
+    its tooltip), and its state: « Add » for a kind already connected, « Connect », « Soon » (no connector of this
     kind on this worker), or « Not set up » (the worker has the kind, and its operator did not set
-    it up: the line then says so). The routine says « New » beside its name. Where a tracker
+    it up: the line then says so). The routine says « New » beside its name. **A kind is connected
+    more than once** (FRU-727): two workspaces of Linear, two addresses. The worker already gives one
+    entry of `GET …/connectors` for each connection, with its account (its `label`), so the table has
+    a row for each, and the account tells them apart. The tile of a connected kind counts them in a
+    green disc of 16 px on the top right corner of its logo (`aria-hidden`), and offers « Add » in
+    place of « Connected » and « + »: it does what « Connect » does (the consent of Linear again, the
+    form of an address), and a screen reader hears « Add another Linear (2 connected) ». A person
+    who cannot add one (a member, a worker that cannot keep a key) reads « Connected », and hears the
+    count in words. Where a tracker
     connects two ways (the consent, a key or a token), « Connect » is the consent and a menu beside
     it offers the other. **The form of a source opens in its tile, which then takes the whole row**,
     and so does the sentence of a way back that went wrong (`LINEAR_RETURNS`, `GITHUB_RETURNS`,
