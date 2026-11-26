@@ -2,14 +2,15 @@ import { type Page, type Route, expect, test } from '@playwright/test';
 import { ACME, stubWorker } from './console-workspace.ts';
 
 /**
- * A press of « Next page » while a page is read (FRU-709): each press goes on from the page asked
- * last, not from the page shown. Before, a second press during the read of the next page asked the
- * same cursor again, and was lost: the list went one page on instead of two. A slow CI made
- * `console-notes-pages.spec.ts` fail on it.
+ * A press while the next notes are read (FRU-709, then FRU-724). On the notes of a workspace, which
+ * scroll with no end, « Load more » during the read of the next notes asks nothing again: the list goes
+ * on from the notes that read brings, once they are drawn. Each chunk is read once, and each note is one
+ * row. On the notes of the instance, which keep their pages, each press of « Next page » goes on from
+ * the page asked last, not from the page shown.
  *
- * The worker is answered by stubs, and holds the read of a page until the spec lets it go: the
- * presses come while it is on its way, whatever the speed of the machine. 263 notes, 25 to a page,
- * the cursor the index of the first note of a page.
+ * The worker is answered by stubs, and holds the read of a cursor until the spec lets it go: the
+ * presses come while it is on its way, whatever the speed of the machine. 263 notes, 25 to a read,
+ * the cursor the index of the first note of a read.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -47,10 +48,23 @@ function reads(): Reads & { answer: (cursor: string, answer: () => Promise<void>
   };
 }
 
-/** `failOnce`: the first read of this cursor answers `503`, as a worker that did not answer. */
+/**
+ * `failOnce`: the first read of this cursor answers `503`, as a worker that did not answer. The observer
+ * of the browser never fires: « Load more » alone reads the next notes, and the spec says when.
+ */
 async function open(page: Page, failOnce?: string): Promise<Reads> {
   const read = reads();
   let failing = failOnce;
+  await page.addInitScript(() => {
+    window.IntersectionObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    } as unknown as typeof IntersectionObserver;
+  });
   await stubWorker(page, {
     workspaces: [ACME],
     answer: (pathname, route: Route) => {
@@ -78,115 +92,69 @@ async function open(page: Page, failOnce?: string): Promise<Reads> {
     },
   });
   await page.goto(`${CONSOLE}/w/w1/notes`);
-  await expect(summary(page)).toHaveText('1 to 25 of 263');
+  await expect(rows(page)).toHaveCount(25);
 
   return read;
 }
 
-const pages = (page: Page) => page.getByRole('navigation', { name: 'Pages of notes' });
-const summary = (page: Page) => pages(page).locator('span').first();
-const press = (page: Page, name: 'Next page' | 'Previous page') =>
-  pages(page).getByRole('button', { name, exact: true }).click();
-const firstRow = (page: Page) =>
-  page.getByRole('region', { name: 'Notes' }).locator('tbody tr:not(.kit-table-group)').first();
+const rows = (page: Page) => page.getByRole('region', { name: 'Notes' }).locator('tbody tr:not(.kit-table-group)');
+const end = (page: Page) => page.locator('[data-notes-end]');
+const loadMore = (page: Page) => end(page).getByRole('button', { name: 'Load more' });
+/** The ids of the rows, in order: each note once. */
+const ids = (page: Page) => rows(page).evaluateAll((all) => all.map((row) => row.getAttribute('data-note')));
 
 /** Lets the effects of the last answer run: a press that waits for it goes on in them. */
 const settled = (page: Page) =>
   page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
-test('two presses of « Next page » go two pages on, even when the second comes during the read', async ({ page }) => {
+test('presses of « Load more » during the read of the next notes ask nothing again', async ({ page }) => {
   const read = await open(page);
   const release = read.hold('all:25');
-  await press(page, 'Next page');
+  await loadMore(page).click();
   await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
-  // The second page is still on its way: the rows of the first are on the screen.
-  await expect(firstRow(page)).toContainText('Note 1 of the list');
-  await press(page, 'Next page');
+  // The next notes are still on their way: the notes read stay, and the presses ask nothing.
+  await loadMore(page).click();
+  await loadMore(page).click();
+  await expect(end(page)).toContainText('Loading…');
   release();
 
-  await expect(summary(page)).toHaveText('51 to 75 of 263');
-  await expect(firstRow(page)).toContainText('Note 51 of the list');
-  await expect(page).toHaveURL(/[?&]cursor=all%3A50(&|$)/);
-  // Each page read once, in the order of the presses.
-  expect(read.cursors).toEqual(['', 'all:25', 'all:50']);
-  // The pages walked through are offered back.
-  await expect(pages(page).getByRole('button', { name: 'Page 2', exact: true })).toBeVisible();
-});
-
-test('three presses during two held reads go three pages on, and the screen ends on the last one', async ({ page }) => {
-  const read = await open(page);
-  const second = read.hold('all:25');
-  const third = read.hold('all:50');
-  for (let presses = 0; presses < 3; presses += 1) await press(page, 'Next page');
-  await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
-  second();
-  await expect.poll(() => read.cursors.at(-1)).toBe('all:50');
-  third();
-
-  await expect(summary(page)).toHaveText('76 to 100 of 263');
-  await expect(firstRow(page)).toContainText('Note 76 of the list');
-  expect(read.cursors).toEqual(['', 'all:25', 'all:50', 'all:75']);
-});
-
-test('« Previous page » takes back a press of « Next page » that waits for its page', async ({ page }) => {
-  const read = await open(page);
-  const release = read.hold('all:25');
-  await press(page, 'Next page');
-  await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
-  await press(page, 'Next page');
-  await press(page, 'Previous page');
-  release();
-
-  // Next, Next, Previous: one page on.
-  await expect(summary(page)).toHaveText('26 to 50 of 263');
-  await expect(firstRow(page)).toContainText('Note 26 of the list');
+  await expect(rows(page)).toHaveCount(50);
   await settled(page);
-  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  await expect(rows(page)).toHaveCount(50);
   expect(read.cursors).toEqual(['', 'all:25']);
+  expect(new Set(await ids(page)).size).toBe(50);
+  // A press once they are drawn goes on from them.
+  await loadMore(page).click();
+  await expect(rows(page)).toHaveCount(75);
+  await expect(rows(page).last()).toContainText('Note 75 of the list');
+  expect(read.cursors).toEqual(['', 'all:25', 'all:50']);
 });
 
-test('a number pressed during the read goes to its page, and no press of « Next page » waits after it', async ({
-  page,
-}) => {
-  const read = await open(page);
-  const release = read.hold('all:25');
-  await press(page, 'Next page');
-  await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
-  await press(page, 'Next page');
-  await pages(page).getByRole('button', { name: 'Page 1', exact: true }).click();
-  release();
-
-  await expect(summary(page)).toHaveText('1 to 25 of 263');
-  await expect(firstRow(page)).toContainText('Note 1 of the list');
-  await settled(page);
-  await expect(summary(page)).toHaveText('1 to 25 of 263');
-  expect(read.cursors).toEqual(['', 'all:25', '']);
-});
-
-test('a read that fails drops the press that waited for it, and « Try again » reads the page asked (review of #937)', async ({
+test('a read of the next notes that fails keeps the notes, says so under them, and « Try again » reads them (FRU-682)', async ({
   page,
 }) => {
   const read = await open(page, 'all:25');
   const release = read.hold('all:25');
-  await press(page, 'Next page');
+  await loadMore(page).click();
   await expect.poll(() => read.cursors.at(-1)).toBe('all:25');
-  await press(page, 'Next page');
+  await loadMore(page).click();
   release();
 
-  // The read failed: the screen says so, and offers no page to press.
-  await expect(page.getByText('The notes did not load')).toBeVisible();
-  await expect(pages(page)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Try again' }).click();
-  // The page asked, and only it: the press that waited for the failed read went nowhere.
-  await expect(summary(page)).toHaveText('26 to 50 of 263');
-  await expect(firstRow(page)).toContainText('Note 26 of the list');
+  // The read failed: the notes read stay, and the end of the list says it, with « Try again ».
+  const failed = end(page).getByRole('alert');
+  await expect(failed).toContainText('The next notes did not load.');
+  await expect(rows(page)).toHaveCount(25);
+  await expect(page.getByText('The notes did not load')).toHaveCount(0);
+  await expect(loadMore(page)).toHaveCount(0);
+  await end(page).getByRole('button', { name: 'Try again' }).click();
+  await expect(rows(page)).toHaveCount(50);
+  await expect(failed).toHaveCount(0);
   await settled(page);
-  await expect(summary(page)).toHaveText('26 to 50 of 263');
+  // The cursor that failed, once more, and only it: the press during the failed read asked nothing.
   expect(read.cursors).toEqual(['', 'all:25', 'all:25']);
-  // A press after the retry goes on from the page read.
-  await press(page, 'Next page');
-  await expect(summary(page)).toHaveText('51 to 75 of 263');
-  await expect(firstRow(page)).toContainText('Note 51 of the list');
+  await loadMore(page).click();
+  await expect(rows(page)).toHaveCount(75);
+  expect(read.cursors).toEqual(['', 'all:25', 'all:25', 'all:50']);
 });
 
 /** A note of the instance, as `adminNoteView` of the worker answers it (FRU-272). */
