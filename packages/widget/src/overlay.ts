@@ -14,6 +14,14 @@ import { type Direction, type Translator, createTranslator, languageOf } from '.
 import { createIcon } from './icons.ts';
 import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
 import { statusLabel, statusPaint } from './status-paint.ts';
+import {
+  type StatusAnswer,
+  type StatusFooter,
+  type StatusSeam,
+  applyStatus,
+  statusMenu,
+  statusSaid,
+} from './thread-status.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -159,6 +167,11 @@ export type OverlayOptions = {
    * read says `withdrawable`. Left out: no thread offers it.
    */
   withdraw?: WithdrawSeam;
+  /**
+   * How a member changes the status of a note from the head of its thread (FRU-718). Offered on a note
+   * whose read says `canSetStatus`. Left out: the status stays read only in every thread.
+   */
+  status?: StatusSeam;
   /**
    * How the author moves an open note to another element (FRU-605), from « ⋯ » of its thread, where
    * the read says `editable`. The thread closes while the person chooses; the answer says whether
@@ -1092,6 +1105,33 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
           said: withdrawSaid,
           settled: withdrawSettled,
         };
+  // FRU-718: the status of a note, from the head of its thread. What it said outlives its thread.
+  const statusesInFlight = new Set<string>();
+  const statusSaidOf = new Map<string, string>();
+  const statusSettled = (issue: NoteIssue, kept?: StatusAnswer): void => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (kept !== undefined) {
+      applyStatus(issue, kept);
+      // A read may have drawn the note again since: the answer goes on the issue on screen too.
+      if (entry !== undefined && entry.issue !== issue) applyStatus(entry.issue, kept);
+    }
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
+    const focused = threadHasFocus();
+    if (kept !== undefined) {
+      // The pin takes the colour of its new stage, and this thread stays open.
+      keeping = issue.note.id;
+      try {
+        draw();
+      } finally {
+        keeping = undefined;
+      }
+    } else reopenThread(entry);
+    if (focused) thread?.querySelector<HTMLElement>('.fruitback-thread-stage')?.focus();
+  };
+  const statusFor = (issue: NoteIssue): StatusFooter | undefined =>
+    options.status === undefined || DRAFTS.has(issue) || issue.canSetStatus !== true
+      ? undefined
+      : { seam: options.status, inFlight: statusesInFlight, said: statusSaidOf, settled: statusSettled };
   // FRU-605: the menu « ⋯ » of the author. What its last action said outlives its thread, as a reply.
   const moreSaidOf = new Map<string, MoreSaid>();
   const moreFor = (issue: NoteIssue): MoreFooter | undefined => {
@@ -1192,6 +1232,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       moreFor(entry.issue),
       withdrawFor(entry.issue),
       options.byBrowser?.() === true,
+      statusFor(entry.issue),
     );
     const rebuilt = thread.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
     if (rebuilt !== null && foldOpen !== undefined) rebuilt.open = foldOpen;
@@ -1246,6 +1287,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       moreFor(entry.issue),
       withdrawFor(entry.issue),
       options.byBrowser?.() === true,
+      statusFor(entry.issue),
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1264,6 +1306,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     moreSaidOf.clear();
     withdrawSaid.clear();
     withdrawAsking.clear();
+    statusSaidOf.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
@@ -1664,6 +1707,7 @@ function buildThread(
   more?: MoreFooter,
   withdraw?: WithdrawFooter,
   byBrowser = false,
+  status?: StatusFooter,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1707,7 +1751,10 @@ function buildThread(
     // On the page only: a thread in the list of the page has its place in the column (FRU-312).
     ...(movable ? [handleButton(document, t)] : []),
     element(document, 'div', 'fruitback-thread-heading', [
-      element(document, 'span', 'fruitback-thread-stage', [ring, state]),
+      // FRU-718: a button with a chevron and its menu, for a member who may change it.
+      status === undefined
+        ? element(document, 'span', 'fruitback-thread-stage', [ring, state])
+        : statusMenu(document, issue, t, status, [ring, state], stateLabel(issue, t)),
       // FRU-700: after the state, in the heading that wraps, so a narrow thread puts it on a line of its own.
       ...youChip(document, issue, t, byBrowser),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
@@ -1734,6 +1781,7 @@ function buildThread(
   thread.append(
     head,
     element(document, 'div', 'fruitback-thread-body', [
+      ...statusSaid(document, issue, status),
       element(document, 'div', 'fruitback-thread-message', [
         avatar,
         element(document, 'div', 'fruitback-thread-reply-text', [

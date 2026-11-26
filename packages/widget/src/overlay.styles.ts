@@ -320,6 +320,51 @@ export const STYLES = `
 }
 .fruitback-thread-ring { flex: none; width: 14px; height: 14px; }
 /*
+  The status a member may change (FRU-718): the same chip as a button, with a chevron after the word,
+  as the mock-up draws it. Its target is 44 px tall: a transparent border above and below, given back
+  by the margins, as the link of the ticket. Its menu opens under it, on the start side.
+*/
+.fruitback-thread-status-wrap { position: relative; flex: 0 1 auto; min-width: 0; display: flex; }
+button.fruitback-thread-stage {
+  position: relative;
+  min-height: 44px;
+  margin-block: -10px;
+  padding-inline: 6px 4px;
+  border: 10px solid transparent;
+  border-inline-width: 0;
+  border-radius: var(--fruitback-radius-sm) / calc(var(--fruitback-radius-sm) + 10px);
+  background: transparent;
+  color: var(--fruitback-color-text);
+  font-family: var(--fruitback-font-sans);
+  text-align: start;
+  cursor: pointer;
+  outline: 0;
+}
+/* The edge of the chip, drawn around its 24 px and not around the 44 px of the target. */
+button.fruitback-thread-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  pointer-events: none;
+}
+button.fruitback-thread-stage:hover, button.fruitback-thread-stage[aria-expanded="true"] {
+  background: var(--fruitback-color-surface-sunken) padding-box;
+}
+button.fruitback-thread-stage:focus-visible::before { border: 2px solid var(--fruitback-color-accent); }
+button.fruitback-thread-stage[aria-busy="true"] { cursor: progress; }
+.fruitback-thread-status-chevron { flex: none; width: 12px; height: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-status-menu { inset-inline: -4px auto; top: calc(100% - 4px); min-width: 180px; }
+.fruitback-thread-status-item { display: flex; align-items: center; gap: 8px; }
+/* The stage the note is in: marked by its weight and by aria-checked, never by a colour alone. */
+.fruitback-thread-status-item[aria-checked="true"] { font-weight: 650; background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-status-said { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+@media (forced-colors: active) {
+  button.fruitback-thread-stage { border-color: Canvas; }
+  button.fruitback-thread-stage::before { border-color: ButtonText; }
+}
+/*
   « You · this browser » (FRU-700): a chip of the sunken surface, after the word of the state, in the
   heading that wraps. Its words wrap too, in a thread narrower than the chip.
 */
