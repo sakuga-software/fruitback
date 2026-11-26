@@ -3957,8 +3957,11 @@ for the list.
   `app.ts`).
 - **At most one write an hour per site and per way** (`site-seen.ts`): the process remembers what it
   wrote, and asks nothing of the database in the hour after; the store writes only a date an hour old
-  (`markSiteSeen`), so two processes write once. A write that fails is said in the log, and the read
-  goes on. Migration `0054_sites_seen`: two columns of `sites`.
+  (`markSiteSeen`), so two processes write once. A read claims its way (a token: the extension; none:
+  the script) and the claim is checked only when that way is due; a session that did not verify is
+  not verified again for a minute, so a bad token costs one verification a minute. Each memory holds
+  10 000 sites and ways at most, emptied past it as in `last-seen.ts`. A write that fails is said in
+  the log, and the read goes on. Migration `0054_sites_seen`: two columns of `sites`.
 
 ### What it costs
 

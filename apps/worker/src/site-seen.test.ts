@@ -6,7 +6,7 @@ import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { SEEN_EVERY_MS, forgetSeen, seeSite } from './site-seen.ts';
+import { REFUSED_FOR_MS, SEEN_EVERY_MS, forgetSeen, seeSite } from './site-seen.ts';
 
 const open = worlds();
 const DAY = 86_400_000;
@@ -165,10 +165,33 @@ describe('when the widget was last seen on a site (FRU-721)', () => {
     // An hour later, the way is checked and written again.
     await seeSite(accounts, 'site_a', 'extension', confirm, NOW + SEEN_EVERY_MS);
     assert.equal(checks, 3);
-    assert.deepEqual(marked, ['site_a:extension', 'site_a:script', 'site_a:extension']);
-    // A claim that does not check writes nothing.
+    assert.deepEqual(marked.slice(0, 3), ['site_a:extension', 'site_a:script', 'site_a:extension']);
+    // A claim that does not check writes nothing, and a claim of the script is checked again at once.
     await seeSite(accounts, 'site_b', 'script', async () => false, NOW);
-    assert.equal(marked.length, 3);
+    await seeSite(accounts, 'site_b', 'script', confirm, NOW + 1);
+    assert.equal(marked.length, 4);
+  });
+
+  it('checks a session that did not verify once a minute, not at every read', async () => {
+    const marked: string[] = [];
+    const accounts = { markSiteSeen: async (site: string, way: string) => void marked.push(`${site}:${way}`) };
+    let checks = 0;
+    let good = false;
+    const confirm = async () => {
+      checks += 1;
+
+      return good;
+    };
+    // A bad token at every second of a minute: one check.
+    for (let second = 0; second < 60; second += 1)
+      await seeSite(accounts, 'site_c', 'extension', confirm, NOW + second * 1_000);
+    assert.equal(checks, 1);
+    assert.deepEqual(marked, []);
+    // The minute after, the widget comes with a good session: checked again, and written.
+    good = true;
+    await seeSite(accounts, 'site_c', 'extension', confirm, NOW + REFUSED_FOR_MS);
+    assert.equal(checks, 2);
+    assert.deepEqual(marked, ['site_c:extension']);
   });
 
   it('answers the read of the pins when the write fails', async () => {
