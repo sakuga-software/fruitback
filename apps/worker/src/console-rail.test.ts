@@ -137,6 +137,37 @@ describe('the counts of the bar of the console (FRU-711)', () => {
     assert.equal('failing' in guest.body, false);
   });
 
+  it('says as many sends that wait as the Connectors screen adds up, calls of a trigger included', async () => {
+    const { world, alice, workspace } = await aWorkspace();
+    // A second address, with a call of a trigger that waits beside a note (FRU-468).
+    const routine = await world.accounts.addConnector(workspace, {
+      kind: 'rest',
+      label: 'hooks.two.test',
+      sealed: 'x',
+    });
+    await world.accounts.enqueueDelivery(routine.id, '{"n":3}', BASE);
+    await world.accounts.enqueueDelivery(routine.id, '{"n":4}', BASE, 'agent.requested');
+
+    // What the Connectors screen reads: the deliveries of each connector, notes and calls added up.
+    const listed = await callOn(world, 'GET', `/console/workspaces/${workspace}/connectors`, { token: alice.token });
+    const { connectors } = (await listed.json()) as { connectors: { id: string }[] };
+    let screen = 0;
+    for (const connector of connectors) {
+      const read = await callOn(
+        world,
+        'GET',
+        `/console/workspaces/${workspace}/connectors/${connector.id}/deliveries`,
+        {
+          token: alice.token,
+        },
+      );
+      screen += ((await read.json()) as { deliveries: unknown[] }).deliveries.length;
+    }
+
+    assert.equal(screen, 5);
+    assert.equal((await railOf(world, workspace, alice.token)).body.failing, screen);
+  });
+
   it('answers 404 to a person who is not a member, 401 to nobody, 405 to a write', async () => {
     const { world, alice, workspace, other } = await aWorkspace();
     const stranger = await signInTo(world, 'stranger@else.dev');
