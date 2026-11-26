@@ -4,7 +4,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GUIDE, GUIDE_ANCHORS } from './guide.ts';
 import { OPERA_SEARCH_PAGES } from './browser-family.ts';
-import { NOTES_NEED_SESSION, READ_NEEDS_SESSION, WORKER_NOT_FOUND } from './read-probe.ts';
+import {
+  CLOUD_NOTES_NEED_MEMBER,
+  CLOUD_READ_NEEDS_MEMBER,
+  MEMBER_TURNS_ON,
+  NOTES_NEED_SESSION,
+  NOT_A_MEMBER,
+  READ_NEEDS_SESSION,
+  WORKER_NOT_FOUND,
+} from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 import { popupSource } from './popup-source.fixture.ts';
 
@@ -130,14 +138,26 @@ describe('the guide quotes the popup this extension renders', () => {
   });
 
   /** The same walk-through, on the options page (FRU-43). */
+  // The popup writes the lines of a refused read through `memberRemedy`, whose own tests say which
+  // line goes with which answer (`read-probe.test.ts`).
   it('quotes the line the popup writes for a worker that wants a session (FRU-66)', () => {
     assert.ok(guide.includes(`\`${READ_NEEDS_SESSION}\``), 'the guide does not quote the line of the popup');
-    assert.ok(popup.includes('READ_NEEDS_SESSION'), 'the popup no longer writes that line');
+    assert.ok(popup.includes('memberRemedy('), 'the popup no longer writes that line');
   });
 
   it('quotes the line the popup writes for a site whose notes are « Members only » (FRU-330)', () => {
     assert.ok(guide.includes(`\`${NOTES_NEED_SESSION}\``), 'the guide does not quote the line of the popup');
-    assert.ok(popup.includes('NOTES_NEED_SESSION'), 'the popup no longer writes that line');
+    assert.ok(popup.includes('memberRemedy('), 'the popup no longer writes that line');
+  });
+
+  it('quotes the lines and the buttons of a site of the Cloud read by its members (FRU-663)', () => {
+    for (const line of [CLOUD_NOTES_NEED_MEMBER, CLOUD_READ_NEEDS_MEMBER, MEMBER_TURNS_ON, NOT_A_MEMBER]) {
+      assert.ok(guide.includes(`\`${line}\``), `the guide does not quote the line of the popup: ${line}`);
+    }
+    for (const button of ['Sign in to Fruitback', 'Turn on with my account']) {
+      assert.ok(popup.includes(`t('${button}')`), `the popup no longer draws « ${button} »`);
+      assert.ok(guide.includes(`« ${button} »`), `the guide does not name « ${button} »`);
+    }
   });
 
   it('names the options page controls it walks somebody through', () => {

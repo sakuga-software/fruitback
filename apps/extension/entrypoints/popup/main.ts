@@ -196,7 +196,17 @@ async function renderPopup(editing = false, claimedNow?: ConnectState): Promise<
   });
 
   app.replaceChildren(
-    await draw(state, { origin: origin ?? '', tab, link, found, offer, account, pending: pendingNow }),
+    await draw(state, {
+      origin: origin ?? '',
+      tab,
+      link,
+      found,
+      offer,
+      account,
+      pending: pendingNow,
+      // An account that ended was forgotten by `accountOf`, after `held` was read.
+      cloudSession: CLOUD !== undefined && held[CLOUD] !== undefined && accountState !== 'ended',
+    }),
   );
   shownKind = state.kind;
   // A later draw may have started while this one awaited: it is the one that ends the run.
@@ -219,6 +229,8 @@ type Found = {
   offer: Offer | undefined;
   account: Account | undefined;
   pending: PendingConnect | undefined;
+  /** This browser holds a session of the Fruitback of the build: an account, or a pairing (FRU-663). */
+  cloudSession: boolean;
 };
 
 async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
@@ -311,7 +323,7 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       // named. A reviewer holds one session per worker however many of its sites they have turned on.
       if (found !== undefined && !open) body.push(...(await session(found.site)));
       if (found !== undefined && !open && facts.tab?.url !== undefined)
-        body.push(readability(found.site, facts.tab.url));
+        body.push(readability(found.site, facts.tab.url, { origin, signedIn: facts.cloudSession }));
       if (found !== undefined && !open) body.push(otherCopyLine(facts.tab, found.site.enabled));
 
       return frame(...body);

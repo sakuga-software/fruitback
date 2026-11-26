@@ -19,7 +19,9 @@ it changes who is shown the feedback and never who may fetch it.
   (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
   line. A `401` that also says `canWrite: false` is a site whose notes are « Members only »
   (FRU-330): the popup says that extension mode can send no note there, and how an admin opens the
-  site (« Anyone on the page »). The probe was measured from an extension page with **no** host permission on the worker,
+  site (« Anyone on the page »). On the Fruitback of the build the line offers the fix instead
+  (FRU-663): « Sign in to Fruitback » signed out, « Turn on with my account » for a member, who to
+  ask for anybody else. The probe was measured from an extension page with **no** host permission on the worker,
   because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
   FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
   extension-mode client can stay `public` beside a team-mode one.
@@ -2253,6 +2255,36 @@ on both workers, so its `fetch` skips CORS. The shipped extension holds none in 
 page of the unmodified build, with `permissions.contains` answering `false` for the worker, a `fetch`
 of `/feedback` on an `authenticated` worker reads `status: 401` (Chromium 1234): the worker puts its
 CORS headers on the refusal for an extension origin.
+
+### Extension mode on a site of the Cloud that its members read (FRU-663)
+
+A site made on Fruitback Cloud is read by its members, and its notes are « Members only »: both
+are the defaults. A person who installs the extension and turns such a site on in extension mode,
+with no session, sees no pin, and the widget offers no note. Before FRU-663 the popup said that an
+admin of the site sets « Anyone on the page », and the widget said « Ask its team to invite you ».
+Neither offered what fixes it for a member: the sign-in.
+
+**Taken: the line of the probe offers the fix, on the Fruitback of the build only.** `memberRemedy`
+in `read-probe.ts` chooses the sentence and the button from the answer of the probe, whether the
+rule is on the Fruitback of the build, whether this browser holds its account, and whether a
+workspace of the account lists the origin (`offerFor`, asked only when signed in):
+
+- signed out: « Sign in to Fruitback », the sign-in of the popup (FRU-251);
+- signed in, and a member: « Turn on with my account », which stores the site of the workspace
+  (`cloudEntry`) under the origin, in place of the rule of extension mode, as the screen of an
+  offer does. A session changes nothing in extension mode, so signing in alone would leave the page
+  as it was;
+- signed in, and not a member: who to ask, and no button.
+
+A worker run by somebody else keeps the sentences of FRU-66 and FRU-330, with the guide.
+
+**Not taken: refuse extension mode on the Cloud** (FRU-643, cancelled on 2026-11-22). Extension mode
+is the first path of a person who finds Fruitback, and a site that says « Anyone on the page » takes
+their notes. **Not taken: a button in the widget.** The widget of extension mode has no `onSignIn`,
+and giving it one would turn every refusal into « Your session has ended » (`forThisHost` in
+`embed.ts`). The sign-in lives in the popup, and the side panel already says to sign in from the
+extension. Nothing typed is on the screen of a rule, so neither button can lose a draft (review of
+#897).
 
 ## The team mode, and the call the page cannot make (FRU-57)
 
