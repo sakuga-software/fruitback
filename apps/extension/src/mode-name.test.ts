@@ -30,7 +30,20 @@ function textFiles(folder: string): string[] {
   return found;
 }
 
-const OLD_NAMES = [/\bprivate[ -]mode\b/i, /\bmode priv[ée]/i, /« Private »/, /\bPrivé\b/, /\bPrivate ·/];
+/**
+ * The old name, and the phrasings that used it as the name of a mode: « a private rule », « a
+ * private site », a « Private » cell of a table. The stored value `private` in code, and « private »
+ * in another sense (a private repository, a private network), are not the name of the mode.
+ */
+const OLD_NAMES = [
+  /\bprivate[ -]mode\b/i,
+  /\bmode priv[ée]/i,
+  /« Private »/,
+  /\bPrivé\b/,
+  /\bPrivate ·/,
+  /\bprivate (?:rule|site|mount|entry|wildcard)s?\b/i,
+  /\|\s*Private\s*\|/,
+];
 /**
  * A browser's own private mode, which is not the mode of the extension: the browser named just
  * before it, or after it. Only that phrase is taken out of a line, so the old name beside it still
@@ -82,6 +95,9 @@ describe('the mode the extension mounts is « Extension mode » (FRU-662)', () =
       'Le mode privé ne porte aucune session.',
       '| « Private » | « Team » |',
       "['private', 'Private · the extension shows the widget'],",
+      // Kentō #0a56f0: the mode named by its old word, without « mode ».
+      'Keeps the label of a private rule, and the mount of a private site.',
+      '|  | Public | Private | Team |',
       // A browser named on the line does not hide the old name of the mode.
       'Private mode in the extension of the browser.',
       'Safari in private mode, and the private mode of the extension.',
@@ -93,7 +109,8 @@ describe('the mode the extension mounts is « Extension mode » (FRU-662)', () =
       'Reading `localStorage` can throw in Safari in private mode.',
       'Open the page in the private mode of the browser.',
       'Firefox en mode privé refuse le stockage, comme le mode privé du navigateur.',
-      'the private ranges of the network, a private repository',
+      'the private ranges of the network, a private repository, private ones first',
+      "const clientId = site.mode === 'private' ? site.clientId : undefined;",
     ]) {
       assert.ok(!namesTheOldMode(line), line);
     }

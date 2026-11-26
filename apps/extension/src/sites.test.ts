@@ -50,7 +50,7 @@ describe('parseSite', () => {
     }
   });
 
-  it('refuses a private entry with no client id', () => {
+  it('refuses an extension-mode entry with no client id', () => {
     assert.equal(parseSite({ endpoint: 'https://worker.test' }), undefined);
     assert.equal(parseSite({ mode: 'private', endpoint: 'https://worker.test', clientId: '' }), undefined);
   });
