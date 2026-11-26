@@ -379,6 +379,13 @@
       "when": 1795636939654,
       "tag": "0053_sites_visitor_rights_default",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795684610227,
+      "tag": "0054_connector_delivered_at",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { type Connector, call } from '../api';
+import { type Connector, type TrackerTrouble, call, trackerTrouble } from '../api';
 import { moment } from '../ago';
 import { msg, t } from '../i18n';
 import { problemOf, writeProblemOf } from '../problems';
@@ -37,7 +37,7 @@ const PROBLEMS: Readonly<Record<string, string>> = {
 };
 
 /** What to do about a connector that its service refuses (FRU-102). `{when}` is the first refusal. */
-const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> = {
+const ATTENTION: Record<TrackerTrouble, string> = {
   'key-refused': msg(
     '{source} refuses this connection since {when}, and the notes of its sites do not reach {source}. Disconnect it, then connect {source} again.',
   ),
@@ -164,6 +164,7 @@ export function PluginPanel({ id, base, connector, sites, manages, onChanged, on
   const [problem, setProblem] = useState<string | undefined>();
   const source = t(KINDS[connector.kind].name);
   const known = trackerOf(connector.kind) !== undefined;
+  const refusal = trackerTrouble(connector.attention);
 
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
@@ -197,15 +198,12 @@ export function PluginPanel({ id, base, connector, sites, manages, onChanged, on
     >
       {/* A connector of a kind this console does not draw yet: a server of after made it. */}
       {known ? null : <p className="text-hint text-muted">{t('This console does not know this connector yet.')}</p>}
-      {connector.attention === undefined ? null : (
+      {refusal === undefined ? null : (
         <Problem>
-          {t(
-            trackerOf(connector.kind)?.attention?.[connector.attention.reason] ?? ATTENTION[connector.attention.reason],
-            {
-              when: moment(connector.attention.since),
-              source,
-            },
-          )}
+          {t(trackerOf(connector.kind)?.attention?.[refusal] ?? ATTENTION[refusal], {
+            when: moment(connector.attention?.since ?? ''),
+            source,
+          })}
         </Problem>
       )}
       <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />

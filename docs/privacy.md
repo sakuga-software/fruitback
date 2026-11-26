@@ -56,7 +56,7 @@ If your staging site shows real customer records, keep that in mind before you i
 - A typed name is never presented as checked. Only a signed token makes `reporter.verified`
   true; the worker removes the flag from anything a browser sends.
 - The browser environment stays on the page. A user agent string, with a language and a time,
-  narrows down who a reporter is, so `env` is not sent. The extension's private mode mounts the
+  narrows down who a reporter is, so `env` is not sent. The extension's extension mode mounts the
   widget with its defaults, so it sends none either.
 
 ### What you can turn on
@@ -285,7 +285,9 @@ The table `done_notices` keeps one row for each note that waits:
   provider signed them in or was linked by them
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
-  tracker it connected, encrypted, and where each site sends its notes; its name, its members and their roles, and the address
+  tracker it connected, encrypted, and where each site sends its notes; for each connector, whether
+  its tracker refused it and since when, and when its last send arrived (a moment, never what was
+  sent); its name, its members and their roles, and the address
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members, its sites and the notes that Fruitback keeps for them; the notes already in a tracker stay
   there.
@@ -542,7 +544,7 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   reporter hid, the screenshot switch, and the corner of the dock once the reporter chose one in the
   settings. The reporter's name too, **only if the reporter ticked
   « Remember me in this browser »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
-  value, with no name of the tracker. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into the site's
+  value, with no name of the tracker. No e-mail, no note. In extension mode the extension writes `fruitback:config:extension` into the site's
   storage, so a site can see that a reviewer used the extension on it.
 - `localStorage`, under `fruitback:visitor:<site>`: the key of this browser for this site,
   32 random bytes. The widget makes it at the first note a visitor sends with no account, and sends
@@ -596,7 +598,7 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   has access to, or after the click on its icon. It keeps nothing, and sends nothing to a worker.
 - « Name on my notes », when the reviewer types one in the page of the extension, is
   kept in the extension's own storage and given to the widget the extension mounts on a site in
-  private mode, to fill the name of a note. That page can read it while the widget is mounted. It is
+  extension mode, to fill the name of a note. That page can read it while the widget is mounted. It is
   sent only with a note the reviewer sends, as a name typed in the note is.
 - The colour of the note button (« Appearance »), when the reviewer chooses one, is kept in
   the extension's own storage and given to the widget the extension mounts, which paints « Send » in

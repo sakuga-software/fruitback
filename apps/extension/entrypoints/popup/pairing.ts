@@ -235,7 +235,7 @@ export function pairing(
 export async function session(site: SiteConfig): Promise<HTMLElement[]> {
   const endpoint = site.endpoint;
   const held = (await sessions.list())[endpoint];
-  // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
+  // Extension mode carries no session, so it offers no pairing (FRU-88). A session that this worker
   // already holds stays on the screen, with its log out.
   if (held === undefined && site.mode !== 'team') return [];
   if (held !== undefined) return [pairedRow(endpoint, held.identity)];

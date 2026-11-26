@@ -26,7 +26,7 @@ describe('a site that wants a session (FRU-315)', () => {
   it('is a site of a workspace of this build, with no session for it', () => {
     assert.equal(wantsSession(TEAM, CLOUD, {}), true);
     assert.equal(wantsSession(TEAM, CLOUD, { [CLOUD]: true }), false);
-    // Another worker, a team entry the site mounts itself, private mode, or a build with no Cloud.
+    // Another worker, a team entry the site mounts itself, extension mode, or a build with no Cloud.
     assert.equal(wantsSession({ ...TEAM, endpoint: 'https://self.test' }, CLOUD, {}), false);
     assert.equal(wantsSession({ mode: 'team', endpoint: CLOUD, enabled: true }, CLOUD, {}), false);
     assert.equal(wantsSession({ mode: 'private', endpoint: CLOUD, clientId: 'a', enabled: true }, CLOUD, {}), false);

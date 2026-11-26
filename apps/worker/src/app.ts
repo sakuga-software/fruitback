@@ -732,8 +732,20 @@ async function routed(
   }
 
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
+  // FRU-730: the accounts of this request go to the read as to a note. A server hands `handleRequest`
+  // none in its context: without them the read gave no status the team added, no colour of a tracker
+  // and no line of an agent.
   return request.method === 'GET'
-    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex, context, checks)
+    ? getFeedback(
+        request,
+        served,
+        watchedStore(store, accounts),
+        kv,
+        cors.headers,
+        noteIndex,
+        accounts === undefined ? context : { ...context, accounts },
+        checks,
+      )
     : postFeedback(
         request,
         served,

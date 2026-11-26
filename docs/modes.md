@@ -3,7 +3,7 @@
 The first question a reader has is whether their reviewers need the site to ship anything. There are
 three answers, and picking one is the only decision this page asks for.
 
-|                                     | **Public**                      | « Private »                           | « Team »                             |
+|                                     | **Public**                      | « Extension »                         | « Team »                             |
 | ----------------------------------- | ------------------------------- | ------------------------------------- | ------------------------------------ |
 | The site embeds                     | the widget                      | nothing                               | the widget, dormant                  |
 | Delivered as                        | `<script>` tag or npm           | a browser extension                   | `<script>` tag or npm                |
@@ -32,11 +32,11 @@ What the three modes differ on is who can produce that session.
 
 - Public mode cannot, and does not need to. It is the site that everyone reads. The widget on the
   page reads with no credential, and so does `curl`.
-- Private mode cannot. The extension mounts the widget with no token and no transport, so it has
+- Extension mode cannot. The extension mounts the widget with no token and no transport, so it has
   nothing to attach and the site embeds nothing that could supply one. On a site that members read,
   those reads answer `401`, and the page shows no pins. The popup says why: `This worker answers a
-  signed-in reader only, and private mode carries no session.` On a site that everyone reads, the pins
-  are the same pins on the same open path: private mode changes who is shown the feedback, never
+  signed-in reader only, and extension mode carries no session.` On a site that everyone reads, the pins
+  are the same pins on the same open path: extension mode changes who is shown the feedback, never
   who may fetch it.
 - Team mode is the only one where the reviewer supplies it, and the only one that keeps it out of
   the page. The site's widget is handed the extension's transport, and the token is attached in the
@@ -50,18 +50,18 @@ A site that only members read takes a note from its members only, unless it says
 page ». « Who can leave a note » is a setting of such a site, and « Members only » is the
 default of a new one: a note with no session answers `401`, and the widget offers none. With
 « Anyone on the page », a note with no session is kept: its sender cannot read it back, and the
-members find it. Every site made before 0.3.0 has that value. Private mode carries no session,
-so a site that a reviewer opens in private mode must say « Anyone on the page ».
+members find it. Every site made before 0.3.0 has that value. Extension mode carries no session,
+so a site that a reviewer opens in extension mode must say « Anyone on the page ».
 
 So:
 
 - pins nobody minds being read → public, on a site that everyone reads, and the simplest of the
   three;
-- a client's staging you must not ask them to deploy to → private, and treat the notes as
+- a client's staging you must not ask them to deploy to → extension, and treat the notes as
   readable by anyone who can build the URL if the site is read by everyone;
 - your own product, notes internal → team, on a site that members read.
 
-A private-mode reviewer is not verified either: verification comes from the session the extension
+An extension-mode reviewer is not verified either: verification comes from the session the extension
 holds, and only the relay carries it. Their name on a note is self-declared, exactly as a visitor's
 on a public site: `reporter.verified` is the worker's word and it withholds it.
 
@@ -73,19 +73,20 @@ token were sent. Before 0.3.0, a client of
 `FRUITBACK_CLIENTS` had that secret, and « a site with its own login » ran public mode with
 `read: 'authenticated'`. Whether a site of the console gets such a secret is not decided.
 
-## Private mode is not going away
+## Extension mode is not going away
 
-Team mode covers a team reviewing its own product, which private mode served awkwardly: it asked a
-team to deploy nothing when the code is theirs. Private mode keeps the case team mode cannot reach:
+Team mode covers a team reviewing its own product, which extension mode served awkwardly: it asked a
+team to deploy nothing when the code is theirs. Extension mode keeps the case team mode cannot reach:
 **a client's site that will never install the package**. One origin, switched on in a popup, and
 nothing to ask anybody to ship.
 
-Both extension modes are one field on the site's entry, chosen in the popup, and an entry with no
-mode reads as private.
+The two modes of the extension, extension and team, are one field on the site's entry, chosen in the
+popup. The field keeps the value `private`, the old name of extension mode, so a rule saved or
+imported before the rename still works, and an entry with no mode reads as extension mode.
 
 ## What each one needs
 
-|                                          | Public | Private                      | Team         |
+|                                          | Public | Extension                    | Team         |
 | ---------------------------------------- | ------ | ---------------------------- | ------------ |
 | An instance, and the site in its console | yes    | yes                          | yes          |
 | A `<script>` tag or `init` on the site   | yes    | **no**                       | yes, dormant |
@@ -97,17 +98,17 @@ Every mode needs the instance: the worker, its PostgreSQL and its console. The w
 a tracker when a site sends there, and that key cannot ship in client-side JavaScript; the console is
 where a site is made. Self-hosted, it is one compose file: [self-hosting.md](self-hosting.md).
 
-A site read by members under private mode is worth spelling out: the widget the extension mounts
+A site read by members under extension mode is worth spelling out: the widget the extension mounts
 sends no token, so the read answers `401` and the page shows no pins, the same page as a worker that
 is down. The popup tells the two apart: it asks the worker the same read, and on a `401` it says that
-the worker wants a session that private mode does not carry. On a site whose notes are « Members
+the worker wants a session that extension mode does not carry. On a site whose notes are « Members
 only », the default of a new site, the widget offers no note either: the refusal of the
 read says `canWrite: false`. Such a site must say « Anyone on the page » to take the notes of a
-private-mode reviewer, and is still read by members only.
+extension-mode reviewer, and is still read by members only.
 
 One instance serves team mode for several clients, grouped in workspaces. A session
 belongs to the workspace it was connected for, and reads and writes on the sites of that workspace
-and of no other. Each site keeps its own visibility, so a site in private mode can stay read by
+and of no other. Each site keeps its own visibility, so a site in extension mode can stay read by
 everyone beside a team-mode site that members read.
 
 ## `showComments` is an editorial switch, not an access control

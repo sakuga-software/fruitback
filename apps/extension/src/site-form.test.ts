@@ -60,7 +60,7 @@ describe('a wildcard in team mode (FRU-75)', () => {
     assert.equal(complaint(team, 'https://*.staging.acme.dev'), WILDCARD_TEAM_PROBLEM);
   });
 
-  it('is still accepted in private mode, which carries no credential', () => {
+  it('is still accepted in extension mode, which carries no credential', () => {
     assert.equal(
       complaint({ mode: 'private', endpoint: 'https://w.test', clientId: 'acme' }, 'https://*.staging.acme.dev'),
       '',

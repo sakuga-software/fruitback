@@ -105,6 +105,14 @@ const PANEL_TITLE = 'source-panel-title';
 /** The id of the title « Your connectors ». */
 const CONNECTED_TITLE = 'connected-title';
 
+/**
+ * Whether the screen reads the sends of a connector that wait (FRU-714): one whose sends the worker
+ * says wait, of any kind; with no health from the worker, one that receives, as before.
+ */
+function toRead(connector: Connector): boolean {
+  return connector.health === undefined ? receives(connector) : connector.health.failing > 0;
+}
+
 export default function Connectors() {
   useLocale();
   const { workspace, failingRead } = useWorkspace();
@@ -182,11 +190,14 @@ export default function Connectors() {
     const read = listedOf(placed, (data) => data.sites);
     setSites((current) => (read === 'failed' && typeof current !== 'string' ? current : read));
 
-    // The sends that wait, for the health of each connector that receives. A read that fails is said
-    // above the table, and its row says that its health was not read.
+    // The sends that wait, for the health of each connector. FRU-714: the worker says how many with
+    // the list, so only a connector whose sends wait is read, for what waits and the ids of « Retry »,
+    // whatever its kind. A worker that did not say reads each connector that receives, as before. A
+    // read that fails is said above the table, and its row says that its health was not read.
     if (listed.ok) {
+      const all = listed.data.connectors;
       const counts = await Promise.all(
-        listed.data.connectors.filter(receives).map(async (connector) => {
+        all.filter(toRead).map(async (connector) => {
           const read = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
 
           if (!read.ok || !Array.isArray(read.data?.deliveries)) return undefined;
@@ -198,12 +209,28 @@ export default function Connectors() {
         }),
       );
       const found = counts.filter((count) => count !== undefined);
-      setLate(Object.fromEntries(found));
+      // A connector that receives, and whose sends the worker says none wait: nothing to read.
+      const none = all.flatMap((connector) =>
+        receives(connector) && connector.health?.failing === 0
+          ? [[connector.id, { notes: 0, calls: 0, ids: [] }] as const]
+          : [],
+      );
+      const read = Object.fromEntries([...none, ...found]);
+      setLate(read);
       setHealthUnread(found.length < counts.length);
-      // The red count of « Connectors » in the bar: every send that waits, once every list was read. A
-      // list that was not read gives no new count: the bar keeps the one it had, never a smaller one.
-      if (found.length === counts.length)
-        reportFailing.current(found.reduce((sum, [, each]) => sum + each.notes + each.calls, 0));
+      // The red count of « Connectors » in the bar: every send that waits, of every connector, once
+      // each count is known: the one the worker said, or the list that was read; a tracker of a worker
+      // that says no health has none. A count that is not known gives no new count: the bar keeps the
+      // one it had, never a smaller one.
+      const waiting = all.map((connector) => {
+        if (connector.health !== undefined) return connector.health.failing;
+        if (!receives(connector)) return 0;
+        const late = read[connector.id];
+
+        return late === undefined ? undefined : late.notes + late.calls;
+      });
+      if (waiting.every((count) => count !== undefined))
+        reportFailing.current(waiting.reduce<number>((sum, count) => sum + (count ?? 0), 0));
     }
 
     return { found: listed.ok ? listed.data.connectors : [], adds: listed.ok && listed.data.available };

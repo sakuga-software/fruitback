@@ -109,7 +109,7 @@ export type MountMessage = {
   relay?: true;
   /**
    * The « Name on my notes » of the preferences (FRU-302), for a widget the extension mounts in
-   * private mode: the composer starts with it. The page can read it, like the rest of this message;
+   * extension mode: the composer starts with it. The page can read it, like the rest of this message;
    * it is the name the reviewer chose to sign their notes with on these sites.
    */
   name?: string;
@@ -239,7 +239,7 @@ export type HelloMessage = {
  * The other half of `mount`, sent for a site that embeds its own widget. The main world answers it
  * by putting a transport on the page, so the site's dormant widget has something to call. Nothing
  * travels with it: the endpoint and the client id are the site's own, which is what separates this
- * mode from the private one.
+ * mode from extension mode.
  */
 export type AnnounceMessage = {
   channel: typeof CHANNEL;

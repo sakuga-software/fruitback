@@ -52,6 +52,12 @@ export const WITHDRAW_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/withdraw$/;
 export const PLACE_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/place$/;
 
 /**
+ * The path of the status of one note, changed from its thread (FRU-718): `FEEDBACK_PATH`, the id, then
+ * `/status`. The worker decides who may: a member who left the note, or a role that manages the sites.
+ */
+export const STATUS_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/status$/;
+
+/**
  * The path of a file of a note on its way (FRU-332): `POST /attachments`, its bytes in base64 between
  * the page and the background. The only path that takes a body in base64.
  */
@@ -174,8 +180,9 @@ function isTimeout(error: unknown): boolean {
 /**
  * The one URL this origin's widget is allowed to ask for.
  *
- * An allowlist of four paths, the notes, a reply under one note, a verdict on one note
- * (FRU-300), and a file of a note (FRU-332), so a route the widget grows
+ * An allowlist of paths: the notes, a reply under one note, a verdict on one note (FRU-300), the
+ * edit, the withdrawal, the move and the status of one note (FRU-475, FRU-605, FRU-718), and a file of
+ * a note (FRU-332), so a route the widget grows
  * later is refused here until somebody adds it — rather than the relay becoming a way to reach
  * anything on that worker. The origin and
  * the path are compared apart because an endpoint may carry a path of its own
@@ -200,6 +207,7 @@ function targets(url: string, endpoint: string): boolean {
       EDIT_PATH.test(rest) ||
       WITHDRAW_PATH.test(rest) ||
       PLACE_PATH.test(rest) ||
+      STATUS_PATH.test(rest) ||
       rest === ATTACHMENTS_PATH
     );
   } catch {

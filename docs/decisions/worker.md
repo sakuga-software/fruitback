@@ -428,6 +428,23 @@ degradation the ticket asked to have written down rather than discovered.
   `manage-workspace`, with the rule and the code of the name of a workspace (`invalid-name`); `null`
   or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
   installed again keeps the name, as it keeps its connector.
+- **The list of the connectors says the health of each one** (FRU-714), for the table of the
+  Connectors screen: `health: { failing, notes?, lastDeliveredAt? }` in `GET
+  /console/workspaces/<id>/connectors`, read beside the list with two grouped statements.
+  - `failing` is `waitingDeliveries`: the deliveries of the connector that did not arrive, tried
+    again or given up. A tracker has none: it takes a note in the request, or refuses it there and
+    the widget keeps the text, so a tracker with `failing: 0` and no `attention` is healthy.
+  - `notes` is `byConnector` of the index: the notes of the workspace with this `connector_id`, as
+    the chip of its place counts them. 9 to 15 ms for 60,000 notes of one workspace (190,000 in the
+    instance), by `note_index_by_workspace`; an index of `(workspace_id, connector_id)` made it 3 to
+    8 ms and cost each note written, so it was not taken. An index that does not answer costs
+    `notes` only.
+  - `lastDeliveredAt` is `connectors.delivered_at` (migration 0054): `settleDelivery` writes it in
+    the statement that removes a delivery that arrived, and `noteDelivered` when a tracker took a
+    note (`delivering` of `connectors.ts`). A later moment is never replaced by an earlier one. A
+    connector of before has none until its next send arrives.
+  - Deliveries that do not answer leave `health` out, and the console reads the list of each address,
+    as before: no count is not « none waits ».
 
 ## Where a note is stored
 
@@ -856,6 +873,13 @@ same database since FRU-142: see the section after this one.
 - **`postgres.ts` is the one file that names the driver**, as types, and it loads `pg` at the first
   call. A lint rule holds the import. A test held the rest in a process of its own, for a worker with
   no database, until FRU-225 made that worker refuse to start. `/health` opens no database.
+- **A route gets the accounts of its request from `app.ts`, never from the context of the
+  transport** (FRU-730). `server.ts` hands `handleRequest` no store of the accounts: `app.ts` resolves
+  them once (`context.accounts ?? accountStoreFor`) and passes them on, to `getFeedback` as to
+  `postFeedback`. Before FRU-730 the read took the bare context, and in production it gave no status
+  that a team added, no colour of a tracker and no line of an agent, while every suite was green: the
+  suites put `accounts` in the context by hand. `read-accounts.test.ts` reads a page through
+  `createFruitbackServer`, the handler of `server.ts`.
 - **`Database` is the seam**: `run`, `transaction`, `alone` and `close`. It hands a store the `Db` of
   Drizzle (FRU-180: see _The database in Drizzle_). `createPgDatabase` is the one implementation
   that ships. The tests have a second one on PGlite, in `postgres.fixture.ts`.
@@ -1582,7 +1606,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3342,7 +3366,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3707,6 +3731,22 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
   withdrawal does not depend on the replies being shown: the stage says it on its own.
 - The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
+
+## The status of a note, from its thread on the page (FRU-718)
+
+- **No new route.** The thread of the widget calls `POST /feedback/<id>/status` of FRU-367, with its
+  rights: a session that writes on the site, of the person who left the note or of a role with
+  `manage-sites`. A visitor known by their browser has no session, and changes no status, even of
+  their own note (decision of the orchestrator, 2026-11-26): `401`.
+- **The tracker follows by the same path as the console.** The worker's own store and an address
+  take a status; a note of a tracker is `403 statuses-not-taken`, and the console offers no status for
+  it either. No second path writes the state of a tracker.
+- **`canSetStatus: true` is added after the cache**, as `editable` (`statusSetterOf`). It reads no
+  session in the store: `memberOf` checks the token and the reach, so a reader with no token costs no
+  query, then `takesStatuses`, then the role. The route reads the session again, and decides. A store
+  that does not answer costs the menu, never the read: before this, a read whose session store was
+  down still answered (`accounts-postgres.test.ts`), and it still does. The cost, measured on a page
+  of 50 notes, is in the pull request of FRU-718.
 
 ## The author edits a note (FRU-475)
 

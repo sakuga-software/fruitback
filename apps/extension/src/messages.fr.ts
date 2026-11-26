@@ -150,7 +150,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Every site this pattern covers': 'Chaque site que couvre ce motif',
   'This origin': 'Cette origine',
   Team: 'Équipe',
-  Private: 'Privé',
+  Extension: 'Extension',
   Granted: 'Accordé',
   'Runs nowhere': 'Ne tourne nulle part',
   'No access': 'Pas d’accès',
@@ -303,7 +303,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'workspace · {name}': 'espace de travail · {name}',
   // A straight apostrophe: the guide quotes this line as the popup writes it.
   "team mode · the site's own widget": 'mode équipe · le widget du site',
-  'Private · the extension shows the widget': 'Privé · l’extension monte le widget',
+  'Extension · the extension shows the widget': 'Extension · l’extension monte le widget',
   'Team · the site embeds it, the extension adds your session': 'Équipe · le site l’intègre, nous relayons',
   Mode: 'Mode',
 
@@ -339,8 +339,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You connect to a server, not to a site: one session covers every site that reports to it. Only team mode needs one.':
     'On se connecte à un serveur, pas à un site : une session couvre tous les sites qui lui rendent compte. Seul le mode équipe en a besoin.',
   'No server yet. A rule names one.': 'Aucun serveur pour l’instant. Une règle en nomme un.',
-  'Not connected. Private-mode sites read without a session; a team site would show nothing.':
-    'Pas connecté. Les sites en mode privé lisent sans session ; un site d’équipe resterait endormi.',
+  'Not connected. Extension-mode sites read without a session; a team site would show nothing.':
+    'Pas connecté. Les sites en mode extension lisent sans session ; un site d’équipe resterait endormi.',
   Connect: 'Se connecter',
   'Plain http on localhost. Connecting works here; anywhere else a session must not cross http.':
     'http simple sur localhost. La connexion fonctionne ici ; ailleurs, une session ne doit pas passer par http.',
@@ -365,8 +365,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Top left': 'En haut à gauche',
   'In the head of a note you write, and in the note of a pin. The issue in your tracker keeps the selector either way.':
     'Dans l’en-tête d’une note que vous écrivez, et dans la note d’un repère. Le ticket de votre outil de suivi garde le sélecteur dans tous les cas.',
-  'Prefilled in private mode. Team mode signs with your session.':
-    'Prérempli en mode privé. Le mode équipe signe avec votre session.',
+  'Prefilled in extension mode. Team mode signs with your session.':
+    'Prérempli en mode extension. Le mode équipe signe avec votre session.',
   'Not set': 'Aucun',
   'Leave a note shortcut': 'Raccourci pour laisser une note',
   "Set in your browser's extension shortcuts.": 'Se règle dans les raccourcis d’extensions du navigateur.',
@@ -474,10 +474,21 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback a besoin de l’accès à ces sites pour y fonctionner. Rien n’a été enregistré.',
   'Fruitback could not confirm that change. Check the list, then try again.':
     'Fruitback n’a pas pu confirmer ce changement. Vérifiez la liste, puis réessayez.',
-  'This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.':
-    'Ce site prend les notes de ses membres seulement, et le mode privé ne porte aucune session : aucune note ne peut partir d’ici. Pour le relire en mode privé, un admin du site choisit « Toute personne sur la page » sous « Qui peut laisser une note ? » dans la console.',
-  'This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.':
-    'Ce serveur ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
+  'This site takes notes from its members only, and in extension mode the extension holds no session: no note can be sent from here. To review it in extension mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.':
+    'Ce site prend les notes de ses membres seulement, et le mode extension ne porte aucune session : aucune note ne peut partir d’ici. Pour le relire en mode extension, un admin du site choisit « Toute personne sur la page » sous « Qui peut laisser une note ? » dans la console.',
+  'This server answers a signed-in reader only, and in extension mode the extension holds no session. Notes do not show on this site.':
+    'Ce serveur ne répond qu’à un lecteur connecté, et le mode extension ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
+  // FRU-663: the same refusals, on the Fruitback of this build.
+  'Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member.':
+    'Seuls les membres de ce site voient ses notes et en laissent ici. Connectez-vous à Fruitback pour le relire en tant que membre.',
+  'Only the members of this site see its notes here. Sign in to Fruitback to review it as a member.':
+    'Seuls les membres de ce site voient ses notes ici. Connectez-vous à Fruitback pour le relire en tant que membre.',
+  'You are a member of this site. Turn it on with your account to see its notes and leave one.':
+    'Vous êtes membre de ce site. Activez-le avec votre compte pour voir ses notes et en laisser une.',
+  'Only the members of this site see its notes, and your account is not one of them. Ask its team to invite you.':
+    'Seuls les membres de ce site voient ses notes, et votre compte n’en fait pas partie. Demandez à son équipe de vous inviter.',
+  'Sign in to Fruitback': 'Se connecter à Fruitback',
+  'Turn on with my account': 'Activer avec mon compte',
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the server says the domain is proven.':
     'L’espace de travail ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le serveur dira que le domaine est prouvé.',
   'This rule is too large for the account of this browser, which keeps at most 8 KB for one rule. It is not copied there, and it stays and works in this browser.':

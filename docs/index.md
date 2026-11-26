@@ -12,7 +12,7 @@ layout: landing
 
 |                                            |                                                                                                               |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| [Choose a mode](modes.md)                  | Public, private and team: what the site ships in each, and who may read the pins. Start here.                 |
+| [Choose a mode](modes.md)                  | Public, extension and team: what the site ships in each, and who may read the pins. Start here.               |
 | [Install the widget](install.md)           | Two lines on a site with no build step, and what each option does.                                            |
 | [Run Fruitback yourself](self-hosting.md)  | From an empty folder to a first pin, then backups, upgrades and every environment variable.                   |
 | [Leave a note](leave-a-note.md)            | For a client: point at what should change, and follow it. Two minutes.                                        |

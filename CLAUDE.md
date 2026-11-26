@@ -11,7 +11,7 @@ page, and here last: `claude-md.test.ts` holds this file to its budget, and
 Fruitback is a visual feedback widget: a client clicks an element on their staging site, writes a
 note, and it becomes an issue carrying the CSS selector, the React component and the source file.
 Coming back to the page, they see their pins again, coloured by that issue's status. It ships as
-three modes over one core — public, private, team: [docs/modes.md](docs/modes.md).
+three modes over one core — public, extension, team: [docs/modes.md](docs/modes.md).
 
 ## Commands
 

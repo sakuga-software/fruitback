@@ -75,6 +75,9 @@ export const connectors = pgTable(
     // The name a workspace gave the connector (FRU-404), NULL for none: `label` stays the worker's.
     name: text('name'),
     linear_organization: text('linear_organization'),
+    // FRU-714: when the last send to the connector arrived: a note that a tracker took, or a delivery
+    // of the queue that an address took. NULL: none arrived since the column exists.
+    delivered_at: instant('delivered_at'),
   },
   (table) => [
     unique('connectors_installation_key').on(table.installation),
