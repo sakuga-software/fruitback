@@ -78,7 +78,12 @@ test('a member changes the status of a note from its thread, the pin follows, an
   );
   await expect(thread.locator('.fruitback-thread-state')).toHaveText(PROGRESS);
   await expect(pinFor(page, 'The button is hard to read')).toHaveAttribute('data-fruitback-stage', 'progress');
-  await expect(status).toBeFocused();
+  // The focus stays on the chip, which says the new status now.
+  await expect(
+    thread.getByRole('button', {
+      name: /^(Status: In progress\. Change the status|Statut : En cours\. Changer le statut)$/,
+    }),
+  ).toBeFocused();
 
   // The store says it too: after a read, the note is in progress.
   await page.reload();
