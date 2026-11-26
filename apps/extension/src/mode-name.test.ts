@@ -31,12 +31,19 @@ function textFiles(folder: string): string[] {
 }
 
 const OLD_NAMES = [/\bprivate[ -]mode\b/i, /\bmode priv[ée]/i, /« Private »/, /\bPrivé\b/, /\bPrivate ·/];
-/** A browser's own private mode, which is not the mode of the extension. */
-const BROWSER_PRIVATE = /\b(browser|navigateur|Safari|Firefox|Chrome|Chromium|Edge|window|fenêtre)\b/i;
+/**
+ * A browser's own private mode, which is not the mode of the extension: the browser named just
+ * before it, or after it. Only that phrase is taken out of a line, so the old name beside it still
+ * counts (review of #967).
+ */
+const BROWSER_PRIVATE =
+  /\b(?:Safari|Firefox|Chrome|Chromium|Edge)\s+(?:in|en)\s+(?:private mode|mode privé)|\bprivate mode of (?:the|a) browser\b|\bmode privé du navigateur\b/gi;
 
 /** Whether a line names the mode of the extension by its old name. */
 function namesTheOldMode(line: string): boolean {
-  return OLD_NAMES.some((pattern) => pattern.test(line)) && !BROWSER_PRIVATE.test(line);
+  const left = line.replace(BROWSER_PRIVATE, '');
+
+  return OLD_NAMES.some((pattern) => pattern.test(left));
 }
 
 describe('the mode the extension mounts is « Extension mode » (FRU-662)', () => {
@@ -75,13 +82,17 @@ describe('the mode the extension mounts is « Extension mode » (FRU-662)', () =
       'Le mode privé ne porte aucune session.',
       '| « Private » | « Team » |',
       "['private', 'Private · the extension shows the widget'],",
+      // A browser named on the line does not hide the old name of the mode.
+      'Private mode in the extension of the browser.',
+      'Safari in private mode, and the private mode of the extension.',
+      'Open it in a private window: private mode carries no session.',
     ]) {
       assert.ok(namesTheOldMode(line), line);
     }
     for (const line of [
       'Reading `localStorage` can throw in Safari in private mode.',
-      'Open the page in a private window, or in the private mode of the browser.',
-      'Firefox en mode privé refuse le stockage.',
+      'Open the page in the private mode of the browser.',
+      'Firefox en mode privé refuse le stockage, comme le mode privé du navigateur.',
       'the private ranges of the network, a private repository',
     ]) {
       assert.ok(!namesTheOldMode(line), line);
