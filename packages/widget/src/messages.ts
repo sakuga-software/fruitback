@@ -135,6 +135,9 @@ export const ENGLISH = {
   'composer.sent': 'Sent',
   // The card of a sent note (FRU-305): its identifier, what its pin does, and the way to the issue.
   'composer.sentAs': 'Sent as {identifier}',
+  // FRU-704: the site holds the notes of its visitors; a member approves this one before it goes on.
+  'composer.held': 'Sent for review',
+  'composer.heldFollows': 'The team of this site reviews notes before they go on. Its pin shows here once approved.',
   'composer.sentFollows': 'The pin stays here and follows the issue’s status.',
   'composer.sentOpen': 'Open →',
   // FRU-604: asked of a visitor with no account, under the card of the note they just sent.

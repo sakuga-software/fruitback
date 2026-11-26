@@ -400,6 +400,13 @@
       "when": 1795701699206,
       "tag": "0056_sites_visitor_notes_per_hour",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795701954889,
+      "tag": "0057_hold_visitor_notes",
+      "breakpoints": true
     }
   ]
 }

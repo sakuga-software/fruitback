@@ -35,6 +35,7 @@ const PATHS = {
   key: 'M15 4a5 5 0 1 0 0 10a5 5 0 1 0 0-10M11.5 12.5L4 20M7 17l2 2',
   shield: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9c-4.6-.7-8-4.5-8-9V6z',
   clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
+  inbox: 'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',
 } as const;
 
 type IconName = keyof typeof PATHS;
@@ -591,6 +592,27 @@ export function Safeguards({
           <Fixed>{t('n/a')}</Fixed>
         )}
       </Safeguard>
+      {/* FRU-704: the switch is the whole line, as « After a note » draws one. Where only members write, said. */}
+      {writes ? (
+        <div className="flex items-center gap-[12px] border-t border-line px-[16px] py-[10px]">
+          <span className="text-ink-soft">
+            <Icon name="inbox" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <Toggle
+              label={t('Hold new visitor notes')}
+              hint={t('A member approves before they are sent')}
+              value={access.holdVisitorNotes}
+              disabled={disabled}
+              onChange={(holdVisitorNotes) => onChange({ ...access, holdVisitorNotes })}
+            />
+          </span>
+        </div>
+      ) : (
+        <Safeguard icon="inbox" title={t('Hold new visitor notes')} hint={t('A member approves before they are sent')}>
+          <Fixed>{t('n/a')}</Fixed>
+        </Safeguard>
+      )}
     </AccessCard>
   );
 }

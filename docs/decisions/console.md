@@ -1686,6 +1686,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
+- **« Hold new visitor notes » is the second line of « Safeguards » (FRU-704)**, a switch, sent where
+  anybody writes, « n/a » elsewhere. Its notes wait in the screen « To approve » (`/w/<id>/approve`),
+  an entry of « Views » in the bar for a role that sees the tracker, shown while notes wait or while
+  it is on screen: the bar reads `…/held/count` once by workspace, and the screen tells it each new
+  count. A note shows its site, its page, its author and its age; « Approve » and « Reject » answer
+  it, and a refusal says why, with the note still there.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».
