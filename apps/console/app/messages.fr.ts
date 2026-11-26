@@ -730,11 +730,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes from visitors on the sites that hold them. Approve one to send it on, or reject it.':
     'Les notes des visiteurs sur les sites qui les retiennent. Approuvez-en une pour la transmettre, ou rejetez-la.',
   'The tracker no longer has the place of this site. The note still waits.':
-    'Le tracker n’a plus l’emplacement de ce site. La note attend toujours.',
+    'L’outil de suivi n’a plus l’emplacement de ce site. La note attend toujours.',
   'This site sends its notes nowhere yet. The note still waits.':
     'Ce site n’envoie encore ses notes nulle part. La note attend toujours.',
   'The tracker did not answer. The note still waits: try again.':
-    'Le tracker n’a pas répondu. La note attend toujours : réessayez.',
+    'L’outil de suivi n’a pas répondu. La note attend toujours : réessayez.',
   'This site no longer takes notes. The note was removed.': 'Ce site ne prend plus de notes. La note a été retirée.',
   'The note did not change. Try again.': 'La note n’a pas changé. Réessayez.',
   'Rejected. The note was removed.': 'Rejetée. La note a été retirée.',
