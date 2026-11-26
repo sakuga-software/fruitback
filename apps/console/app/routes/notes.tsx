@@ -551,19 +551,8 @@ export default function Notes() {
                   autoFocus={movedOut}
                   onClick={() => {
                     setTyped('');
-                    filter({
-                      place: '',
-                      site: '',
-                      stage: '',
-                      mine: '',
-                      archived: '',
-                      unresolved: '',
-                      assignee: '',
-                      priority: '',
-                      label: '',
-                      due: '',
-                      q: '',
-                    });
+                    // Every filter of the address, so that a filter added later is cleared too (FRU-722).
+                    filter(Object.fromEntries(FILTERS.map((name) => [name, ''])));
                   }}
                 >
                   {t('Clear the filters')}
