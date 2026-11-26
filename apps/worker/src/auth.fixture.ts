@@ -6,6 +6,7 @@ import { type AuthConfig, authOptions } from './auth.ts';
 import type { PgDatabase } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   createMigratedPgliteDatabase,
   createPgliteDatabase,
   createMigratedRealDatabase,
@@ -162,7 +163,7 @@ export async function signUp(
 
 /** The databases a case runs on. PGlite has one connection; the CI job « postgres » has a server. */
 export const DATABASES: readonly { label: string; open: () => Promise<PgDatabase>; skip: string | false }[] = [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ];
 
@@ -171,7 +172,7 @@ export const DATABASES: readonly { label: string; open: () => Promise<PgDatabase
  * migrations. On the real server, each case gets a copy of a migrated database.
  */
 export const MIGRATED_DATABASES: typeof DATABASES = [
-  { label: 'PGlite', open: createMigratedPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createMigratedPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createMigratedRealDatabase, skip: NO_REAL_POSTGRES },
 ];
 
