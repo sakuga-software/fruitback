@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { deepActiveElement, focusables, holdFocus } from './focus.ts';
 import { keyboardEventCtor, mountPage } from './dom.fixture.ts';
+import { keepTyping } from './key-guard.ts';
 
 describe('focusables', () => {
   it('keeps what Tab reaches and drops what it does not', () => {
@@ -77,5 +78,27 @@ describe('holdFocus with two dialogs open', () => {
 
     popoverHold.destroy();
     panelHold.destroy();
+  });
+});
+
+describe('holdFocus and the keys of a field of the widget (FRU-726)', () => {
+  it('brings a Tab from a field of the widget out of the dialog back in, though the key stops before the document', () => {
+    const page = mountPage('<div id="host"></div>');
+    const root = page.query('#host').attachShadow({ mode: 'open' });
+    root.innerHTML =
+      '<input id="search" type="search"><div id="dialog" aria-modal="true"><button id="in">In</button></div>';
+    const stop = keepTyping(root);
+    const hold = holdFocus(root.getElementById('dialog') as HTMLElement, () => {});
+    hold.remember();
+    const search = root.getElementById('search') as HTMLInputElement;
+    search.focus();
+
+    search.dispatchEvent(
+      new (keyboardEventCtor(page))('keydown', { key: 'Tab', bubbles: true, cancelable: true, composed: true }),
+    );
+
+    assert.equal(deepActiveElement(page.document)?.id, 'in');
+    hold.destroy();
+    stop();
   });
 });

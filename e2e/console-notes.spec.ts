@@ -18,7 +18,7 @@ import {
 
 /**
  * The Notes page (FRU-245), measured in a browser against screen 10 of the mockup of 2026-10-13: the
- * chips of where the notes went, the filters, the table, the pages, « Send again », and the states the
+ * chips of where the notes went, the filters, the table, its end, « Send again », and the states the
  * mockup does not draw (loading, none, no match, a read that failed).
  *
  * The worker is answered by stubs, at the shape of the route of FRU-244 that fru-console announced:
@@ -169,7 +169,7 @@ const FIRST: Note[] = [
     createdAt: since(6 * 24 * 60 + 60),
   },
 ];
-/** The second page: the notes after the eighth, as a cursor reaches them. */
+/** Two notes more than the mockup: the notes after the eighth. */
 const SECOND: Note[] = [
   { ...(FIRST[7] as Note), id: 'n9', excerpt: 'The footer links overlap on a tablet.', createdAt: since(8 * 24 * 60) },
   {
@@ -232,9 +232,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       return route.fulfill({ status: 204 });
     }
     if (pathname !== '/console/workspaces/w1/notes') return undefined;
-    // The order is kept apart (FRU-551): the table asks `order=status`, the board does not.
-    // The size of a page too (FRU-587): this stub answers 8 notes a page whatever is asked.
-    const { order, limit: _limit, ...asked } = Object.fromEntries(new URL(request.url()).searchParams);
+    // The order is kept apart (FRU-551): the table asks `order=status`, the board does not. The size
+    // of a read too: the ten notes are one read of 25 (FRU-724); `console-notes-pages.spec.ts` reads more.
+    const { order, limit, ...asked } = Object.fromEntries(new URL(request.url()).searchParams);
     worker.orders.push(order);
     worker.asked.push(asked);
     if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
@@ -260,8 +260,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 
         return (note.place?.connector ?? note.place?.kind) === asked.place;
       });
-      const start = asked.cursor === 'p2' ? 8 : 0;
-      const notes = placed.slice(start, start + 8);
+      const start = asked.cursor === undefined ? 0 : Number(asked.cursor.slice(1));
+      const size = Number(limit ?? 25);
+      const notes = placed.slice(start, start + size);
       const byPlace: Record<string, number> = {};
       for (const note of kept) {
         const id = (note.place?.connector ?? note.place?.kind) as string;
@@ -284,7 +285,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
                     : { byPlace, undelivered: kept.filter((note) => note.delivery !== undefined).length }),
                 },
               }),
-          ...(start + 8 < placed.length ? { next: 'p2' } : {}),
+          ...(start + size < placed.length ? { next: `p${start + size}` } : {}),
         },
       });
     };
@@ -313,7 +314,8 @@ const chips = (page: Page) => page.getByRole('group', { name: 'Where the notes w
 const chip = (page: Page, name: string | RegExp) =>
   page.getByRole('group', { name: 'Where the notes went' }).getByRole('button', { name });
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Search notes' });
-const pages = (page: Page) => page.getByRole('navigation', { name: 'Pages of notes' });
+// FRU-724: the end of the list, where « Load more » would be. Ten notes are one read: there is none.
+const end = (page: Page) => page.locator('[data-notes-end]');
 const row = (page: Page, excerpt: string) => rows(page).filter({ hasText: excerpt });
 /** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
 async function choose(page: Page, field: string, value: string): Promise<void> {
@@ -338,11 +340,11 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
-test('the page is the one of the mockup: chips, filters, the table and its pages', async ({ page }) => {
+test('the page is the one of the mockup: chips, filters, the table and its end', async ({ page }) => {
   await page.clock.setFixedTime(NOON);
   const worker = await workerWith(page);
   await open(page);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 
   // The bar has its entry, on screen, first (FRU-684).
   const rail = page.getByRole('navigation', { name: 'Workspace' }).getByRole('link');
@@ -531,20 +533,12 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     'font-size': '12px',
   });
 
-  // The pages.
-  await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
-  // « Previous » and « Next » are small icon buttons (FRU-587, in place of the outlined buttons of the mockup).
-  const previous = pages(page).getByRole('button', { name: 'Previous page' });
-  await expect(previous).toBeDisabled();
-  expect.soft(await styles(previous, ['width', 'height', 'border-top-left-radius'])).toEqual({
-    width: '24px',
-    height: '24px',
-    'border-top-left-radius': '6px',
-  });
-  expect
-    .soft(await styles(pages(page), ['margin-top', 'font-size']))
-    .toEqual({ 'margin-top': '16px', 'font-size': '13px' });
-  expect.soft(await painted(pages(page), 'color')).toEqual(rgb(MUTED));
+  // The end of the list (FRU-724, in place of the pages of the mockup): how many are shown, muted.
+  await expect(page.getByRole('navigation', { name: 'Pages of notes' })).toHaveCount(0);
+  await expect(end(page)).toContainText('10 of 10');
+  await expect(end(page).getByRole('button', { name: 'Load more' })).toHaveCount(0);
+  expect.soft(await styles(end(page), ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await painted(end(page), 'color')).toEqual(rgb(MUTED));
 
   // The heads of the groups: a worker that does not count each stage gets no number, as the notes
   // of one page are no count of the list (review of #764).
@@ -563,7 +557,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   const worker = await workerWith(page);
   await page.clock.install();
   await open(page);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 
   // A tab.
   await chip(page, /^REST API/).click();
@@ -573,7 +567,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(chip(page, /^All/)).toHaveAttribute('aria-pressed', 'false');
   expect(worker.asked.at(-1)).toEqual({ place: 'c2' });
   await chip(page, /^All/).click();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 
   // The status, from « Filter » (FRU-686): its chip says it.
   await choose(page, 'Status', 'Done');
@@ -612,14 +606,14 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(page).not.toHaveURL(/q=/);
   await removeFilter(page, 'Status').click();
   await expect(page).not.toHaveURL(/stage=/);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   await choose(page, 'Left by', 'Me');
   await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
   await expect(rows(page)).toHaveCount(1);
   await expect.poll(() => worker.asked.at(-1)).toEqual({ mine: '1' });
   await expect(filtersOn(page).locator('.kit-filter-tag')).toHaveText(['Left byMe']);
   await removeFilter(page, 'Left by').click();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   await expect(filtersOn(page)).toHaveCount(0);
   await search(page).fill('mug');
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
@@ -638,7 +632,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await filtersOn(page).getByRole('button', { name: 'Clear' }).click();
   await expect(page).not.toHaveURL(/stage=|q=/);
   await expect(search(page)).toHaveValue('');
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 });
 
 test('« / » gives the focus to the search, but not from a field (FRU-686)', async ({ page }) => {
@@ -656,7 +650,7 @@ test('« / » gives the focus to the search, but not from a field (FRU-686)', as
 test('a list chosen while the search waits its 300 ms is kept when the search lands', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   await search(page).fill('mug');
   // Inside the 300 ms of the search: a status is chosen.
   await choose(page, 'Status', 'Done');
@@ -664,52 +658,6 @@ test('a list chosen while the search waits its 300 ms is kept when the search la
   await page.waitForTimeout(400);
   await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
   await expect.poll(() => worker.asked.at(-1)).toEqual({ stage: 'done', q: 'mug' });
-});
-
-test('the pages go forward with the cursor and come back, « Previous » off on the first one', async ({ page }) => {
-  const worker = await workerWith(page);
-  await open(page);
-  const next = pages(page).getByRole('button', { name: 'Next page' });
-  const previous = pages(page).getByRole('button', { name: 'Previous page' });
-  await expect(previous).toBeDisabled();
-  await next.click();
-  await expect(rows(page)).toHaveCount(2);
-  await expect(pages(page).locator('span').first()).toHaveText('9 to 10 of 10');
-  // FRU-502: « Next » keeps the counts of the filter, and the worker reads the page alone.
-  expect(worker.asked.at(-1)).toEqual({ cursor: 'p2', counts: 'none' });
-  await expect(chip(page, /^Linear/)).toBeVisible();
-  await expect(next).toBeDisabled();
-  await expect(page).toHaveURL(/[?&]cursor=p2(&|$)/);
-  await previous.click();
-  await expect(rows(page)).toHaveCount(8);
-  await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
-  await expect(previous).toBeDisabled();
-  expect(worker.asked.at(-1)).toEqual({});
-  // A filter starts again from the first page.
-  await next.click();
-  await expect(rows(page)).toHaveCount(2);
-  await chip(page, /^Linear/).click();
-  await expect(page).not.toHaveURL(/cursor=/);
-  await expect.poll(() => worker.asked.at(-1)).toEqual({ place: 'c1' });
-});
-
-test('a link to a later page reads its range, and « Previous » goes to the first page, range and all', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  // A link shared from the second page, or a reload there: the cursors before it are not known.
-  await open(page, '?cursor=p2&from=9');
-  await expect(rows(page)).toHaveCount(2);
-  await expect(pages(page).locator('span').first()).toHaveText('9 to 10 of 10');
-  // No count is held for this filter yet: the worker counts it (FRU-502).
-  expect(worker.asked.length).toBeGreaterThan(0);
-  expect(worker.asked.every((asked) => asked.counts === undefined)).toBe(true);
-  await pages(page).getByRole('button', { name: 'Previous page' }).click();
-  await expect(page).not.toHaveURL(/cursor=|from=/);
-  await expect(rows(page)).toHaveCount(8);
-  await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
-  await expect(pages(page).getByRole('button', { name: 'Previous page' })).toBeDisabled();
-  expect(worker.asked.at(-1)).toEqual({});
 });
 
 test('a group folds from its head, and stays folded for this person after a reload (FRU-685)', async ({ page }) => {
@@ -798,7 +746,6 @@ test('« Send again » waits, then the row loses its alert; a refusal says so on
 test('a delivery the worker gave up says so, and « Send again » still sends it', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await pages(page).getByRole('button', { name: 'Next page' }).click();
   const given = row(page, 'The contact form');
   await expect(given.locator('td').nth(4)).toHaveText('REST APIFailedNot delivered: Fruitback stopped trying');
   await expect(given.getByText('Failed', { exact: true })).toHaveAttribute(
@@ -806,9 +753,7 @@ test('a delivery the worker gave up says so, and « Send again » still sends it
     'Not delivered: Fruitback stopped trying',
   );
   // One that the worker still tries says « yet ».
-  await pages(page).getByRole('button', { name: 'Previous page' }).click();
   await expect(row(page, 'The order form').getByText('Not delivered yet', { exact: true })).toBeVisible();
-  await pages(page).getByRole('button', { name: 'Next page' }).click();
   await given.getByRole('button', { name: 'Send again' }).click();
   await expect(given.getByText(/Not delivered/)).toHaveCount(0);
   expect(worker.sent).toEqual(['POST /console/workspaces/w1/notes/n10/retry']);
@@ -848,7 +793,7 @@ test('a workspace with no note says so, and a read that failed is an alert, neve
   // « Try again » reads again, and the list comes.
   worker.read = 'list';
   await alert.getByRole('button', { name: 'Try again' }).click();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 });
 
 test('a filter that keeps nothing says so, and clears in one press', async ({ page }) => {
@@ -857,7 +802,7 @@ test('a filter that keeps nothing says so, and clears in one press', async ({ pa
   await expect(page.getByText('No note matches.')).toBeVisible();
   await expect(table(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Clear the filters' }).click();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   await expect(search(page)).toHaveValue('');
   await expect(page).not.toHaveURL(/q=/);
 });
@@ -865,13 +810,12 @@ test('a filter that keeps nothing says so, and clears in one press', async ({ pa
 test('while a filter is read, the rows stay and nothing a pointer can reach moves', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   const reachable = [
     chip(page, /^All/),
     chip(page, /^Linear/),
     search(page),
     row(page, 'The order form').getByRole('button', { name: 'Send again' }),
-    pages(page).getByRole('button', { name: 'Next page' }),
   ];
   const before = await Promise.all(reachable.map(box));
 
@@ -879,8 +823,8 @@ test('while a filter is read, the rows stay and nothing a pointer can reach move
   await choose(page, 'Status', 'New');
   await expect(page).toHaveURL(/stage=new/);
   await page.waitForTimeout(300);
-  // The answer is held: the eight rows are still there, and nothing moved.
-  await expect(rows(page)).toHaveCount(8);
+  // The answer is held: the ten rows are still there, and nothing moved.
+  await expect(rows(page)).toHaveCount(10);
   await expect(page.getByText('Loading…')).toHaveCount(0);
   expect(await Promise.all(reachable.map(box))).toEqual(before);
 
@@ -896,13 +840,13 @@ test('the first read says « Loading… », and draws no state before its answer
   await expect(page.getByText(/No note/)).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
   worker.release();
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
 });
 
 test('a guest reads no place, no reference, no chip and no « Send again »', async ({ page }) => {
   await workerWith(page, 'guest');
   await open(page);
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   await expect(page.getByRole('group', { name: 'Where the notes went' })).toHaveCount(0);
   await expect(table(page).getByRole('link', { name: /ACM-/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send again' })).toHaveCount(0);
@@ -944,7 +888,7 @@ for (const locale of ['en', 'fr'] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     await workerWith(page, 'owner', locale);
     await page.goto(`${CONSOLE}/w/w1/notes`);
-    await expect(rows(page)).toHaveCount(8);
+    await expect(rows(page)).toHaveCount(10);
     expect.soft(await sideScroll(page)).toBe(0);
     // The head of a group stays on screen above its notes (FRU-551).
     const head = page.locator('.kit-table-group th').first();
@@ -1058,7 +1002,7 @@ test('sources that did not load are said above the list, no chip calls them remo
     'The connectors of this workspace did not load. Fruitback hit an error.',
   );
   // The notes still read, and their places are counted, but not named as sources that are gone.
-  await expect(rows(page)).toHaveCount(8);
+  await expect(rows(page)).toHaveCount(10);
   // With no source read, Fruitback comes first: the order of the sources is not known.
   await expect(chips(page)).toHaveText(['All10', 'In Fruitback1', 'A connector3', 'A connector6']);
   await expect(page.getByText('A connector that was removed')).toHaveCount(0);

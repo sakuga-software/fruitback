@@ -22,8 +22,9 @@ import {
   statusMenu,
   statusSaid,
 } from './thread-status.ts';
-import { isElement } from './dom.ts';
+import { isElement, isShadowRoot } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
+import { isTypingCopy, pageFieldHasFocus } from './key-guard.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, followHosts, resolveAnchor } from './resolve.ts';
 import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
@@ -1352,7 +1353,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function onKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape') return;
+    // A field of the page keeps its Escape (FRU-726).
+    if (event.key !== 'Escape' || pageFieldHasFocus(document, host)) return;
     // Escape closes the preview first, and the thread when no preview is shown.
     if (preview !== null) hidePreview();
     else closeThread();
@@ -1362,6 +1364,14 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   view?.addEventListener('resize', schedule, { passive: true });
   document.addEventListener('click', onDocumentClick, true);
   document.addEventListener('keydown', onKeyDown);
+  // A key of a field of the widget stops before the document (FRU-726, `key-guard.ts`): its copy comes
+  // here, to the root, and Escape in the field of a reply still closes the thread.
+  const onTypedKey = (event: Event): void => {
+    if (isTypingCopy(event)) onKeyDown(event as KeyboardEvent);
+  };
+  // Only a Shadow root gets copies: on `document.body`, Escape would come twice (raised in review).
+  const typedKeys = isShadowRoot(host) ? host : null;
+  typedKeys?.addEventListener('keydown', onTypedKey);
 
   // Structure only, no `attributes`. A design system toggles classes on every hover, and an element
   // that changed class but stayed in place needs no re-resolution. A replaced element always shows
@@ -1444,6 +1454,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       view?.removeEventListener('resize', schedule);
       document.removeEventListener('click', onDocumentClick, true);
       document.removeEventListener('keydown', onKeyDown);
+      typedKeys?.removeEventListener('keydown', onTypedKey);
       closeThread();
       hidePreview();
       orphans.destroy();
