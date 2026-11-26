@@ -269,6 +269,25 @@ test('a card writes neither its status nor its address, and opens its page from 
   );
 });
 
+test('the text of a card starts each of its lines at the left, as the table does (FRU-725)', async ({ page }) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
+  const title = card(page, 'The headline').getByRole('button', { name: /^The headline/ });
+  await expect(title).toBeVisible();
+  // Where each line of the words starts, from the left edge of the button. A button centres its
+  // words: on main, the two lines of this note started 10 and 39 px in.
+  const starts = await title.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(button);
+
+    return [...range.getClientRects()].map((line) => Math.round(line.left - box.left));
+  });
+  // The control: the text wraps, so a centred line would start further in than another.
+  expect(starts.length).toBeGreaterThan(1);
+  expect(starts).toEqual(starts.map(() => 0));
+});
+
 test('a status the select of a card could not save is said on the card, and the card stays', async ({ page }) => {
   const worker = await workerWith(page);
   worker.refuse = { status: 403, error: 'not-allowed' };
