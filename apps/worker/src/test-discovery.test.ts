@@ -398,17 +398,32 @@ const WORKER = 'apps/worker';
 
 /**
  * `source` with its comments blanked out, line for line: a word in a comment names no subject
- * (review of #968). A block comment, and a `//` at the start of a line or after a space, to its end.
- * The `//` of an address (`https://`) follows a colon: it stays. A word in a string still counts,
- * because rule 6 reads the label of a subject, a string. The guard then fails on a file that names a
- * subject in a string only: a failure that says so, never a case that no job runs.
+ * (review of #968). It reads the strings, so that a `//` or a `/*` inside one starts no comment, and
+ * keeps them: rule 6 reads the label of a subject, a string. A name in a string still counts, so the
+ * guard fails on a file that names a subject in a string only: a failure that says so, never a case
+ * that no job runs. The `${…}` of a template literal is read as part of its string.
  */
 function withoutComments(source: string): string {
-  const blank = (comment: string) => comment.replace(/[^\n]/g, ' ');
+  let out = '';
+  let quote = '';
+  for (let at = 0; at < source.length; at += 1) {
+    const char = source[at] ?? '';
+    if (quote !== '') {
+      out += char;
+      if (char === '\\') out += source[(at += 1)] ?? '';
+      else if (char === quote) quote = '';
+    } else if (char === '/' && (source[at + 1] === '/' || source[at + 1] === '*')) {
+      const close = source[at + 1] === '/' ? source.indexOf('\n', at) : source.indexOf('*/', at + 2) + 2;
+      const until = close < at + 2 ? source.length : close;
+      out += source.slice(at, until).replace(/[^\n]/g, ' ');
+      at = until - 1;
+    } else {
+      if (char === "'" || char === '"' || char === '`') quote = char;
+      out += char;
+    }
+  }
 
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/(^|[ \t])(\/\/[^\n]*)/gm, (_, before: string, comment: string) => before + blank(comment));
+  return out;
 }
 
 /** The files that a `test:postgres` script names, from the root of the repository. */
@@ -461,8 +476,9 @@ describe('each test file with cases on a real PostgreSQL runs in the job « post
       'apps/worker/src/pglite-only.test.ts': "import { createMigratedPgliteDatabase } from './postgres.fixture.ts';",
       'apps/worker/src/listed-pglite.test.ts': 'createPgliteDatabase()',
       'apps/worker/src/says-it.test.ts':
-        "/** Unlike DATABASES of auth.fixture.ts, */\n  // or createRealDatabase,\nconst at = 'https://acme.dev'; // as ownDatabase does\ncreatePgliteDatabase()",
+        "/** Unlike DATABASES of auth.fixture.ts, */\n  // or createRealDatabase,\nconst at = 'https://acme.dev'; // as ownDatabase does\nconst path = '/* a glob'; createPgliteDatabase(); // */ createRealDatabase\ncreatePgliteDatabase()",
       'apps/worker/src/left-out-by-address.test.ts': "open('postgres://127.0.0.1/t', createRealDatabase);",
+      'apps/worker/src/left-out-after-a-string.test.ts': "const x = 'see // here'; createRealDatabase();",
       'apps/worker/src/postgres.fixture.ts': 'export const NO_REAL_POSTGRES = false;',
       'apps/worker/src/hidden.fixture.ts': 'export const SERVERS = [createRealDatabase];',
       'apps/console/app/zz.test.ts': 'DATABASES',
@@ -475,6 +491,7 @@ describe('each test file with cases on a real PostgreSQL runs in the job « post
         'apps/worker/src/left-out.test.ts',
         'apps/worker/src/left-out-too.test.ts',
         'apps/worker/src/left-out-by-address.test.ts',
+        'apps/worker/src/left-out-after-a-string.test.ts',
       ],
       listedWithoutCases: ['apps/worker/src/listed-pglite.test.ts', 'apps/worker/src/gone.test.ts'],
       fixtures: ['apps/worker/src/hidden.fixture.ts'],
