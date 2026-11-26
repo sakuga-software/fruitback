@@ -7,7 +7,14 @@ import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
+  createPgliteDatabase,
+  createRealDatabase,
+  ownDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import {
   HOME_MADE_MIGRATIONS,
   THEN,
@@ -108,7 +115,7 @@ assert.ok(BASELINE_FILE !== undefined, 'the worker has no migration');
 const WHOLE_JOURNAL = FILES.map((file) => ({ hash: file.hash, created_at: file.folderMillis }));
 
 const DATABASES = [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const;
 

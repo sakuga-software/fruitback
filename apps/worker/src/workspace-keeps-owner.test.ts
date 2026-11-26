@@ -5,7 +5,7 @@ import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, ownMigratedDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrated } from './postgres-migrate.ts';
 
 /**
@@ -104,7 +104,7 @@ describe(
 
     async function race(ask: Ask, control: { withoutTrigger?: boolean; deletion?: Deletion } = {}) {
       const deleting_ = control.deletion ?? 'account';
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const database = createPgDatabase(own.url, 'public');
       const [deleting, holder] = [0, 1].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,

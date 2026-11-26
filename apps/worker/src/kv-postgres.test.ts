@@ -6,7 +6,13 @@ import { handleRequest, kvFor } from './app.ts';
 import { KvError, processKv } from './kv.ts';
 import { KV_TABLE, createPostgresKv } from './kv-postgres.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createPgliteDatabase,
+  ownDatabase,
+  ownMigratedDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { migrated } from './postgres-migrate.ts';
 import { StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
@@ -43,7 +49,7 @@ function watched(database: Database): { database: Database; answers: Record<stri
 describe('two replicas that count at once, on a real server (FRU-67)', { skip: NO_REAL_POSTGRES !== false }, () => {
   /** Two pools of one connection each, on one database: two replicas, as far as the server can tell. */
   async function twoReplicas() {
-    const own = await ownDatabase();
+    const own = await ownMigratedDatabase();
     const databases = [
       createPgDatabase(own.url, 'public', { max: 1 }),
       createPgDatabase(own.url, 'public', { max: 1 }),

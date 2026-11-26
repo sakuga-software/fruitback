@@ -13,7 +13,8 @@ import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, PlaceCell, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
 import { TaskMenuContext, useTaskMenu } from './task-menu';
-import { SelectTask, TaskSelectionContext, ownsKeys, useSelectRow } from './task-selection';
+import { SelectTask, TaskSelectionContext, useSelectRow } from './task-selection';
+import { isBareShortcut } from '../keys';
 
 /**
  * The columns of the list (FRU-685), by the width of the list (a container query): what a row loses
@@ -292,9 +293,8 @@ function readFolded(key: string): ReadonlySet<Stage> {
 function useRowKeys(list: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key !== 'j' && event.key !== 'k') return;
-      if (ownsKeys(event.target)) return;
+      if (!isBareShortcut(event)) return;
       // A list that is closed takes a letter to choose its option (raised in review, FRU-685): it keeps it.
       if (event.target instanceof Element && event.target.closest('[aria-haspopup="listbox"], [role="combobox"]'))
         return;

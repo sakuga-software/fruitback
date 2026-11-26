@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
+import { isBareShortcut } from '../keys';
 import { type SiteChoice, call } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -284,20 +285,12 @@ export function useTaskCreate({
 
 /**
  * The key « C » opens « New task » (FRU-657), as in Linear: a key alone, with no modifier, out of a
- * field, and when no dialog, menu or panel is open. Answers whether it took the key.
+ * field (the widget's in its Shadow root too, FRU-726), and when no dialog, menu or panel is open.
+ * Answers whether it took the key.
  */
 export function isNewTaskKey(event: KeyboardEvent): boolean {
   if (event.key !== 'c' && event.key !== 'C') return false;
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.repeat || event.isComposing) {
-    return false;
-  }
-  const target = event.target;
-  if (
-    target instanceof Element &&
-    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]') !== null
-  ) {
-    return false;
-  }
+  if (event.shiftKey || event.repeat || !isBareShortcut(event)) return false;
 
   return document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]') === null;
 }
