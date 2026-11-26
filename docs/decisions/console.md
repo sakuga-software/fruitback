@@ -1350,7 +1350,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   « heard » at once, asks `GET /console/me`, and on a session says « carried-on » and goes on: the
   sign-in page to the front door, the setup to its next step. The tab of the link then shows « You
   are signed in »; with no « heard » in 400 ms, or no « carried-on » in 5 s, it is the console, as
-  before. **A message is a hint, never a proof**: it carries no token and no account, and a tab goes
+  before. **A tab that waits holds a Web Lock** (`fruitback:sign-in-waiting`, shared, FRU-732), and
+  the tab of the link reads it before it speaks: when a tab holds it, « heard » gets 5 s, the time of
+  a call, and a link opened alone still costs 400 ms. Measured on a busy Mac of GitHub (3 CPUs, a load
+  of 10 to 20): the browser delivered « signed-in » to the tab that waited 0.43 s, 1.6 s and 2.8 s
+  after it was said, and with 400 ms the tab of the link had become the console. The browser frees
+  the lock of a tab that closes; a browser with no `navigator.locks` keeps the 400 ms. The cost,
+  accepted: a tab that the browser froze still holds the lock and cannot answer, so a link opened
+  then waits 5 s before it is the console. **A message is
+  a hint, never a proof**: it carries no token and no account, and a tab goes
   on only on the answer of the worker. A browser that tells a tab nothing: the tab asks the worker
   when it comes back to the front. **A link opened in the tab that asked for it changes the part
   after the `#` only**, so the page is not loaded again: `sign-in.tsx` reads the code on
@@ -1639,8 +1647,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   kept.
 - **The tab follows the mockup « Onglet Access »** of FRU-699: « Public access » (four levels),
   « What a visitor can do » (a table of seven actions in two columns), « How a visitor is
-  recognised », and « What a visitor sees » on the right from 1100 px. **Left out**: the card
-  « Safeguards » (FRU-704). **Drawn and not chosen**: the level « Collaborate » (FRU-707), and the
+  recognised », and « What a visitor sees » on the right from 1100 px, with « Safeguards » under it
+  (FRU-704). **Drawn and not chosen**: the level « Collaborate » (FRU-707), and the
   e-mail and the signed token among the ways to recognise a visitor (FRU-705, FRU-706).
 - **A list is a setting of the worker, and only that.** `access-policy.ts` holds the four values the
   worker stores: who reads (`visibility`, the list « See notes » of others), who writes (`writers`,
@@ -1656,6 +1664,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« Save » sends the whole access in one `POST …/sites`** of the address of the site, as the form
   of the page did (FRU-504): who reads, who writes and the rights of a visitor always (« Never »
   where only members write, as the table shows), and the e-mail only where anybody writes. Nothing changed: nothing is asked. A refusal says its cause and keeps what was chosen.
+- **« Safeguards » grows one line by safeguard, each with its pull request (FRU-704).** « Notes per
+  visitor » first: a list of « No limit », 5, 10, 20 and 50 « / hour », the values `POST …/sites`
+  takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
+  members write. A level does not change it. A worker that answers without it did not keep it: « Save »
+  says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».

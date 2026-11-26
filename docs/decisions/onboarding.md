@@ -156,6 +156,14 @@ site is fixed too (FRU-482): signed out, it offers the sign-in there as well.
   the token of a run opened, and that pull request needs `ci.yml`. A run from a branch
   (`workflow_dispatch`) is the release of test: it stops at the artifact. The release does not wait
   for these jobs: a capture that fails publishes the extension all the same.
+- **The Mac of the release is busy when the job starts, so the guide waits for it** (FRU-732,
+  `e2e/guide-machine.ts`): up to 300 s for a load under the number of CPUs, then one launch of the
+  full Chromium before the spec. On 23 Macs of GitHub, the first launch of Chromium took 5.5 to
+  11 s, and the welcome page of the extension came up to 16 s after it: past the 10 s of
+  `extension.ts`, which failed v0.8.0. The tab of a sign-in link waits for the tab of the setup by a
+  Web Lock, not 400 ms ([console.md](console.md), FRU-235), which failed v0.7.0. With both: 12 runs
+  of 12 on 6 Macs. Without them: 3 failures in 7 first runs on a fresh Mac (the releases v0.6.0 to
+  v0.8.0, and 4 Macs measured).
 - **The video of the welcome page comes from the same walk** (FRU-531). From the site to the pin,
   `first-note.spec.ts` takes a frame at each step (`DEMO_FRAMES` of `apps/extension/src/demo-video.ts`,
   `docs/assets/video/<frame>.png`), in one box of 16/9 around the element, with a pointer drawn on

@@ -11,6 +11,56 @@
  */
 const NAME = 'fruitback:sign-in';
 
+/**
+ * The Web Lock that a tab holds while it waits for a link (FRU-732). It tells the tab of the link
+ * that a tab waits, before any message comes. The browser frees it when the tab closes.
+ */
+const WAITING_LOCK = 'fruitback:sign-in-waiting';
+
+/** The part of `navigator.locks` that is used here, so a test gives its own. */
+export type Locks = {
+  /** Holds the lock until the returned function runs. */
+  hold(): () => void;
+  /** Whether a tab of this browser holds the lock now. */
+  held(): Promise<boolean>;
+};
+
+type LockManager = {
+  request(name: string, options: { mode: 'shared' }, callback: () => Promise<void>): Promise<void>;
+  query(): Promise<{ held?: { name?: string }[] }>;
+};
+
+function lockManager(): LockManager | undefined {
+  const locks = (globalThis.navigator as { locks?: LockManager } | undefined)?.locks;
+
+  return typeof locks?.request === 'function' && typeof locks.query === 'function' ? locks : undefined;
+}
+
+/** `navigator.locks`, or locks that nobody holds in a browser that has none. */
+const LOCKS: Locks = {
+  hold() {
+    const locks = lockManager();
+    if (locks === undefined) return () => {};
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Shared: two tabs that wait hold it together.
+    void locks.request(WAITING_LOCK, { mode: 'shared' }, () => released).catch(() => {});
+
+    return release;
+  },
+  async held() {
+    const locks = lockManager();
+    if (locks === undefined) return false;
+    try {
+      return ((await locks.query()).held ?? []).some((lock) => lock.name === WAITING_LOCK);
+    } catch {
+      return false;
+    }
+  },
+};
+
 /** « signed-in »: from the tab of the link. « heard », then « carried-on »: from a tab that waited. */
 const WORDS = ['signed-in', 'heard', 'carried-on'] as const;
 type Word = (typeof WORDS)[number];
@@ -42,6 +92,15 @@ function word(data: unknown): Word | undefined {
 /**
  * How long the tab of the link waits. A tab that waits says « heard » at once, so a link opened
  * alone costs 400 ms. A tab that heard then asks the worker, which can take the time of a call.
+ *
+ * When a tab holds the lock of `WAITING_LOCK`, « heard » gets the time of a call too (FRU-732): on a
+ * busy machine the browser delivers the message late. Measured on a Mac of GitHub (3 CPUs, a load of
+ * 10 to 20): the tab that waited received « signed-in » 0.43 s, 1.6 s and 2.8 s after it was said, and
+ * the tab of the link had become the console at 400 ms.
+ *
+ * The cost, accepted: a tab that holds the lock and cannot answer (frozen by the browser, while its
+ * document stays) makes a link opened alone wait 5 s, not 400 ms, before it is the console. A tab
+ * that closes, or that the browser discards, frees the lock; a tab that stops waiting frees it too.
  */
 const WAITS: { heard: number; carried: number } = { heard: 400, carried: 5_000 };
 
@@ -50,9 +109,15 @@ const WAITS: { heard: number; carried: number } = { heard: 400, carried: 5_000 }
  * one of them said that it carried on. `false`: no tab waited, or none could go on, and this tab is
  * the console.
  */
-export function announceSignIn(make: () => Channel | undefined = open, waits = WAITS): Promise<boolean> {
+export async function announceSignIn(
+  make: () => Channel | undefined = open,
+  waits = WAITS,
+  locks: Locks = LOCKS,
+): Promise<boolean> {
   const channel = make();
-  if (channel === undefined) return Promise.resolve(false);
+  if (channel === undefined) return false;
+  // Asked before « signed-in » is said: the answer sets how long « heard » may take.
+  const waiting = await locks.held();
 
   return new Promise<boolean>((resolve) => {
     let timer: ReturnType<typeof setTimeout>;
@@ -62,7 +127,7 @@ export function announceSignIn(make: () => Channel | undefined = open, waits = W
       channel.close();
       resolve(carried);
     };
-    timer = setTimeout(() => end(false), waits.heard);
+    timer = setTimeout(() => end(false), waiting ? waits.carried : waits.heard);
     channel.onmessage = (event) => {
       const said = word(event.data);
       if (said === 'carried-on') return end(true);
@@ -84,9 +149,11 @@ export function awaitSignIn(
   signedIn: () => Promise<boolean>,
   carryOn: () => void,
   make: () => Channel | undefined = open,
+  locks: Locks = LOCKS,
 ): () => void {
   const channel = make();
   if (channel === undefined) return () => {};
+  const release = locks.hold();
   let stopped = false;
   channel.onmessage = (event) => {
     if (word(event.data) !== 'signed-in') return;
@@ -100,6 +167,7 @@ export function awaitSignIn(
 
   return () => {
     stopped = true;
+    release();
     channel.onmessage = null;
     channel.close();
   };

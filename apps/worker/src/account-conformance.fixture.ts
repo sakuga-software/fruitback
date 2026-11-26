@@ -264,6 +264,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       // FRU-703: the level « Contribute » of the mockup, for a new site.
       visitorEdit: 'while-open',
       visitorDelete: 'while-open',
+      // FRU-704: the notes of a visitor in an hour of the mockup, for a new site.
+      visitorNotesPerHour: 10,
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -276,6 +278,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         write: 'public',
         visitorEdit: 'while-open',
         visitorDelete: 'while-open',
+        visitorNotesPerHour: 10,
       },
     });
   });
@@ -399,6 +402,30 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(closed?.visitorDelete, undefined);
   });
 
+  it('gives a new site 10 notes of a visitor an hour, keeps the value on a site added again, and serves it where a visitor writes (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.visitorNotesPerHour, 10);
+    const set = await store.addSite(workspace.id, { origin, visibility: 'everyone', visitorNotesPerHour: 50 });
+    assert.equal(set.visitorNotesPerHour, 50);
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).visitorNotesPerHour, 50);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => site.visitorNotesPerHour),
+      [50],
+    );
+    assert.equal((await store.client(made.id))?.visitorNotesPerHour, 50);
+
+    // « No limit » is told to no route, and neither is a site of its members only.
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', visitorNotesPerHour: 0 });
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).visitorNotesPerHour, 0);
+    assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members', visitorNotesPerHour: 20 });
+    assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
+  });
+
   it('keeps one address apart in two workspaces', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);
@@ -418,6 +445,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         write: 'public',
         visitorEdit: 'while-open',
         visitorDelete: 'while-open',
+        visitorNotesPerHour: 10,
       },
     });
   });

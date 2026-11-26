@@ -1,4 +1,4 @@
-import type { Site, Visibility, VisitorRight, Writers } from './api.ts';
+import type { Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from './api.ts';
 
 /**
  * What a visitor with no account may do on a site (FRU-703), as the tab « Access » sets it. The worker
@@ -8,6 +8,8 @@ import type { Site, Visibility, VisitorRight, Writers } from './api.ts';
  * - `writers`: who leaves one, `members` or `anyone`. It decides on every site since FRU-703.
  * - `visitorEdit`, `visitorDelete`: what a visitor may do to a note of their own.
  * - `notifyDone`: the e-mail when a note is done (FRU-604), offered where anybody writes.
+ * - `visitorNotesPerHour`: the notes a visitor leaves in an hour, `0` for no limit (FRU-704), a line
+ *   of the card « Safeguards ». It counts where anybody writes; a level does not change it.
  */
 export type Access = {
   visibility: Visibility;
@@ -15,6 +17,7 @@ export type Access = {
   visitorEdit: VisitorRight;
   visitorDelete: VisitorRight;
   notifyDone: boolean;
+  visitorNotesPerHour: VisitorNoteLimit;
 };
 
 /**
@@ -26,7 +29,7 @@ export type Level = (typeof LEVELS)[number];
 export type ChosenLevel = Exclude<Level, 'collaborate'>;
 
 /** What each level that can be chosen sets: the table of the mockup. */
-export const LEVEL_ACCESS: Readonly<Record<ChosenLevel, Omit<Access, 'notifyDone'>>> = {
+export const LEVEL_ACCESS: Readonly<Record<ChosenLevel, Omit<Access, 'notifyDone' | 'visitorNotesPerHour'>>> = {
   closed: { visibility: 'members', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
   'read-only': { visibility: 'everyone', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
   contribute: { visibility: 'everyone', writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'while-open' },
@@ -44,6 +47,7 @@ export function accessOf(site: Site): Access {
     visitorEdit: site.visitorEdit ?? 'never',
     visitorDelete: site.visitorDelete ?? 'never',
     notifyDone: site.notifyDone === true,
+    visitorNotesPerHour: site.visitorNotesPerHour ?? 0,
   };
 }
 
@@ -66,14 +70,14 @@ export function levelOf(access: Access): ChosenLevel | 'custom' {
   return 'custom';
 }
 
-/** The access once a level is chosen: the table is filled, and the e-mail switch stays as it was. */
+/** The access once a level is chosen: the table is filled; the e-mail and the safeguards stay as they were. */
 export function withLevel(access: Access, level: ChosenLevel): Access {
   return { ...access, ...LEVEL_ACCESS[level] };
 }
 
 /**
  * Whether the draft holds what is stored: the rights of a visitor count everywhere, as the body sends
- * them; the e-mail counts only where anybody writes.
+ * them; the e-mail and the notes of a visitor in an hour count only where anybody writes.
  */
 export function sameAccess(draft: Access, stored: Access): boolean {
   const sent = accessBody('', draft);
@@ -83,7 +87,8 @@ export function sameAccess(draft: Access, stored: Access): boolean {
     sent.writers === stored.writers &&
     sent.visitorEdit === stored.visitorEdit &&
     sent.visitorDelete === stored.visitorDelete &&
-    (draft.writers === 'members' || draft.notifyDone === stored.notifyDone)
+    (draft.writers === 'members' ||
+      (draft.notifyDone === stored.notifyDone && draft.visitorNotesPerHour === stored.visitorNotesPerHour))
   );
 }
 
@@ -114,7 +119,8 @@ export function accessBody(origin: string, access: Access): Record<string, unkno
     writers: access.writers,
     visitorEdit: writes ? access.visitorEdit : 'never',
     visitorDelete: writes ? access.visitorDelete : 'never',
-    ...(writes ? { notifyDone: access.notifyDone } : {}),
+    // FRU-704: as the e-mail: where only members write, no visitor is counted, and the value stays.
+    ...(writes ? { notifyDone: access.notifyDone, visitorNotesPerHour: access.visitorNotesPerHour } : {}),
   };
 }
 

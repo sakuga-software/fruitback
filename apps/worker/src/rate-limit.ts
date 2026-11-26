@@ -40,18 +40,24 @@ export async function chargeRateLimit(
   kv: Kv,
   clientIp: string,
   amount: number,
-  options: { limit?: number; now?: number; counter?: (clientIp: string, window: number) => string } = {},
+  options: {
+    limit?: number;
+    now?: number;
+    counter?: (clientIp: string, window: number) => string;
+    /** The length of a window, a minute unless the count says (FRU-704 counts by the hour). */
+    windowMs?: number;
+  } = {},
 ): Promise<boolean> {
-  const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
+  const { limit = DEFAULT_LIMIT, now = Date.now(), windowMs = WINDOW_MS } = options;
   // A batch of one note has nothing more to count, and `incr` takes no amount below one.
   if (amount < 1) return true;
-  const window = Math.floor(now / WINDOW_MS);
-  const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
+  const window = Math.floor(now / windowMs);
+  const overlap = 1 - (now % windowMs) / windowMs;
 
   const key = options.counter ?? windowKey;
   // Two windows of expiry, so the previous count is still there for the whole current window.
   const [current, previous] = await Promise.all([
-    kv.incr(key(clientIp, window), 2 * WINDOW_MS, amount),
+    kv.incr(key(clientIp, window), 2 * windowMs, amount),
     kv.get(key(clientIp, window - 1)),
   ]);
 
@@ -84,6 +90,57 @@ export function checkReplyLimit(kv: Kv, clientIp: string, now: number = Date.now
     now,
     counter: (ip, window) => `fruitback:rate:reply:${JSON.stringify([ip, window])}`,
   });
+}
+
+/** The window of the count of the notes of a visitor (FRU-704). */
+export const HOUR_MS = 3_600_000;
+
+/**
+ * How many visitors one address counts for (FRU-704). The people of one office, or of one mobile
+ * network, share an address: three of them at the limit pass. A visitor who clears their key to get
+ * a new count meets this one.
+ */
+export const VISITORS_PER_ADDRESS = 3;
+
+/**
+ * Whether a visitor with no account may leave `amount` more notes on `site` now (FRU-704).
+ *
+ * - Two counts of an hour, as `chargeRateLimit` counts: one for the key of the browser on this site
+ *   (`visitor`, the digest of `visitorDigestOf`), at `perHour`, and one for the address on this site,
+ *   at `VISITORS_PER_ADDRESS × perHour`. Over either one refuses. With no key, the address counts
+ *   alone.
+ * - By site: a visitor of one site spends nothing of another.
+ * - `perHour` `0` counts nothing: the site set « No limit ».
+ * - Both are counted, even when refused, as every count of `chargeRateLimit`: a visitor who keeps
+ *   sending stays refused, for two hours at most.
+ */
+export async function checkVisitorNotes(
+  kv: Kv,
+  asked: { site: string; visitor: string | undefined; clientIp: string; perHour: number; amount: number },
+  now: number = Date.now(),
+): Promise<boolean> {
+  const { site, visitor, clientIp, perHour, amount } = asked;
+  if (perHour <= 0) return true;
+  const counts = [
+    chargeRateLimit(kv, clientIp, amount, {
+      limit: VISITORS_PER_ADDRESS * perHour,
+      now,
+      windowMs: HOUR_MS,
+      counter: (ip, window) => `fruitback:rate:visitor-notes-ip:${JSON.stringify([site, ip, window])}`,
+    }),
+    ...(visitor === undefined
+      ? []
+      : [
+          chargeRateLimit(kv, visitor, amount, {
+            limit: perHour,
+            now,
+            windowMs: HOUR_MS,
+            counter: (key, window) => `fruitback:rate:visitor-notes:${JSON.stringify([site, key, window])}`,
+          }),
+        ]),
+  ];
+
+  return (await Promise.all(counts)).every(Boolean);
 }
 
 /**

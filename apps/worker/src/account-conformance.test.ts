@@ -321,6 +321,24 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   },
   {
     breaks:
+      'gives a new site 10 notes of a visitor an hour, keeps the value on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'gives a new site no limit',
+    replace: {
+      from: 'visitor_notes_per_hour: visitorNotesPerHour ?? DEFAULT_VISITOR_NOTES_PER_HOUR,',
+      to: 'visitor_notes_per_hour: visitorNotesPerHour ?? 0,',
+    },
+  },
+  {
+    breaks:
+      'gives a new site 10 notes of a visitor an hour, keeps the value on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'never changes the limit of a site that exists',
+    replace: {
+      from: '...(visitorNotesPerHour === undefined ? {} : { visitor_notes_per_hour: visitorNotesPerHour }),',
+      to: '',
+    },
+  },
+  {
+    breaks:
       'gives a new site what the mockup gives a visitor, keeps it on a site added again, and serves it where a visitor writes (FRU-703)',
     by: 'gives a new site nothing',
     replace: {

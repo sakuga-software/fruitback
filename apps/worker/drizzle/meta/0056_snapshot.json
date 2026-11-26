@@ -1,5 +1,5 @@
 {
-  "id": "dbbb514d-cea8-4eb7-b384-99d5151a5232",
+  "id": "a416d586-ab9b-4c00-b418-7dfd2a88b61f",
   "prevId": "24aeadea-fb22-493f-badd-0239acb9be23",
   "version": "7",
   "dialect": "postgresql",
@@ -3350,6 +3350,13 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": false
+        },
+        "visitor_notes_per_hour": {
+          "name": "visitor_notes_per_hour",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
         }
       },
       "indexes": {
@@ -4223,12 +4230,6 @@
         "locale": {
           "name": "locale",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "appearance": {
-          "name": "appearance",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

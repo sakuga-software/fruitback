@@ -7,7 +7,7 @@ import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { envWith } from './auth-worker.fixture.ts';
-import { DEV_PLAYGROUND, DEV_SITE, devEnvironment, seedDevWorkspace } from './dev-worker.fixture.ts';
+import { DEV_GUARDS_SITE, DEV_PLAYGROUND, DEV_SITE, devEnvironment, seedDevWorkspace } from './dev-worker.fixture.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { DATABASE_REQUIRED, type WorkerEnv, hasAccounts, hasAuth, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
@@ -16,6 +16,7 @@ import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { StoreError } from './store.ts';
+import { VISITOR_HEADER } from './visitor-key.ts';
 
 /**
  * The database of development (FRU-223): the switch `FRUITBACK_DEV_DATABASE`, which production
@@ -269,6 +270,36 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.equal(await said(), undefined);
     assert.equal((await set('members')).status, 200);
     assert.equal(await said(), false);
+  });
+
+  it('makes the site of the safeguards at the first call, sets it, and leaves the site of the playground with no limit (FRU-704)', async () => {
+    const worker = await start({});
+    await ready(worker.origin, worker.said);
+    const set = (body: unknown) =>
+      fetch(`${worker.origin}/__dev/guards`, { method: 'POST', body: JSON.stringify(body) });
+    const send = (site: string, id: string) =>
+      fetch(`${worker.origin}/feedback`, {
+        method: 'POST',
+        // The key of one browser: with no key, only the address counts, at three times the limit.
+        headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json', [VISITOR_HEADER]: 'G'.repeat(43) },
+        body: JSON.stringify({ ...noteFixture({ id, page: { url: PAGE, path: '/pricing' } }), client: { id: site } }),
+      });
+
+    const made = await set({ visitorNotesPerHour: 5 });
+    assert.equal(made.status, 200);
+    assert.deepEqual(await made.json(), { id: DEV_GUARDS_SITE, visitorNotesPerHour: 5 });
+    const answers: number[] = [];
+    for (let index = 0; index < 6; index += 1) answers.push((await send(DEV_GUARDS_SITE, `g_${index}`)).status);
+    assert.deepEqual(answers, [201, 201, 201, 201, 201, 201].fill(429, 5));
+    // The other site counts nothing, and kept no count of the one above.
+    for (let index = 0; index < 12; index += 1) assert.equal((await send(DEV_SITE, `p_${index}`)).status, 201);
+
+    assert.equal((await set({ visitorNotesPerHour: 7 })).status, 400);
+    assert.deepEqual(await (await set({ visitorNotesPerHour: 0 })).json(), {
+      id: DEV_GUARDS_SITE,
+      visitorNotesPerHour: 0,
+    });
+    assert.equal((await send(DEV_GUARDS_SITE, 'g_after')).status, 201);
   });
 
   it('does not start under NODE_ENV=production', async () => {

@@ -1,7 +1,15 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
-import { DEFAULT_LIMIT, WINDOW_MS, checkRateLimit, resolveClientIp } from './rate-limit.ts';
+import {
+  DEFAULT_LIMIT,
+  HOUR_MS,
+  VISITORS_PER_ADDRESS,
+  WINDOW_MS,
+  checkRateLimit,
+  checkVisitorNotes,
+  resolveClientIp,
+} from './rate-limit.ts';
 
 /** The first millisecond of a window, so each test says exactly where in the window it is. */
 const WINDOW_START = Math.ceil(1_770_000_000_000 / WINDOW_MS) * WINDOW_MS;
@@ -157,5 +165,77 @@ describe('resolveClientIp', () => {
 
   it('degrades to a single shared bucket rather than crashing when nothing identifies the caller', () => {
     assert.equal(resolveClientIp(null, undefined, 1), 'unknown');
+  });
+});
+
+describe('checkVisitorNotes (FRU-704)', () => {
+  const HOUR_START = Math.ceil(1_770_000_000_000 / HOUR_MS) * HOUR_MS;
+  const ask = (kv: Kv, visitor: string | undefined, options: { site?: string; ip?: string; perHour?: number } = {}) =>
+    checkVisitorNotes(
+      kv,
+      {
+        site: options.site ?? 'site_1',
+        visitor,
+        clientIp: options.ip ?? IP,
+        perHour: options.perHour ?? 10,
+        amount: 1,
+      },
+      HOUR_START + 60_000,
+    );
+  const times = async (count: number, each: () => Promise<boolean>) => {
+    const answers: boolean[] = [];
+    for (let index = 0; index < count; index += 1) answers.push(await each());
+
+    return answers;
+  };
+
+  it('lets a visitor leave the notes of the hour, refuses the next, and counts each site apart', async () => {
+    const kv = createMemoryKv({ now: () => HOUR_START + 60_000 });
+
+    assert.deepEqual(await times(11, () => ask(kv, 'visitor-a')), [...Array.from({ length: 10 }, () => true), false]);
+    // Another browser on the same address, and the same browser on another site.
+    assert.equal(await ask(kv, 'visitor-b'), true);
+    assert.equal(await ask(kv, 'visitor-a', { site: 'site_2' }), true);
+  });
+
+  it(`counts ${VISITORS_PER_ADDRESS} visitors on one address, so a key made again meets the address`, async () => {
+    const kv = createMemoryKv({ now: () => HOUR_START + 60_000 });
+    for (const visitor of ['visitor-a', 'visitor-b', 'visitor-c']) {
+      assert.deepEqual(await times(5, () => ask(kv, visitor, { perHour: 5 })), [true, true, true, true, true]);
+    }
+
+    assert.equal(await ask(kv, 'visitor-d', { perHour: 5 }), false);
+    // With no key at all, the address counts alone, and it is spent too.
+    assert.equal(await ask(kv, undefined, { perHour: 5 }), false);
+    assert.equal(await ask(kv, 'visitor-d', { perHour: 5, ip: '203.0.113.8' }), true);
+  });
+
+  it('counts nothing when the site says « No limit »', async () => {
+    const kv = createMemoryKv({ now: () => HOUR_START + 60_000 });
+
+    assert.deepEqual(
+      await times(60, () => ask(kv, 'visitor-a', { perHour: 0 })),
+      Array.from({ length: 60 }, () => true),
+    );
+    assert.equal(
+      await kv.get(`fruitback:rate:visitor-notes:${JSON.stringify(['site_1', 'visitor-a', HOUR_START / HOUR_MS])}`),
+      undefined,
+    );
+  });
+
+  it('counts by the hour, not by the minute', async () => {
+    let clock = HOUR_START + 60_000;
+    const kv = createMemoryKv({ now: () => clock });
+    const at = (time: number) => {
+      clock = time;
+
+      return checkVisitorNotes(kv, { site: 'site_1', visitor: 'visitor-a', clientIp: IP, perHour: 2, amount: 1 }, time);
+    };
+    assert.deepEqual([await at(clock), await at(clock)], [true, true]);
+
+    // Ten minutes later the limit of a minute would have let the visitor in again.
+    assert.equal(await at(HOUR_START + 11 * 60_000), false);
+    // Two hours later both windows are gone.
+    assert.equal(await at(HOUR_START + 2 * HOUR_MS + 60_000), true);
   });
 });
