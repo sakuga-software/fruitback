@@ -339,7 +339,7 @@ jobs:
     # `test:postgres` fails when the address is missing: a suite that is skipped proves nothing.
     name: postgres
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
@@ -389,32 +389,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # FRU-720, TEMPORARY EXPERIMENT, reverted in the next commit: the same suite four times on one
-      # runner, to measure what the workers of vitest and the durability of the server cost.
       - name: Run the account and session stores on a real PostgreSQL
         env:
           FRUITBACK_TEST_DATABASE_URL: postgres://postgres:ci-not-a-real-password@127.0.0.1:5432/fruitback
-        run: |
-          nproc; command -v psql || { sudo apt-get update -q && sudo apt-get install -yq postgresql-client; }
-          durable() {
-            for setting in fsync synchronous_commit full_page_writes; do
-              psql "$FRUITBACK_TEST_DATABASE_URL" -qAtc "ALTER SYSTEM $1 $setting${2:+ = $2}"
-            done
-            psql "$FRUITBACK_TEST_DATABASE_URL" -qAtc 'SELECT pg_reload_conf()'
-            psql "$FRUITBACK_TEST_DATABASE_URL" -qAtc 'SHOW fsync' -c 'SHOW synchronous_commit'
-          }
-          timed() {
-            local start=$SECONDS
-            VITEST_MAX_WORKERS=$2 pnpm --filter @fruitback/worker test:postgres > "$RUNNER_TEMP/run-$1.log" 2>&1 || echo "run $1 FAILED"
-            grep -E 'Test Files|Tests  |Duration' "$RUNNER_TEMP/run-$1.log"
-            echo "::notice title=FRU-720 $1::workers=$2 durability=$3 wall=$((SECONDS - start)) s"
-          }
-          timed durable-6 6 on
-          durable SET off
-          timed fast-3 3 off
-          timed fast-6 6 off
-          durable RESET
-          timed durable-3 3 on
+        run: pnpm --filter @fruitback/worker test:postgres
 
       # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
       - name: Write the durations
@@ -422,7 +400,7 @@ jobs:
         continue-on-error: true
         env:
           NAME: postgres
-        run: node tools/ci/durations.ts --name "$NAME" --timeout 30
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 10
 
   dependencies:
     # FRU-143. The scan of the image reads the packages that a file of the image names. The worker is
