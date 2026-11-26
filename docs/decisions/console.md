@@ -899,7 +899,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     `lastDeliveredAt`, « None yet » without it. A worker that says no `health` (one of before, or
     deliveries that did not answer) gets the screen of before: every list of an address read, «
     Connected » for a tracker, no count of notes and an empty « Last delivery ». « Not read » when the
-    list of an address was not read, with a line above the table and « Try again ». **Never «
+    list of an address was not read, with a line above the table and « Try again »; « N sends not
+    delivered » instead when the worker said that N wait, as the bar counts them, with no « Retry ». **Never «
     Healthy » for what was not read.** A red word is `accent-strong`, on a tint of the accent; a green
     one is `done`, on a tint of `done`.
   - **A routine whose `/fire` answered `404` is « Needs attention »** (`routine-gone`, FRU-627): its

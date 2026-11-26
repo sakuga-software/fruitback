@@ -189,6 +189,14 @@ test('an address whose sends wait is read for « Retry », and the bar counts wh
   await expect(rows(page).first().locator('td').nth(2)).toHaveText('2 sites · 0 notes');
   await expect(failing(page)).toHaveText('failed sends:2');
   expect(reads).toEqual(['/console/workspaces/w1/connectors/r1/deliveries']);
+
+  // The list does not answer: the row says the count the worker said, as the bar does, and offers no
+  // « Retry », whose ids are in the list (raised in review).
+  worker.late = undefined;
+  await open(page);
+  await expect(address.locator('[data-pill]')).toHaveText('2 sends not delivered');
+  await expect(address.getByRole('button', { name: /^Retry/ })).toHaveCount(0);
+  await expect(failing(page)).toHaveText('failed sends:2');
 });
 
 test('any connector whose sends the worker says wait is read, and the bar counts it (FRU-714, review)', async ({
