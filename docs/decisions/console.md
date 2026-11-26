@@ -912,6 +912,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites,
     and the notes that went there: « 2 sites · 31 notes »; none for a routine), its health, « Last
     delivery », and at its end « Retry » and « … ».
+  - **On a tablet and a phone** (FRU-727, the mockups at 834 and 390 px attached to the ticket). The
+    columns follow the width of the table, a container query as on Sites: under 900 px « Used by » is
+    0 px wide and its head is said to a screen reader only, so « Retry » and « … » stay in the frame
+    at 834 px. Under 680 px a row is a card, drawn on the `data-stacked` of `DataTable` (its values are
+    `!important`, since the kit names the frame in its selectors): the logo of 32 px at its left, the
+    name with « … » at its top right, the account, then the health, the sites and the last delivery
+    on one line (« 2 sites · 31 notes · 12 min ago »; the dot ends the sites, so a line that goes on
+    starts with the time), and « Retry » on a line of its own at the right. With a finger
+    (`pointer: coarse`) « … », « Retry » and the buttons of a tile take a press 10 px around their 24
+    px, so 44 px, and « Retry » and « … » stand 20 px apart. The frame of the console (the bar folded
+    under 1024 px) is not this screen's: the header of the mockups (the path « Acme / Connectors »
+    on a tablet, 56 px and « New connector » as an icon on a phone) is a change of every screen.
   - **The health says only what the worker says.** Since FRU-714 the worker says it with the list:
     `health` of each connector, `{ failing, notes?, lastDeliveredAt? }`. « Needs attention » when the
     tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not delivered »
@@ -940,7 +952,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     another number; before it, the bar shows the count of its own read (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
-    and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box
+    and Developers. Its tiles are 64 px, never narrower than 260 px (FRU-727: a button no longer
+    squeezes their words), four in a row at 1440 px, two at 834 px, one at 390 px. The head goes on a
+    second line where it has no room, and its search grows up to 220 px; under 560 px the search
+    takes the whole width, 44 px high in 16 px (iOS zooms on a smaller font), and the groups stay on
+    one line that scrolls sideways. A tile: the logo in a box
     of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
     its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
     can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
@@ -969,7 +985,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     places, read only, with a link to the Sites screen (FRU-399) and « Statuses » on the row of each
     site of a Linear (FRU-478); the notes that did not arrive; « Use an API key ». « Connect » is
     written many times, so each button also holds the name of its source for a screen reader.
-    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe.
+    `e2e/console-connectors-table.spec.ts` and `console-connectors-catalogue.spec.ts` hold the values, the states, the roles, 390 px and axe; `console-connectors-narrow.spec.ts` the tablet, the cards of a phone and the presses of a finger (FRU-727).
     **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
     admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
     workspace), and an empty name gives it back the name of its kind. `connectorName` of
