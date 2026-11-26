@@ -452,28 +452,38 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     build, and « My account » (`ACCOUNT`) to the menu, so no entry leads nowhere and every screen has
     a way in.
   - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
-    and the number on « Connectors » when sends failed. The Connectors screen gives the second one
-    when it reads the health of its connectors (FRU-690). No read gives the others yet: counting the
-    notes of every site on every screen was taken away for its cost (FRU-497), and a summary of the
-    worker is FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
-    server, mounts the bar with the counts of the mockup.
+    and the number on « Connectors » when sends failed. **The frame reads them once** (FRU-711,
+    `GET …/rail`, `railCounts` of `api.ts`), when it mounts and at each change of workspace, never
+    for a screen: « Notes » counts the notes that are not done nor closed, « Sites » the sites the
+    person reads, « Connectors » the sends that did not arrive, and each view its filter. Counting
+    the notes of every site on every screen was taken away for its cost (FRU-497): this read is one
+    statement over the notes, measured in `worker.md`. **A screen that reads a count again says the
+    newer one**: the Connectors screen the sends (FRU-690), the Notes screen the count of a view
+    (FRU-697); the answer of the bar does not write over what a screen said meanwhile. A read that
+    fails, and a count the worker does not give (no `failing` to a guest), show no count, never a
+    zero. `/kit/frame`, a page of the development server, mounts the bar with the counts of the
+    mockup.
   - **The views are under the sections** (FRU-697, « Views » of the same mockup): a view is a filter
     of the Notes screen with a name, and its entry is a link to the address of that filter
     (`saved-views.ts`, which has its own test). « Views » is 600 11px in `muted` and names the
-    navigation; an entry is one of the bar, its first one 31 px under « Settings ». **Only « Assigned
-    to me » is a view** (`assignee=me`), with the initial of the person on `avatar` in 16 px: « New
-    this week » needs a filter on the day a note was left and « Not delivered » one on its delivery,
-    and the route of the notes reads neither (FRU-722). A view the worker does not filter would show
-    a list it did not filter. A guest has no view: a task is never given to a guest (FRU-673). **The
+    navigation; an entry is one of the bar, its first one 31 px under « Settings ». **The views are the
+    three of the mockup** (FRU-722): « New this week » (`created=week`: the notes left since midnight
+    of the day of the person six days ago, which the Notes screen asks the worker as `since`, an
+    instant; a circle of dashes), « Assigned to me » (`assignee=me`, the initial of the person on
+    `avatar` in 16 px) and « Not delivered » (`undelivered=1`, red braces, and its count red when it is
+    more than zero, with no dot: the dot says a failure of a connector). Each filter is in « Filter »
+    too (« Left », « Delivery »), with its chip. A view exists only for a filter the worker reads: a
+    view it did not filter would show a list it did not filter. A guest has « New this week » alone:
+    a task is never given to a guest (FRU-673), and a guest does not see where a note went. **The
     Notes screen with the filters of a view, and no other, is that view**: its entry is the one on
     screen, not « Notes »; the page, the board and a task opened are no filter. **The count of a
-    view is the `total` of the last read of the Notes screen with exactly its filter**, kept by the
-    frame for this workspace as the red count of « Connectors »: the bar reads nothing for it, so no
-    screen asks the worker more than before (`e2e/console-views.spec.ts` counts the reads), and a view
-    the screen did not read shows no count. A read again, after a write (a status, a task, « Send
-    again »), drops the counts of the views when it starts, as the write can change them and its
-    answer can be dropped: a count that may be wrong is not shown, and a view read again says its new
-    count. A read for the bar is FRU-711. A view a person makes
+    view is the one of the read of the bar (FRU-711), then the `total` of the last read of the Notes
+    screen with exactly its filter**, kept by the frame for this workspace as the red count of
+    « Connectors »: no screen asks the worker for a view more than before (`e2e/console-views.spec.ts`
+    counts the reads). A read again, after a
+    write (a status, a task, « Send again »), drops the counts of the views when it starts, as the
+    write can change them and its answer can be dropped: a count that may be wrong is not shown, and
+    a view read again says its new count. A view a person makes
     from the bar of filters needs the worker to keep it (FRU-723): the console keeps none.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
@@ -672,9 +682,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   A site that is not in the workspace says so, and a read that failed is the alert with « Try again ».
   **« Overview »** draws, on the left, three figures, the card « Site » and where the notes go; on
   the right, from 1100 px, the card « Install » in a column of 420 px. **No figure the worker does not
-  give**: « Notes » with the bar of its statuses, « Open » (the new notes, and how many are to do or
-  in progress), and « Delivered » for whoever sees the tracker: the share of the notes that no address
-  still waits for (`undelivered`, FRU-122), of every note, since the worker counts none by day yet.
+  give**: « Notes » with the bar of its statuses, « Open » (the new notes, and the age of the oldest
+  open one, « oldest 5 days », FRU-721), and « Delivered » for whoever sees the tracker: the share of
+  the notes of the last 30 days that arrived, « last 30 days » under it, or a link to the ones that
+  did not (`?site=&undelivered=1`, FRU-722). From a worker of before FRU-721, « Open » says how many
+  are to do or in progress and « Delivered » the share of every note (`undelivered`, FRU-122).
   The card « Site » is a row of 44 px for each setting (an icon, its name, its value), with
   « Change » to the tab that changes it, for an owner or an admin: « Access » for who reads, who
   writes and the e-mail of FRU-604; « Install » for how the notes came, for every role. Where the
@@ -682,11 +694,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   menu: « Make it the default », « Remove ». « Add » leads to « Destinations ». The card « Install »
   has the script and the extension in a segment; the script is on ink (`Snippet` of the kit, tone
   `ink`: the page and the ink swapped, so a dark theme draws it light), with the address of this
-  console, which is the instance's in production, and « Copy ». **The worker records no visit of the
-  script**: the card says « Notes came » once a note came by the script or the extension, with when the
-  last note came, and « Not seen yet » before, never « Installed ». The ticket of the follow-up asks
-  the worker for the last time the script was seen, the oldest open note, and the deliveries of 30
-  days. `e2e/console-site-page.spec.ts` holds the head, the tabs in the address, the figures, the
+  console, which is the instance's in production, and « Copy ». **« Installed » once the worker saw
+  the widget on the site** (FRU-721: `seen` of the read of one site, written from the read of the pins
+  of a page, an hour apart at most), with « Seen on the site 2 h ago » under the script and « Seen
+  with the extension … » under the extension. Before the worker saw it, « Notes came » once a note
+  came by the script or the extension, with when the last note came, and « Not seen yet » before. `e2e/console-site-page.spec.ts` holds the head, the tabs in the address, the figures, the
   rows, the menu of a place, the card « Install », the roles, the hashes of before, the two failures,
   390 px in English and in French, and axe.
   **The address of the site is a link to it** (FRU-575, Mathieu), in a new tab with no referrer, so
@@ -765,9 +777,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   does not change is in one chunk, and one only (`notes-list.test.ts`, every role and filter crossed).
   The console reads the list again after a status it saves, as many notes as it shows, so the person
   sees the note in its new group and stays where they were. The chips are every note and each place that has notes, in the order
-  of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
-  counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
-  them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
+  of the sources of the workspace. **« Not delivered » is no chip of the places**: it is a
+  filter of « Filter » (« Delivery », FRU-722), with its chip under the bar, and a view of the bar;
+  each of those notes says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
   mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, and the fields of the tasks):
@@ -931,7 +943,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
     screen last read them (`failingRead` of the frame): `failing` of each connector, or the list
     read for one whose health the worker did not say; on another screen it stays until a read says
-    another number, and before any read the bar counts nothing (FRU-711).
+    another number; before it, the bar shows the count of its own read (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
     and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box

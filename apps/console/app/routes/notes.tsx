@@ -15,6 +15,7 @@ import { boardColumns } from '../board-columns';
 import { NotesBoard } from '../parts/notes-board';
 import {
   FILTERS,
+  weekStart,
   type IndexedNote,
   type NotesAnswer,
   type View,
@@ -91,13 +92,17 @@ export default function Notes() {
     if (seesTracker) void readConnectors();
   }, [readConnectors, seesTracker, workspace.id]);
 
+  // Where a note went is about the tracker (FRU-722): a guest's link with `place` or `undelivered`,
+  // which the worker refuses them, reads as the list without that filter, and shows no chip of it.
   const filters = useMemo(
     () =>
-      Object.fromEntries(FILTERS.map((name) => [name, params.get(name) ?? ''])) as Record<
-        (typeof FILTERS)[number],
-        string
-      >,
-    [params],
+      Object.fromEntries(
+        FILTERS.map((name) => [
+          name,
+          !seesTracker && (name === 'place' || name === 'undelivered') ? '' : (params.get(name) ?? ''),
+        ]),
+      ) as Record<(typeof FILTERS)[number], string>,
+    [params, seesTracker],
   );
   const view: View = params.get('view') === 'board' ? 'board' : 'table';
   // FRU-724: the list, as one key: the workspace, the view and the filters. A new list starts again
@@ -149,7 +154,9 @@ export default function Notes() {
   /** The query of the list: its filters and its order, with no cursor and no size. */
   const queryOf = useCallback(() => {
     const query = new URLSearchParams();
-    for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
+    for (const name of FILTERS) if (filters[name] !== '' && name !== 'created') query.set(name, filters[name]);
+    // FRU-722: « This week » starts on a day of the person, which the worker cannot know: an instant.
+    if (filters.created === 'week') query.set('since', String(weekStart()));
     // FRU-655: « Overdue » and « Due this week » count from the day of the person, which the worker
     // cannot know.
     if (filters.due === 'overdue' || filters.due === 'week') query.set('today', dayFromToday(0));
@@ -535,6 +542,7 @@ export default function Notes() {
                 onType={setTyped}
                 view={view}
                 onView={show}
+                seesTracker={seesTracker}
                 // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
                 {...(shown.notes.some((note) => note.task !== undefined) ||
                 TASK_FILTERS.some((name) => filters[name] !== '')
@@ -559,19 +567,8 @@ export default function Notes() {
                   autoFocus={movedOut}
                   onClick={() => {
                     setTyped('');
-                    filter({
-                      place: '',
-                      site: '',
-                      stage: '',
-                      mine: '',
-                      archived: '',
-                      unresolved: '',
-                      assignee: '',
-                      priority: '',
-                      label: '',
-                      due: '',
-                      q: '',
-                    });
+                    // Every filter of the address, so that a filter added later is cleared too (FRU-722).
+                    filter(Object.fromEntries(FILTERS.map((name) => [name, ''])));
                   }}
                 >
                   {t('Clear the filters')}
