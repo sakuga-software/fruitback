@@ -3878,9 +3878,10 @@ refused by its sentence. What follows is the history.
   `place`** (the tabs of the screen); `counts.undelivered` the notes of that filter whose delivery
   did not arrive.
 - **`counts=none` answers the page with no `total` and no `counts`** (FRU-502, `NoteIndex.page`).
-  The counts are a pass over the filter, and the page an index scan that stops: « Next » and
-  « Previous » of the console keep the counts of the filter and ask `counts=none`. Every other read
-  counts again: a first page, a reload on a later page, a filter, a status that a person changed.
+  The counts are a pass over the filter, and the page an index scan that stops: the notes of a
+  workspace in the console, read as the list scrolls (FRU-724), keep the counts of their first read
+  and ask `counts=none` for each chunk after it. Every other read counts again: a first read, a
+  reload, a filter, a status that a person changed.
   `GET /console/admin/notes` takes `counts=none` too, for its `total`. Any other value is `400`.
 - **Who reads what**: every role reads the list (`read-feedback`). **Where a note went is about the
   tracker** (`see-tracker`): the place, the reference and its link, the delivery, `byPlace` and
