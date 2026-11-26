@@ -1,5 +1,84 @@
 # @fruitback/extension
 
+## 0.8.0
+
+### Minor Changes
+
+- 4e3ad70: The widget takes `actionColor` at `init`, and `setActionColor` later: the colour of « Send » in the composer, refused under 4.5:1 with white text. The extension has an « Appearance » page where a person chooses the colour of the note button (Fruitback red, Deep red, Orange, Ink, or their own): it paints « Leave a note » in the popup and the side panel, and « Send » of the widget it mounts, for that person only.
+- 21aa779: The person who left a note gets one e-mail when the team marks it done: a member at the address of their account, a visitor at the address they gave just after the note, once per browser. The worker keeps that address for one message, 90 days at most (table `done_notices`, migration `0042`), and takes it on `POST /feedback/<note>/notify` with the token of the note. The icon of the extension shows, for the site of the tab, how many notes of the reviewer are done and waiting for their check.
+- 2a48f4a: The popup of a site that is on follows the mock-up of 2026-11-25: a head of 48 px with the workspace (a menu of the workspaces of the account, each opening in the console), the site in a card with « On · Acme · 4 open notes » and a switch, « Sent to » in a field of 32 px whose chevron opens « Where notes go », « Leave a note » of 40 px with its keys inside, then « On this page »: the notes of the page, one line each with their status and their age, read from the widget of the tab. A click on a note opens it on the page. « Open sidebar » opens the side panel, and the foot holds « Console », the guide and the menu of the site.
+- 880d540: The author of an open note can move it to another element of the same page, from « ⋯ » in its thread. The widget asks for the new element, then the note moves there. On Linear, the issue keeps its description and gets a comment « Moved the note » that names the element, and the thread reads the note's new place from that comment. An address receives a new `note.moved` event, which carries identifiers only, and the console lists it with the other deliveries. Notes sent to GitHub cannot be moved.
+- 3d4f2eb: On a phone, « Send » takes the whole width of the sheet, every target of the composer is 44 px, and the element stays in sight: the page scrolls it above the sheet, or the sheet stands on the top when the page cannot scroll that far. The lists say « 99+ » above 99 in a tab, a chip and a scope, and « To check » always exactly (`shortCount` of `@fruitback/shared`). A long host is cut at its start, in the list of the widget, the popup and the side panel, with the whole host in its tooltip. The widget reads a page ground on one canvas per document.
+- c7d700b: The list of the notes has three tabs that follow the loop, in the widget and in the side panel of the extension: « To check », « Open » and « Done ». « To check » holds the notes of the reader that the team marked done and nobody confirmed; it replaces the block « Ready to check » above the tabs. The list opens on « To check » while a note waits there. In the widget, the search, the scope and the chips move behind « Search and options », the magnifier of the head, as in the side panel. `noteTab` and `firstTab` of `@fruitback/shared` sort a note into its tab.
+- 9ff903d: The field of a reply is the same everywhere: two lines, Enter sends, Shift+Enter goes to the next line, and the text is kept. The thread of the widget opens its reply on two lines; the side panel of the extension sends on Enter, and keeps what was typed in a reply after « Cancel », a closed row or another tab, until the reply goes.
+- 3b77bb2: The page of the extension has one page for each setting: Sites, Servers and sessions, Share rules and Preferences. The address chooses the page, Back and Forward go between them, and what you typed on a page is still there when you come back. On a narrow window the menu is a bar above the page.
+- 72cc4ce: « Where notes go » is a screen of the popup: one card per place, the lists of the chosen one, and Save. After a save, a notice says where new notes go. A member who may not change the place sees it locked, with a message to copy for an admin.
+- 614009d: « Show Fruitback on this page » is now « Hide Fruitback on this page », an icon button beside the side panel in the popup. The popup has one switch, the one of the site. Hidden, « Leave a note » and the side panel stay in place, turned off.
+- bfabab5: The popup of a site that is on is a launcher: « Leave a note » first, « Sent to » on the line above it with a pencil to change it, the side panel with the open notes and the fixes to check under it, and a menu « ⋯ » that holds « Hide the widget on this site », « Stop reviewing this site », « Change where notes go » and « All settings for this site ». The switch of the site is gone, and the popup is as high as what it holds.
+- 327beba: The popup turns a site on in one click: « Leave notes on this site? » sums up where the notes go and who sees them, and « Change before turning on » opens the lists. A site that only an admin can add gives a message to copy for that admin. A sign-in that did not finish says its problem as the title, then « Sign in again ».
+- 2dd49ea: A note in the list says the stage of Fruitback first and the tracker second, « In progress · Linear: In Review », after a round that fills as the note moves on: a dashed ring for New, an empty one for To do, half full for In progress, full with a tick for Done, with a cross for Closed (`createStageRing`). The filter of the list keeps its shape: All and the five stages, Closed too, in the widget and the side panel; the list of statuses that took the place of the chips beyond five statuses is gone, and the search finds the name of a status or the word of a tracker. `trackerOf`, `stageFirstLabel` and `TRACKER_NAMES` of `@fruitback/shared` name the tracker of an issue by its address.
+- 9159f49: The settings of the widget end with « Hide Fruitback on this page » for a host that gives `hide` to `init`. The extension gives it: the click hides the widget on that origin, as the popup does, and only in a gesture of the person.
+- d96c822: The author of an open note can withdraw it from « ⋯ » in its thread. The thread asks first, then closes the note, and nothing is deleted. A reply under the note says who withdrew it. On Linear, the issue gets the same reply as a comment and moves to the team's first canceled state. An address receives a new `note.withdrawn` event, which carries identifiers only, and the console lists it with the other deliveries. The read gives `withdrawable: true` for the note the reader may withdraw. Notes sent to GitHub cannot be withdrawn.
+
+### Patch Changes
+
+- 6dda086: « Appearance »: when a colour of your own was stored and a ready colour chosen over it could not be saved, the colour of your own comes back in its field, with its contrast, instead of an empty field.
+- f46cbb0: A capture refused for want of permission on its second try, after a refusal for its rate, now says « Click the Fruitback icon… » as on the first try, and no longer « The capture was not taken ».
+- 6535b23: A note opened before the first read of the page answered now joins the capture of its element when that read says the note takes files. Before, the note went without it.
+- 024cb76: The extension builds its stylesheets with Tailwind, on the shared theme of Fruitback: its tokens and their dark scheme move to `src/theme.css`, and the kit is written with `@apply`. Nothing changes on screen.
+- 03e6ded: The sheet of the page of the extension (sites, servers, sharing, preferences, appearance) is written with Tailwind (`@apply`) on the theme of the extension. Nothing changes on screen.
+- 5155fe3: The sheets of the side panel and of the welcome page, and the frame of the gallery, are written with Tailwind (`@apply`) on the theme of the extension. Nothing changes on screen.
+- b2b2ed0: The sheet of the popup, which every page of the extension loads first, is written with Tailwind (`@apply`) on the theme of the extension. Nothing changes on screen.
+- c40459d: Linear keeps one pair of tokens for each Linear workspace, and a new consent ends the pair of before. A Linear connected in a second Fruitback workspace therefore ended the first one. Now every Linear connector of the same Linear workspace shares the pair. A consent or a refresh brings them all back, and disconnecting one connector revokes the pair only when no other connector uses it.
+
+  A connection that Linear ended is reconnected in place: « Reconnect Linear » in the panel of the connector keeps its sites, their places and its settings. A « Connect » for a Linear workspace that the workspace already holds brings the old connector back instead of making a second one. The extension says, under « Sent to », that the notes of the site do not reach a tracker that refuses the connection. For an owner or an admin, it opens that connector in the console.
+
+- 2270f4b: An owner or an admin reconnects a Linear that Linear ended from the popup itself: « Reconnect Linear » under « Sent to » opens the consent at Linear in a new tab, and Linear brings the browser back to the panel of the connector in the console, with its sites and its settings. A worker that refuses, or a tracker other than Linear, still opens the connector in the console.
+- 256666d: On Opera, a page of search results (Google included) keeps the extension off until the person allows it. When a site is on and nothing of the extension runs in the tab, the popup now names the setting to turn on: « Allow access to search page results », in `opera://extensions`. The guide says it too.
+- 52fa16d: A pin is drawn over the dock, the settings and the list of the page, so a note on an element in the corner of the dock stays visible. The thread, its tether and the preview of a pin stay over every pin; the composer and the capture of an area stay over everything.
+- 8764fe7: A reply of the side panel goes once: while it is on its way, the field of its note stays held, with « Send » disabled, even when the reader opens the reply of another note and comes back to it.
+- 662db05: Safari: the background starts again. Safari answers `undefined` to `alarms.create`, where Chrome answers a promise, so the background stopped at its start and « Turn on » in the popup loaded forever. The Xcode project is made with Xcode 27.2 too, and the app asks for macOS 12.
+- 5aa014f: The files of a note live in its field (FRU-609). In the extension, a capture of the element joins
+  the note at the open, as a thumbnail with the element framed; a cross removes it, a click opens it
+  whole, and it leaves only with the note. Each file says its state, and a file too large says its size
+  and the limit. « Send » waits for the files on their way and says so. The area of a capture shows its
+  size and can take the visible page whole. A reader who must sign in first sees « Sign in to send »,
+  and the note stays until they do. « Name » and « Remember me in this browser » replace the old labels.
+  The extension asks a capture once more, after a second, when the browser refused it for its rate.
+- Updated dependencies [4e3ad70]
+- Updated dependencies [57bb8e5]
+- Updated dependencies [21aa779]
+- Updated dependencies [4e2f1df]
+- Updated dependencies [6535b23]
+- Updated dependencies [1a60ff2]
+- Updated dependencies [880d540]
+- Updated dependencies [3d4f2eb]
+- Updated dependencies [26f4598]
+- Updated dependencies [f48ad10]
+- Updated dependencies [c7d700b]
+- Updated dependencies [9ff903d]
+- Updated dependencies [132f13b]
+- Updated dependencies [52fa16d]
+- Updated dependencies [2dd49ea]
+- Updated dependencies [687ed1f]
+- Updated dependencies [01b7b9b]
+- Updated dependencies [04b7b96]
+- Updated dependencies [fbeaa0f]
+- Updated dependencies [a1877fe]
+- Updated dependencies [4b78560]
+- Updated dependencies [66f4f52]
+- Updated dependencies [5f5e51e]
+- Updated dependencies [4ddc561]
+- Updated dependencies [5aa014f]
+- Updated dependencies [9159f49]
+- Updated dependencies [d6b3084]
+- Updated dependencies [aba9530]
+- Updated dependencies [023a84b]
+- Updated dependencies [d96c822]
+- Updated dependencies [73281a2]
+  - @fruitback/widget@0.8.0
+  - @fruitback/shared@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
