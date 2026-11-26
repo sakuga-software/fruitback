@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Stage } from '../stages';
 import { type Connector, type SiteChoice, call, siteChoices } from '../api';
@@ -9,7 +9,6 @@ import { useWorkspace } from './workspace';
 import { t } from '../i18n';
 import { problemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
-import { usePagesAhead } from '../pages-ahead';
 import { useLocale } from '../use-locale';
 import { STATUS_NOT_SAVED, STATUS_PROBLEMS } from '../note-status';
 import { boardColumns } from '../board-columns';
@@ -17,16 +16,15 @@ import { NotesBoard } from '../parts/notes-board';
 import {
   FILTERS,
   type IndexedNote,
-  NOTES_PER_PAGE,
   type NotesAnswer,
   type View,
   byRank,
   groupsOf,
-  pageOf,
   placeBetween,
 } from '../parts/notes-model';
 import { NotesFailed } from '../parts/note-parts';
-import { NotePages } from '../parts/note-pages';
+import { type More, NotesMore } from '../parts/notes-more';
+import { NOTES_PER_READ, againLimit, appended, hasMore, wanted } from '../notes-chunks';
 import { NotesHead, NotesToolbar, Pinned, Places } from '../parts/notes-filters';
 import { NotesTable, useFoldedGroups } from '../parts/notes-table';
 import { NoteCard } from '../parts/note-card';
@@ -101,40 +99,39 @@ export default function Notes() {
       >,
     [params],
   );
-  const cursor = params.get('cursor') ?? '';
   const view: View = params.get('view') === 'board' ? 'board' : 'table';
-  const from = Math.max(1, Number(params.get('from')) || 1);
+  // FRU-724: the list, as one key: the workspace, the view and the filters. A new list starts again
+  // from its first notes; anything else in the address (the task opened) reads nothing.
+  const list = JSON.stringify([base, view, ...FILTERS.map((name) => filters[name])]);
 
   // The answer that is shown, and whether a read is on its way. A read again keeps the rows on the
   // screen until its answer comes: only the first read says « Loading… ».
   const [shown, setShown] = useState<Fetched<NotesAnswer>>('loading');
   const [reading, setReading] = useState(false);
-  // The cursor of each page shown, by its number (FRU-587): « Previous » and the numbers of the
-  // pages take them back. Kept by number, not as a pile, so that the buttons of the browser, which
-  // change the address and not this list, leave each page with its own cursor; and for one list only,
-  // the filters and the view of the address, so that a Back across a filter finds none of another
-  // list. A reload starts it again: « Previous » then goes to the first page.
-  const list = JSON.stringify([view, ...FILTERS.map((name) => filters[name])]);
-  const at = pageOf(from);
-  const [kept, setKept] = useState<{ list: string; pages: Readonly<Record<number, string>> }>({ list, pages: {} });
-  const known: Readonly<Record<number, string>> = kept.list === list ? kept.pages : {};
-  useEffect(
-    () =>
-      setKept((was) => {
-        const pages = was.list === list ? was.pages : {};
-
-        return was.list === list && pages[at] === cursor ? was : { list, pages: { ...pages, [at]: cursor } };
-      }),
-    [list, at, cursor],
-  );
+  // FRU-724: the notes after the list are read as it scrolls, by the cursor of the last answer. Their
+  // read is apart: it adds to the list, and one that failed leaves the list on the screen.
+  const [more, setMore] = useState<More>('idle');
+  const [arrived, setArrived] = useState<number | undefined>();
+  // What the screen shows now, for a read that started before it: a read again reads back as many
+  // notes, and the next notes go on from its cursor. Set with the state, not at the next render: a
+  // read can start between the two (raised in review).
+  const now = useRef(shown);
+  const draw = (next: Fetched<NotesAnswer>) => {
+    now.current = next;
+    setShown(next);
+  };
+  // Whether the list is read, from the moment its read starts: a render can come after it.
+  const busy = useRef(false);
+  // Each read of the list takes a number; the answer of a read of before is dropped, and the read of
+  // the next notes that it began with too. `moreFrom` is the cursor of the next notes on their way:
+  // a press, or the observer, while they are read asks nothing again (FRU-709).
   const asked = useRef(0);
-  // The counts of the last filter that the worker counted, and whether the next read is a press of
-  // « Next » or « Previous » (FRU-502).
-  const counted = useRef<{ filter: string; total: number; counts: NotesAnswer['counts'] } | undefined>(undefined);
-  const paging = useRef(false);
-  // FRU-697: the read asked by a change of the address. Any other read is a read again, after a
-  // write (a status, a task, « Send again ») or « Try again ».
+  const moreFrom = useRef<string | undefined>(undefined);
+  // FRU-697: the read asked by a change of the list. Any other read is a read again, after a write (a
+  // status, a task, « Send again ») or « Try again ».
   const asNew = useRef(false);
+  // A new list is drawn from its top: the filters stay pinned, and its first notes are under them.
+  const toTop = useRef(false);
   // A select of the board moved a note (FRU-436). If the read after it leaves no note under the
   // filters, the board is gone with the select that had the focus: « Clear the filters » takes it.
   const [movedOut, setMovedOut] = useState(false);
@@ -150,64 +147,80 @@ export default function Notes() {
     moved?.querySelector<HTMLElement>('.select__trigger')?.focus();
   }, [refocus, reading, shown]);
 
-  /** The page after an answer, by its cursor. */
-  function forward(answer: NotesAnswer) {
-    if (answer.next === undefined) return;
-    paging.current = true;
-    const next = new URLSearchParams(params);
-    next.set('cursor', answer.next);
-    next.set('from', String(from + answer.notes.length));
-    setParams(next);
-  }
-  // FRU-709: each press goes on from the page asked last, not from the page shown.
-  const ahead = usePagesAhead({ list, cursor, shown, forward, stay: () => setParams(new URLSearchParams(params)) });
-
-  const read = useCallback(async () => {
-    const mine = (asked.current += 1);
-    // FRU-697: a read again follows a write, which can change what a view counts. The counts of the
-    // views go when it starts, not when it is answered: its answer can be dropped (raised in review).
-    // A view read again says its new count with its answer.
-    if (!asNew.current) for (const each of VIEWS) reportView.current(each.id, undefined);
-    asNew.current = false;
-    setReading(true);
+  /** The query of the list: its filters and its order, with no cursor and no size. */
+  const queryOf = useCallback(() => {
     const query = new URLSearchParams();
     for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
     // FRU-655: « Overdue » and « Due this week » count from the day of the person, which the worker
     // cannot know.
     if (filters.due === 'overdue' || filters.due === 'week') query.set('today', dayFromToday(0));
     // The table groups the notes by status (FRU-551): the worker reads them in that order, so that a
-    // group goes on from one page to the next. The board draws a page by date in its columns.
+    // group goes on from one read to the next. The board draws its notes by date in its columns.
     if (view === 'table') query.set('order', 'status');
-    // The size of a page is asked, not left to the worker: the numbers of the pages count on it (FRU-587).
-    query.set('limit', String(NOTES_PER_PAGE));
-    // FRU-502: the counts read the whole filter. « Next » and « Previous » keep the ones of the
-    // filter, so the worker reads the page alone. Any other read counts again: a reload, a filter, a
-    // status that a person changed.
-    const filter = query.toString();
-    const kept = paging.current && cursor !== '' && counted.current?.filter === filter ? counted.current : undefined;
-    paging.current = false;
-    if (cursor !== '') query.set('cursor', cursor);
-    if (kept !== undefined) query.set('counts', 'none');
-    const answer = await call<Partial<NotesAnswer>>('GET', `${base}/notes?${query.toString()}`);
-    // An answer to a question that is no longer asked is dropped: the filters moved on.
-    if (mine !== asked.current) return;
-    setReading(false);
-    if (!answer.ok || !Array.isArray(answer.data?.notes)) return setShown('failed');
-    const { total, counts } = answer.data;
-    if (total !== undefined && counts !== undefined) {
-      counted.current = { filter, total, counts };
-      // The filters of a view and no other: the total is the count of that view (FRU-697).
-      const view = viewOf(filters);
-      if (view !== undefined) reportView.current(view.id, total);
-    }
-    const whole = total !== undefined && counts !== undefined ? { total, counts } : kept;
-    if (whole === undefined) return setShown('failed');
-    const answered = { ...answer.data, notes: answer.data.notes, ...whole };
-    ahead.drawn(answered, list, cursor);
-    setShown(answered);
-    // `ahead` keeps its state in refs, and `list` is made of the view and the filters.
+
+    return query;
+    // `list` is made of the workspace, the view and the filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, filters, cursor, view]);
+  }, [list]);
+
+  /**
+   * Reads the list from its first notes. A read again (after a write, or « Try again ») reads back as
+   * many notes as the screen shows, so that the person stays where they were in it.
+   */
+  const read = useCallback(async () => {
+    const mine = (asked.current += 1);
+    const fresh = asNew.current;
+    // FRU-697: a read again follows a write, which can change what a view counts. The counts of the
+    // views go when it starts, not when it is answered: its answer can be dropped (raised in review).
+    // A view read again says its new count with its answer.
+    if (!fresh) for (const each of VIEWS) reportView.current(each.id, undefined);
+    asNew.current = false;
+    setMore('idle');
+    busy.current = true;
+    setReading(true);
+    // The next notes on their way count too: this read drops their answer, so it reads them back.
+    const was = now.current;
+    const coming = moreFrom.current === undefined ? 0 : NOTES_PER_READ;
+    const want = fresh ? NOTES_PER_READ : wanted((typeof was === 'object' ? was.notes.length : 0) + coming);
+    moreFrom.current = undefined;
+    let got: NotesAnswer | undefined;
+    let failed = false;
+    do {
+      const query = queryOf();
+      // The size of a read is asked, not left to the worker.
+      query.set('limit', String(againLimit(got?.notes.length ?? 0, want)));
+      // FRU-502: the counts read the whole filter, once, with the first notes. The next ones are read alone.
+      if (got?.next !== undefined) {
+        query.set('cursor', got.next);
+        query.set('counts', 'none');
+      }
+      const answer = await call<Partial<NotesAnswer>>('GET', `${base}/notes?${query.toString()}`);
+      // An answer to a question that is no longer asked is dropped: the filters moved on.
+      if (mine !== asked.current) return;
+      if (!answer.ok || !Array.isArray(answer.data?.notes)) {
+        // The first notes did not load: the alert. Later ones: the notes read stay, with « Try again ».
+        failed = got !== undefined;
+        break;
+      }
+      if (got === undefined) {
+        const { total, counts } = answer.data;
+        if (total === undefined || counts === undefined) break;
+        // The filters of a view and no other: the total is the count of that view (FRU-697).
+        const counted = viewOf(filters);
+        if (counted !== undefined) reportView.current(counted.id, total);
+        got = { ...answer.data, notes: answer.data.notes, total, counts };
+      } else got = appended(got, { ...answer.data, notes: answer.data.notes });
+    } while (got.next !== undefined && got.notes.length < want);
+    busy.current = false;
+    setReading(false);
+    if (got === undefined) return draw('failed');
+    if (fresh) toTop.current = true;
+    setArrived(undefined);
+    setMore(failed ? 'failed' : 'idle');
+    draw(got);
+    // `list` is made of the workspace, the view and the filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list]);
   useEffect(() => {
     asNew.current = true;
     void read();
@@ -217,7 +230,46 @@ export default function Notes() {
     if (movedOut && !reading) setMovedOut(false);
   }, [movedOut, reading, shown]);
 
-  /** Sets filters, and goes back to the first page: a page of another list means nothing. */
+  /**
+   * Reads the notes after the list, by the cursor of its last answer (FRU-724): from the observer at
+   * the end of the list, « Load more » and « Try again ». One read at a time: a press while the next
+   * notes are on their way asks nothing, and the list goes on from them once they are drawn.
+   */
+  const readMore = useCallback(async () => {
+    const list = now.current;
+    // While the list is read, its cursor is the one of the list of before.
+    if (busy.current || typeof list !== 'object' || !hasMore(list) || moreFrom.current !== undefined) return;
+    const mine = asked.current;
+    const from = list.next as string;
+    moreFrom.current = from;
+    setMore('reading');
+    const query = queryOf();
+    query.set('limit', String(NOTES_PER_READ));
+    query.set('cursor', from);
+    query.set('counts', 'none');
+    const answer = await call<Partial<NotesAnswer>>('GET', `${base}/notes?${query.toString()}`);
+    // The list was read again, or another list chosen, meanwhile: this read is of none of them.
+    if (mine !== asked.current || moreFrom.current !== from) return;
+    moreFrom.current = undefined;
+    if (!answer.ok || !Array.isArray(answer.data?.notes)) return setMore('failed');
+    const chunk = { ...answer.data, notes: answer.data.notes };
+    setMore('idle');
+    setArrived(chunk.notes.length);
+    const before = now.current;
+    if (typeof before === 'object') draw(appended(before, chunk));
+    // `list` is made of the workspace, the view and the filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list]);
+
+  // A new list is drawn from its top, under the filters, whatever was scrolled in the list of before.
+  useLayoutEffect(() => {
+    if (!toTop.current || typeof shown !== 'object') return;
+    toTop.current = false;
+    const top = document.querySelector('[data-pinned-filters]')?.parentElement?.getBoundingClientRect().top;
+    if (top !== undefined && top < 0) window.scrollBy(0, top);
+  }, [shown]);
+
+  /** Sets filters: a new list, read from its first notes. */
   function filter(changes: Partial<Record<(typeof FILTERS)[number], string>>, replace = false) {
     setMovedOut(false);
     // From the address as it is when the change lands, not as it was when it was asked: the search
@@ -228,57 +280,18 @@ export default function Notes() {
       if (value === '' || value === undefined) next.delete(name);
       else next.set(name, value);
     }
-    next.delete('cursor');
-    next.delete('from');
     latest.current = next;
     setParams(next, { replace });
   }
 
-  function page(to: 'next' | 'previous', answer: NotesAnswer) {
-    if (to === 'next') return ahead.next(answer);
-    // The page before the one asked last: the page of the address, when a press of « Next page » waits.
-    // « First page » goes to the first page.
-    const before = known[at - 1];
-    if ((at <= 2 || before !== undefined) && ahead.back()) return;
-    // The page before by its cursor and its number; the first page when its cursor is not known.
-    // Never `from` less the notes of this page: the last page holds fewer than the others.
-    go(before === undefined ? 1 : at - 1, answer);
-  }
-
-  /** Whether a page has a known cursor: the first, the next one, and the pages shown since the filter. */
-  const reach = (to: number, answer: NotesAnswer) =>
-    to === 1 || (to === at + 1 && answer.next !== undefined) || known[to] !== undefined;
-
   /**
-   * Goes to a page by its number (FRU-587): the next one by its cursor, another by the cursor it was
-   * shown with, the first one with none. `reach` offers no other.
-   */
-  function go(to: number, answer: NotesAnswer) {
-    // A page with no known cursor is not offered; a press that comes anyway reads nothing.
-    if (!reach(to, answer)) return;
-    // A number names its page, from the address: a press of « Next page » that waits goes nowhere now.
-    if (to === at + 1) return ahead.after(answer);
-    paging.current = true;
-    const back = to === 1 ? '' : (known[to] ?? '');
-    ahead.to(back);
-    const next = new URLSearchParams(params);
-    if (back === '') next.delete('cursor');
-    else next.set('cursor', back);
-    if (back === '' || to <= 1) next.delete('from');
-    else next.set('from', String((to - 1) * NOTES_PER_PAGE + 1));
-    setParams(next);
-  }
-
-  /**
-   * Shows the table or the board. The filters stay; the list starts again on its first page, as the
-   * table reads by status and the board by date (FRU-551): a cursor of one is no place in the other.
+   * Shows the table or the board. The filters stay; the list starts again from its first notes, as
+   * the table reads by status and the board by date (FRU-551): a cursor of one is no place in the other.
    */
   function show(next: View) {
     const changed = new URLSearchParams(latest.current);
     if (next === 'board') changed.set('view', 'board');
     else changed.delete('view');
-    changed.delete('cursor');
-    changed.delete('from');
     latest.current = changed;
     setParams(changed);
   }
@@ -341,11 +354,13 @@ export default function Notes() {
   });
 
   // FRU-653: the page of a task, in the address: a link opens it, Escape and « Back » close it.
+  // FRU-724: opening, stepping and closing keep the scroll of the list. A navigation of React Router
+  // goes to the top of the window, unless it is asked not to (`ScrollRestoration` of the root).
   const opened = params.get('task') ?? undefined;
   const openTask = (note: IndexedNote) => {
     const next = new URLSearchParams(params);
     next.set('task', note.id);
-    setParams(next);
+    setParams(next, { preventScrollReset: true });
   };
   const closeTask = () => {
     // The address as it is now: a key can come after a press opened another note, and before React
@@ -353,7 +368,7 @@ export default function Notes() {
     const now = new URLSearchParams(window.location.search);
     const shut = now.get('task');
     now.delete('task');
-    setParams(now);
+    setParams(now, { preventScrollReset: true });
     // FRU-687: the focus goes back to the row of the note, where the person was in the list.
     const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find((each) => each.dataset.note === shut);
     row?.querySelector<HTMLElement>('[data-note-title]')?.focus();
@@ -365,7 +380,7 @@ export default function Notes() {
     const next = new URLSearchParams(latest.current);
     next.set('task', note.id);
     latest.current = next;
-    setParams(next, { replace: true });
+    setParams(next, { replace: true, preventScrollReset: true });
     const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find(
       (each) => each.dataset.note === note.id,
     );
@@ -386,7 +401,7 @@ export default function Notes() {
       const next = new URLSearchParams(latest.current);
       next.set('task', id);
       latest.current = next;
-      setParams(next);
+      setParams(next, { preventScrollReset: true });
     },
   });
   const openCreate = create.open;
@@ -646,21 +661,13 @@ export default function Notes() {
                     }
                   />
                 )}
-                <NotePages
-                  from={from}
+                <NotesMore
                   shown={shown.notes.length}
                   total={shown.total}
-                  first={cursor === ''}
-                  last={shown.next === undefined}
-                  onPage={(to) => page(to, shown)}
-                  // Opened from a link past the second page, the page before has no known cursor.
-                  previousIsFirst={at > 2 && known[at - 1] === undefined}
-                  numbers={{
-                    at,
-                    count: Math.ceil(shown.total / NOTES_PER_PAGE),
-                    reach: (to) => reach(to, shown),
-                    onGo: (to) => go(to, shown),
-                  }}
+                  more={hasMore(shown)}
+                  state={more}
+                  arrived={arrived}
+                  onMore={() => void readMore()}
                 />
                 <TaskBulkBar />
               </div>
