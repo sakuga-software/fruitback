@@ -40,8 +40,8 @@ export type StatusFooter = {
 
 const FAILURES = {
   retry: 'status.failed',
-  wait: 'withdraw.failedWait',
-  'signed-out': 'withdraw.failedSignedOut',
+  wait: 'status.failedWait',
+  'signed-out': 'status.failedSignedOut',
   refused: 'status.refused',
 } as const;
 

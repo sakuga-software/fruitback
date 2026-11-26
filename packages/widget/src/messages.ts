@@ -322,6 +322,8 @@ export const ENGLISH = {
   'status.saving': 'Saving the status…',
   'status.done': 'Status changed: {state}.',
   'status.failed': 'The status was not saved. Try again.',
+  'status.failedWait': 'The status was not saved: too many requests just now. Try again in a minute.',
+  'status.failedSignedOut': 'The status was not saved: your session has ended. Sign in again, then try again.',
   'status.refused': 'You can no longer change the status of this note here. Reload the page.',
   'thread.youBrowser': 'You · this browser',
   'thread.youMayEdit': 'You can edit it until a member picks it up.',

@@ -250,6 +250,9 @@ export const FRENCH: Catalog = {
   'status.saving': 'Enregistrement du statut…',
   'status.done': 'Statut changé : {state}.',
   'status.failed': 'Le statut n’a pas été enregistré. Réessayez.',
+  'status.failedWait': 'Le statut n’a pas été enregistré : trop de demandes en ce moment. Réessayez dans une minute.',
+  'status.failedSignedOut':
+    'Le statut n’a pas été enregistré : votre session a pris fin. Reconnectez-vous, puis réessayez.',
   'status.refused': 'Vous ne pouvez plus changer le statut de cette note ici. Rechargez la page.',
   'thread.youBrowser': 'Vous · ce navigateur',
   'thread.youMayEdit': 'Vous pouvez la modifier tant qu’un membre ne l’a pas prise en charge.',

@@ -148,6 +148,23 @@ describe('the status of a note, from the head of its thread (FRU-718)', () => {
     assert.equal(root.querySelector('.fruitback-pin')?.getAttribute('data-fruitback-stage'), 'new');
   });
 
+  it('says a status that waits for a minute, and one whose session ended, in words of a status', async () => {
+    for (const [status, words] of [
+      [429, 'The status was not saved: too many requests just now. Try again in a minute.'],
+      [401, 'The status was not saved: your session has ended. Sign in again, then try again.'],
+    ] as const) {
+      const page = mounted();
+      const host = hostOf({ issues: [aNote({ canSetStatus: true })] }, { ok: false, status, body: '{}' });
+      const root = await threadOf(page, host.transport);
+
+      root.querySelector<HTMLButtonElement>('button.fruitback-thread-stage')?.click();
+      root.querySelectorAll<HTMLButtonElement>('.fruitback-thread-status-item')[1]?.click();
+      await settle();
+
+      assert.equal(root.querySelector('.fruitback-thread-status-said')?.textContent, words);
+    }
+  });
+
   it('sends nothing for the stage the note is in, and Escape closes the menu, not the thread', async () => {
     const page = mounted();
     const host = hostOf({ issues: [aNote({ canSetStatus: true })] }, MOVED);
