@@ -57,6 +57,8 @@ const LATE = {
 type Worker = {
   asked: { pathname: string; query: string }[];
   total: number;
+  /** FRU-722: the notes not delivered are none. */
+  noneLate?: boolean;
   /** Holds the answer of the next read that is not of the view, until it settles. */
   hold?: Promise<void>;
 };
@@ -83,10 +85,13 @@ async function workerWith(page: Page, workspaces?: StubbedWorkspace[], locale: '
       const held = mine ? undefined : worker.hold;
       worker.hold = undefined;
 
+      const none = worker.noneLate === true && query.get('undelivered') === '1';
+      let notes = mine ? [NOTE] : [NOTE, LATE];
+      if (none) [total, notes] = [0, []];
       const fulfil = () =>
         route.fulfill({
           json: {
-            notes: mine ? [NOTE] : [NOTE, LATE],
+            notes,
             total,
             counts: { all: total, byPlace: {}, byStage: { todo: total } },
           },
@@ -358,6 +363,15 @@ test('« Not delivered » asks the notes whose delivery did not arrive, and its 
   await page.getByRole('menuitemradio', { name: 'Not delivered', exact: true }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?undelivered=1`);
   await expect(undelivered(page)).toHaveAttribute('aria-current', 'page');
+});
+
+test('« Clear the filters » of an empty list clears « Left » and « Delivery » too (FRU-722)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.noneLate = true;
+  await open(page, '/w/w1/notes?undelivered=1&created=week');
+  await expect(page.locator('main').getByText('No note matches.')).toBeVisible();
+  await page.locator('main').getByRole('button', { name: 'Clear the filters' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes`);
 });
 
 test('a count of « Not delivered » of zero is not red', async ({ page }) => {

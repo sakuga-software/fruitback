@@ -117,12 +117,19 @@ is asserted.
   consumer cannot see.
 - **One version for the five packages and the four apps** (`fixed` in `.changeset/config.json`,
   private packages versioned and never tagged). The tag of a release is the version of the extension,
-  and the stores and npm compare it with their manifests. A release is a pull request
-  `chore: version x.y.z` that runs `pnpm changeset version`, which writes each `CHANGELOG.md`; then a
-  release `vx.y.z` published on GitHub. « Draft a new release », a new tag `vx.y.z` on the merge
-  commit, « Generate release notes », « Publish release »: the release makes the tag, and starts
-  `release-npm.yml`, `release-extension.yml` and `release-image.yml` (`release: published`). A tag
-  pushed alone starts nothing.
+  and the stores and npm compare it with their manifests. **`version.yml` writes the pull request and
+  the release** (FRU-728):
+  - At each push to `main` with a changeset waiting, it writes `release/next` again: `pnpm changeset
+    version`, which writes each `CHANGELOG.md`, and the root `package.json` moved to the version of
+    the group. It opens or updates the pull request `chore: version x.y.z`.
+  - At a push to `main` whose root `package.json` names a version that no tag has, newer than every
+    tag `v*`, it publishes the release `vx.y.z` of that commit, with « Generate release notes ». The
+    release makes the tag, and starts `release-npm.yml`, `release-extension.yml` and
+    `release-image.yml` (`release: published`). A person still approves `npm` and `stores`.
+  - The job that runs `pnpm changeset version` holds no secret; its patch may touch only
+    `package.json`, the `package.json` and `CHANGELOG.md` of a package, and `.changeset/*.md`. The
+    two jobs that write use a token of the App: GitHub starts no workflow for a pull request or a
+    release made with the token of a run. A tag pushed alone starts nothing.
 
 ### A new package on npm
 
