@@ -23,7 +23,7 @@ it changes who is shown the feedback and never who may fetch it.
   (FRU-663): « Sign in to Fruitback » signed out, « Turn on with my account » for a member, who to
   ask for anybody else. The probe was measured from an extension page with **no** host permission on the worker,
   because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
-  FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
+  FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so an
   extension-mode client can stay `public` beside a team-mode one.
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in extension mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension

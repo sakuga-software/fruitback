@@ -30,6 +30,15 @@ function textFiles(folder: string): string[] {
   return found;
 }
 
+const OLD_NAMES = [/\bprivate[ -]mode\b/i, /\bmode priv[ée]/i, /« Private »/, /\bPrivé\b/, /\bPrivate ·/];
+/** A browser's own private mode, which is not the mode of the extension. */
+const BROWSER_PRIVATE = /\b(browser|navigateur|Safari|Firefox|Chrome|Chromium|Edge|window|fenêtre)\b/i;
+
+/** Whether a line names the mode of the extension by its old name. */
+function namesTheOldMode(line: string): boolean {
+  return OLD_NAMES.some((pattern) => pattern.test(line)) && !BROWSER_PRIVATE.test(line);
+}
+
 describe('the mode the extension mounts is « Extension mode » (FRU-662)', () => {
   const here = 'apps/extension/src/mode-name.test.ts';
   const files = [
@@ -51,16 +60,32 @@ describe('the mode the extension mounts is « Extension mode » (FRU-662)', () =
   });
 
   it('says the old name nowhere, in English or in French', () => {
-    const old = [/\bprivate[ -]mode\b/i, /\bmode priv[ée]/i, /« Private »/, /\bPrivé\b/];
     const found = files.flatMap((path) =>
       read(path)
         .split('\n')
-        .flatMap((line, index) =>
-          old.some((pattern) => pattern.test(line)) ? [`${path}:${index + 1}: ${line.trim()}`] : [],
-        ),
+        .flatMap((line, index) => (namesTheOldMode(line) ? [`${path}:${index + 1}: ${line.trim()}`] : [])),
     );
 
     assert.deepEqual(found, []);
+  });
+
+  it('tells the old name of the mode from the private window of a browser (review of #967)', () => {
+    for (const line of [
+      'A site that a reviewer opens in private mode takes no note.',
+      'Le mode privé ne porte aucune session.',
+      '| « Private » | « Team » |',
+      "['private', 'Private · the extension shows the widget'],",
+    ]) {
+      assert.ok(namesTheOldMode(line), line);
+    }
+    for (const line of [
+      'Reading `localStorage` can throw in Safari in private mode.',
+      'Open the page in a private window, or in the private mode of the browser.',
+      'Firefox en mode privé refuse le stockage.',
+      'the private ranges of the network, a private repository',
+    ]) {
+      assert.ok(!namesTheOldMode(line), line);
+    }
   });
 
   it('labels the stored value `private` as « Extension » in the popup and on the options page', () => {
