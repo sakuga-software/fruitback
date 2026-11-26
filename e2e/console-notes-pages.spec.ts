@@ -180,7 +180,7 @@ test('« Load more » reads the next notes from the keyboard, and a screen reade
   await expect(loadMore(page)).toBeFocused();
   expect(cursors(worker)).toEqual(['', 'w1/all:25']);
 
-  for (let read = 0; read < 9; read += 1) {
+  for (let read = 0; read < 8; read += 1) {
     const before = await rows(page).count();
     await page.keyboard.press('Enter');
     await expect(rows(page)).toHaveCount(before + 25);

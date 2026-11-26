@@ -347,11 +347,13 @@ export default function Notes() {
   });
 
   // FRU-653: the page of a task, in the address: a link opens it, Escape and « Back » close it.
+  // FRU-724: opening, stepping and closing keep the scroll of the list. A navigation of React Router
+  // goes to the top of the window, unless it is asked not to (`ScrollRestoration` of the root).
   const opened = params.get('task') ?? undefined;
   const openTask = (note: IndexedNote) => {
     const next = new URLSearchParams(params);
     next.set('task', note.id);
-    setParams(next);
+    setParams(next, { preventScrollReset: true });
   };
   const closeTask = () => {
     // The address as it is now: a key can come after a press opened another note, and before React
@@ -359,7 +361,7 @@ export default function Notes() {
     const now = new URLSearchParams(window.location.search);
     const shut = now.get('task');
     now.delete('task');
-    setParams(now);
+    setParams(now, { preventScrollReset: true });
     // FRU-687: the focus goes back to the row of the note, where the person was in the list.
     const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find((each) => each.dataset.note === shut);
     row?.querySelector<HTMLElement>('[data-note-title]')?.focus();
@@ -371,7 +373,7 @@ export default function Notes() {
     const next = new URLSearchParams(latest.current);
     next.set('task', note.id);
     latest.current = next;
-    setParams(next, { replace: true });
+    setParams(next, { replace: true, preventScrollReset: true });
     const row = [...document.querySelectorAll<HTMLElement>('tr[data-note]')].find(
       (each) => each.dataset.note === note.id,
     );
@@ -392,7 +394,7 @@ export default function Notes() {
       const next = new URLSearchParams(latest.current);
       next.set('task', id);
       latest.current = next;
-      setParams(next);
+      setParams(next, { preventScrollReset: true });
     },
   });
   const openCreate = create.open;
