@@ -92,13 +92,17 @@ export default function Notes() {
     if (seesTracker) void readConnectors();
   }, [readConnectors, seesTracker, workspace.id]);
 
+  // Where a note went is about the tracker (FRU-722): a guest's link with `place` or `undelivered`,
+  // which the worker refuses them, reads as the list without that filter, and shows no chip of it.
   const filters = useMemo(
     () =>
-      Object.fromEntries(FILTERS.map((name) => [name, params.get(name) ?? ''])) as Record<
-        (typeof FILTERS)[number],
-        string
-      >,
-    [params],
+      Object.fromEntries(
+        FILTERS.map((name) => [
+          name,
+          !seesTracker && (name === 'place' || name === 'undelivered') ? '' : (params.get(name) ?? ''),
+        ]),
+      ) as Record<(typeof FILTERS)[number], string>,
+    [params, seesTracker],
   );
   const view: View = params.get('view') === 'board' ? 'board' : 'table';
   // FRU-724: the list, as one key: the workspace, the view and the filters. A new list starts again

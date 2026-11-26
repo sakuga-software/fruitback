@@ -365,6 +365,23 @@ test('« Not delivered » asks the notes whose delivery did not arrive, and its 
   await expect(undelivered(page)).toHaveAttribute('aria-current', 'page');
 });
 
+test('a guest who opens a link of « Not delivered » reads the list without it: the worker would refuse it', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, [{ ...LUMEN, id: 'w1', role: 'guest' }]);
+  await open(page, '/w/w1/notes?undelivered=1&place=c2');
+  await expect.poll(() => worker.asked.length).toBeGreaterThan(0);
+  const asked = new URLSearchParams(worker.asked.at(-1)?.query);
+  expect(asked.has('undelivered')).toBe(false);
+  expect(asked.has('place')).toBe(false);
+  await expect(page.getByRole('group', { name: 'Filters on' })).toHaveCount(0);
+  await expect(page.locator('main').getByText('The button is cut on a phone')).toBeVisible();
+  // The control: a member reads the same link with its filter.
+  const member = await workerWith(page, [{ ...LUMEN, id: 'w1', role: 'member' }]);
+  await open(page, '/w/w1/notes?undelivered=1');
+  await expect.poll(() => member.asked.at(-1)?.query ?? '').toContain('undelivered=1');
+});
+
 test('« Clear the filters » of an empty list clears « Left » and « Delivery » too (FRU-722)', async ({ page }) => {
   const worker = await workerWith(page);
   worker.noneLate = true;
