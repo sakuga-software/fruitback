@@ -22,6 +22,7 @@ import {
 import { FROZEN_VERSIONS, closeFrozenFiles, frozenFile } from './postgres-copy.fixture.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   appliedDates,
   createPgliteDatabase,
   createRealDatabase,
@@ -223,7 +224,7 @@ const COPIED_COUNTS = {
 const EMPTY = Object.fromEntries(Object.keys(COPIED_COUNTS).map((table) => [table, 0]));
 
 const SUBJECTS: { label: string; open: () => Promise<Database>; skip: string | false }[] = [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
   // FRU-219: the copy writes where the worker of that database reads, and names no schema.
   {
