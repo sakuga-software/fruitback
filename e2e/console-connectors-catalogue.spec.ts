@@ -7,6 +7,7 @@ import {
   LINE,
   LINEAR,
   ADDRESS,
+  DONE,
   workerWith,
   open,
   rows,
@@ -73,9 +74,13 @@ test('the catalogue: a tile for each tracker, its logo, one line, and its state'
   await expect(line.locator('..')).toHaveAttribute('title', 'Tells Slack or any address when a note arrives.');
   expect.soft(await painted(line, 'color')).toEqual(rgb(MUTED));
 
-  // The states: « Connected », « Connect », « Soon », and the « New » of the routine.
-  await expect(tile(page, 'REST API').locator('[data-pill]')).toHaveText('Connected');
-  await expect(tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' })).toBeVisible();
+  // The states: « Add » with a count (FRU-727), « Connect », « Soon », and the « New » of the routine.
+  await expect(tile(page, 'REST API')).toHaveAttribute('data-state', 'connected');
+  await expect(tile(page, 'REST API').locator('[data-pill]')).toHaveCount(0);
+  await expect(tile(page, 'REST API').locator('[data-count]')).toHaveText('1');
+  await expect(tile(page, 'REST API').getByRole('button', { name: 'Add another REST API (1 connected)' })).toHaveText(
+    'Add',
+  );
   for (const name of ['Jira', 'GitLab', 'Asana', 'ClickUp', 'Trello', 'Notion', 'Slack', 'Webhook']) {
     // No plugin of this kind on this worker: nothing here connects.
     await expect(tile(page, name).locator('[data-pill]'), name).toHaveText('Soon');
@@ -133,7 +138,9 @@ test('the catalogue searches its tiles, and shows one kind at a time', async ({ 
 test('an address connected from its tile shows its secret once, then its settings open', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await tile(page, 'REST API')
+    .getByRole('button', { name: /^Add another REST API \(/ })
+    .click();
   const field = page.getByRole('textbox', { name: 'Address of your receiver' });
   // An address that the worker refuses keeps what was typed.
   worker.refuses = 'invalid-address';
@@ -167,7 +174,9 @@ test('an address connected from its tile shows its secret once, then its setting
 test('a secret on the screen stays when the read after it says no connector can be added', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await tile(page, 'REST API')
+    .getByRole('button', { name: /^Add another REST API \(/ })
+    .click();
   await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
   // The read that follows the address says this worker cannot keep a key any more: the buttons of
   // the catalogue go, and the form with the secret must not go with them.
@@ -284,7 +293,9 @@ test('a first address opens its settings once read, also when the read ends afte
 test('after an address whose read failed, « Cancel » of the next form closes only the form', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await tile(page, 'REST API')
+    .getByRole('button', { name: /^Add another REST API \(/ })
+    .click();
   await page.getByRole('textbox', { name: 'Address of your receiver' }).fill('https://hooks.client.fr/notes');
   await page.getByLabel('Secret (optional)').fill('my-own-secret-0123456789');
   // The address is kept with a secret of its own, and the read that follows fails: no settings open.
@@ -293,7 +304,9 @@ test('after an address whose read failed, « Cancel » of the next form closes o
   await expect(page.getByRole('alert')).toContainText('The connectors and their sites did not load.');
   await expect(panel(page)).toHaveCount(0);
   worker.down = false;
-  await tile(page, 'REST API').getByRole('button', { name: 'Connect another REST API' }).click();
+  await tile(page, 'REST API')
+    .getByRole('button', { name: /^Add another REST API \(/ })
+    .click();
   await tile(page, 'REST API').getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Address of your receiver' })).toHaveCount(0);
   await expect(panel(page)).toHaveCount(0);
@@ -322,4 +335,74 @@ test('a member reads the connectors and the catalogue, and changes nothing', asy
   await expect(panel(page).getByRole('link', { name: /^Statuses of / })).toHaveCount(0);
   await expect(panel(page).getByRole('button')).toHaveCount(0);
   await expect(panel(page).getByRole('switch')).toHaveCount(0);
+});
+
+/**
+ * FRU-727. A workspace connects a kind more than once: two workspaces of Linear, two addresses. The
+ * table has a row for each connection, told apart by its account, and the tile of the kind counts
+ * them on its logo and offers « Add » in place of « Connected », so its words have their room.
+ */
+test('several connections of one kind: a row each, a count on the logo, and « Add »', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.connectors = [LINEAR, { ...LINEAR, id: 'c2', label: 'Linear OAuth · Acme Labs' }, ADDRESS];
+  await open(page);
+  await expect(rows(page)).toHaveCount(3);
+  await expect(rows(page).locator('[data-source-line]')).toHaveText([
+    'Workspace Acme',
+    'Workspace Acme Labs',
+    'hooks.acme.dev/feedback',
+  ]);
+
+  const linear = tile(page, 'Linear');
+  const add = linear.getByRole('button', { name: 'Add another Linear (2 connected)', exact: true });
+  await expect(add).toHaveText('Add');
+  expect.soft(await styles(add, ['height', 'font-size'])).toEqual({ height: '24px', 'font-size': '12px' });
+  await expect(linear.locator('[data-pill]')).toHaveCount(0);
+  await expect(
+    tile(page, 'REST API').getByRole('button', { name: 'Add another REST API (1 connected)' }),
+  ).toBeVisible();
+
+  // The count: a green disc on the top right corner of the logo, which a screen reader does not read
+  // twice (the button says it).
+  const count = linear.locator('[data-count]');
+  await expect(count).toHaveText('2');
+  await expect(count).toHaveAttribute('aria-hidden', 'true');
+  expect.soft(await painted(count, 'backgroundColor')).toEqual(rgb(DONE));
+  const logo = await box(linear.locator('img[data-logo="linear"]').locator('..'));
+  const disc = await box(count);
+  expect.soft(Math.abs(disc.x + disc.width / 2 - (logo.x + logo.width))).toBeLessThanOrEqual(3);
+  expect.soft(Math.abs(disc.y + disc.height / 2 - logo.y)).toBeLessThanOrEqual(3);
+  expect.soft({ width: disc.width, height: disc.height }).toEqual({ width: 16, height: 16 });
+
+  // The words of a connected tile have their room at 1440 px: « An issue in a team » is no longer cut
+  // by « Connected » and « + ». (A longer line, as the one of an address, is still cut at its end.)
+  const line = linear.locator('[data-tile-line]');
+  await expect(line).toHaveText('An issue in a team');
+  expect(await line.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  // « Add » does what « Connect » does: the consent at Linear for a second workspace of Linear.
+  await add.click();
+  await expect
+    .poll(() => worker.sent.map((each) => each.pathname))
+    .toContain('/console/workspaces/w1/connectors/linear/oauth');
+});
+
+test('« Add » of an address opens its form, and a member reads the count with « Connected »', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.connectors = [LINEAR, ADDRESS, { ...ADDRESS, id: 'r2', label: 'REST · n8n.acme.dev/notes' }];
+  await open(page);
+  await tile(page, 'REST API').getByRole('button', { name: 'Add another REST API (2 connected)' }).click();
+  await expect(tile(page, 'REST API').getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+  await expectNoViolation(page, 'the form of a third address');
+
+  // A member adds nothing: « Connected » and the count, which a screen reader hears in words.
+  const member = await workerWith(page, 'member');
+  member.connectors = worker.connectors;
+  await open(page);
+  const rest = tile(page, 'REST API');
+  await expect(rest.getByRole('button')).toHaveCount(0);
+  await expect(rest.locator('[data-pill]')).toHaveText('Connected');
+  await expect(rest.locator('[data-count]')).toHaveText('2');
+  await expect(rest.locator('.sr-only')).toHaveText('2 connected');
+  await expect(tile(page, 'Linear').locator('.sr-only')).toHaveText('1 connected');
 });

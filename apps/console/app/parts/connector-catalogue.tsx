@@ -1,7 +1,7 @@
 import { type ReactNode, type Ref, useState } from 'react';
 import type { Connector } from '../api';
 import { msg, t } from '../i18n';
-import { Button, Field, IconButton, Menu, ViewTab, folded } from '../ui';
+import { Button, Field, Menu, ViewTab, folded } from '../ui';
 import { useLocale } from '../use-locale';
 import { ConnectorLogo } from '../connector-logos';
 import type { LogoKind } from '../connector-logo-kinds.ts';
@@ -129,7 +129,7 @@ export function Catalogue({
   available: boolean;
   /** The kind whose form is open in its tile. */
   adding: Connector['kind'] | undefined;
-  /** The kinds of the connectors of the workspace: their tiles say « Connected ». */
+  /** The kinds of the connectors of the workspace, once for each connector: their tiles count them. */
   connectedKinds: readonly string[];
   offerOf: (entry: Entry) => Offer;
   /** What opens in a tile under its line; `[]` for nothing. */
@@ -207,7 +207,9 @@ export function Catalogue({
         <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-[10px]">
           {shownEntries.map((entry) => {
             const under = underOf(entry.kind);
-            const isConnected = connectedKinds.includes(entry.kind);
+            // FRU-727: a workspace can connect a kind more than once (two workspaces of Linear,
+            // two addresses), and the tile counts them.
+            const count = connectedKinds.filter((kind) => kind === entry.kind).length;
 
             return (
               <Tile
@@ -215,7 +217,7 @@ export function Catalogue({
                 entry={entry}
                 detail={detailOf(entry.kind)}
                 offer={offerOf(entry)}
-                connected={isConnected}
+                connected={count}
                 cannot={cannot}
                 typing={adding === entry.kind}
                 under={under}
@@ -241,10 +243,44 @@ function Connect({ name }: { name: string }) {
 }
 
 /**
+ * « Add », for a kind already connected (FRU-727): a screen reader hears what it adds and how many
+ * there are, « Add another Linear (2 connected) ».
+ */
+function addLabel(name: string, count: number): string {
+  return count === 1
+    ? t('Add another {source} (1 connected)', { source: name })
+    : t('Add another {source} ({count} connected)', { source: name, count });
+}
+
+/**
+ * The count of the connectors of a kind, on the top right corner of its logo (FRU-727): a green disc.
+ * The button « Add » says the count to a screen reader; with no button, the words under it say it.
+ */
+function Count({ count, said }: { count: number; said: boolean }) {
+  useLocale();
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        data-count
+        className="absolute -top-[6px] -right-[6px] flex h-[16px] min-w-[16px] items-center justify-center rounded-pill bg-done px-[4px] text-[10px] leading-none font-bold text-on-ink tabular-nums ring-2 ring-surface"
+      >
+        {count}
+      </span>
+      {said ? null : (
+        <span className="sr-only">{count === 1 ? t('1 connected') : t('{count} connected', { count })}</span>
+      )}
+    </>
+  );
+}
+
+/**
  * A tile of the catalogue (FRU-690): the logo in its box of 36 px, the name, one line of what a note
- * becomes there, cut at its end, and the state at the right: « Connected », « Connect », « Soon »,
- * or « Not set up ». A tile that is open (its form, a refusal) takes the whole row, and what opened
- * is under its line.
+ * becomes there, cut at its end, and the state at the right: « Connect », « Soon », or « Not set up ».
+ * A kind already connected (FRU-727) has its count on its logo, and « Add » to connect one more; a
+ * person who cannot add one reads « Connected ». A tile that is open (its form, a refusal) takes the
+ * whole row, and what opened is under its line.
  */
 function Tile({
   entry,
@@ -258,7 +294,8 @@ function Tile({
   entry: Entry;
   detail: string;
   offer: Offer;
-  connected: boolean;
+  /** How many connectors of its kind the workspace has. */
+  connected: number;
   /**
    * The person cannot add a source here: a member, or a worker that cannot keep a key. The tile then
    * offers no button: a line above the tiles says why, and a disabled button would say nothing more.
@@ -273,20 +310,25 @@ function Tile({
   const name = t(entry.name);
   const wide = under.length > 0;
   const why = offer.state === 'unset' ? offer.why : undefined;
+  // « Add » takes the place of « Connected »: a workspace can connect a second one (FRU-727).
+  const adds = connected > 0 && offer.state === 'connect' && !cannot && !typing;
 
   return (
     <li
       className={`flex min-w-0 flex-col rounded-card border border-line bg-surface px-[14px] ${wide ? 'col-span-full pb-[14px]' : ''}`}
       data-source={name}
-      data-state={connected ? 'connected' : offer.state}
+      data-state={connected > 0 ? 'connected' : offer.state}
     >
       {/* At least 62 px and its 2 px of border: every tile has the height of the others. */}
       <div className="flex min-h-[62px] min-w-0 items-center gap-[12px]">
-        <ConnectorLogo kind={entry.kind} />
+        <span className="relative flex-none">
+          <ConnectorLogo kind={entry.kind} />
+          {connected > 0 ? <Count count={connected} said={adds} /> : null}
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
           <span className="flex min-w-0 items-center gap-[6px]">
             <span className="truncate text-body leading-auto font-semibold">{name}</span>
-            {entry.fresh === true && !connected ? <Pill tone="alert">{t('New')}</Pill> : null}
+            {entry.fresh === true && connected === 0 ? <Pill tone="alert">{t('New')}</Pill> : null}
           </span>
           {/* One line, cut at its end; the whole sentence is the tooltip. */}
           <span className="truncate text-hint leading-auto text-muted" data-tile-line>
@@ -294,21 +336,22 @@ function Tile({
           </span>
         </span>
         <span className={`flex flex-none items-center gap-[4px] ${TOUCH}`}>
-          {connected ? <Pill tone="done">{t('Connected')}</Pill> : null}
-          {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
-          {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
-          {/* A workspace can connect a second one: another team of Linear, another address. */}
-          {offer.state === 'connect' && !cannot && !typing && connected ? (
-            <IconButton
+          {connected > 0 && !adds ? <Pill tone="done">{t('Connected')}</Pill> : null}
+          {offer.state === 'soon' && connected === 0 ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
+          {offer.state === 'unset' && connected === 0 ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
+          {/* A workspace can connect a second one: another workspace of Linear, another address. */}
+          {adds ? (
+            <Button
+              tone="outline"
               size="small"
-              label={t('Connect another {source}', { source: name })}
+              label={addLabel(name, connected)}
               disabled={offer.busy !== undefined}
               onClick={offer.primary}
             >
-              <NoteIcon name="add" />
-            </IconButton>
+              {offer.busy ?? t('Add')}
+            </Button>
           ) : null}
-          {offer.state === 'connect' && !cannot && !typing && !connected ? (
+          {offer.state === 'connect' && !cannot && !typing && connected === 0 ? (
             <>
               <Button tone="outline" size="small" disabled={offer.busy !== undefined} onClick={offer.primary}>
                 {offer.busy ?? <Connect name={name} />}

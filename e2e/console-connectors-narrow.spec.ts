@@ -185,10 +185,10 @@ test.describe('with a finger', () => {
       await page.setViewportSize({ width, height: 900 });
       await twoConnectors(page);
       expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
-      for (const label of ['Settings of REST API', 'Retry REST API', 'Connect another Linear'])
+      for (const label of ['Settings of REST API', 'Retry REST API', 'Add another Linear (1 connected)'])
         expect(await above(page, page.getByRole('button', { name: label, exact: true })), label).toBe(label);
       // A button of the tile stays inside its tile.
-      const plus = await box(tile(page, 'Linear').getByRole('button', { name: 'Connect another Linear' }));
+      const plus = await box(tile(page, 'Linear').getByRole('button', { name: 'Add another Linear (1 connected)' }));
       const tileBox = await box(tile(page, 'Linear'));
       expect(centre(plus) - 22).toBeGreaterThanOrEqual(tileBox.y);
       expect(centre(plus) + 22).toBeLessThanOrEqual(tileBox.y + tileBox.height);
@@ -200,6 +200,6 @@ test('with a mouse, a press beside a control is not its own', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await twoConnectors(page);
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(false);
-  for (const label of ['Settings of REST API', 'Connect another Linear'])
+  for (const label of ['Settings of REST API', 'Add another Linear (1 connected)'])
     expect(await above(page, page.getByRole('button', { name: label, exact: true })), label).not.toBe(label);
 });
