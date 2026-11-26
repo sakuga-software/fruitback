@@ -355,10 +355,11 @@ button.fruitback-thread-stage:hover, button.fruitback-thread-stage[aria-expanded
 button.fruitback-thread-stage:focus-visible::before { border: 2px solid var(--fruitback-color-accent); }
 button.fruitback-thread-stage[aria-busy="true"] { cursor: progress; }
 .fruitback-thread-status-chevron { flex: none; width: 12px; height: 12px; color: var(--fruitback-color-text-muted); }
-.fruitback-thread-status-menu { inset-inline: -4px auto; top: calc(100% - 4px); min-width: 180px; }
-.fruitback-thread-status-item { display: flex; align-items: center; gap: 8px; }
+/* Two classes: the rules of « ⋯ » below would win over one. */
+.fruitback-thread-more-menu.fruitback-thread-status-menu { inset-inline: -4px auto; top: calc(100% - 4px); min-width: 180px; }
+.fruitback-thread-more-item.fruitback-thread-status-item { display: flex; align-items: center; gap: 8px; }
 /* The stage the note is in: marked by its weight and by aria-checked, never by a colour alone. */
-.fruitback-thread-status-item[aria-checked="true"] { font-weight: 650; background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-more-item.fruitback-thread-status-item[aria-checked="true"] { font-weight: 650; background: var(--fruitback-color-surface-sunken); }
 .fruitback-thread-status-said { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 @media (forced-colors: active) {
   button.fruitback-thread-stage { border-color: Canvas; }

@@ -60,6 +60,11 @@ test('a member changes the status of a note from its thread, the pin follows, an
   const menu = thread.getByRole('menu', { name: /^(Status of the note|Statut de la note)$/ });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitemradio')).toHaveCount(5);
+  // Under the chip, on its start side, each stage a row: its round, a gap, its word.
+  const [chip, list] = [await status.boundingBox(), await menu.boundingBox()];
+  expect(Math.abs((list?.x ?? 0) - (chip?.x ?? 0))).toBeLessThanOrEqual(8);
+  await expect(menu.getByRole('menuitemradio').first()).toHaveCSS('display', 'flex');
+  await expect(menu.getByRole('menuitemradio').first()).toHaveCSS('column-gap', '8px');
   await expect(menu.getByRole('menuitemradio', { checked: true })).toBeFocused();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const scanned = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
