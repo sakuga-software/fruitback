@@ -518,10 +518,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // destination (FRU-640): `IS DISTINCT FROM` of a text, in a `where`. Two more for a label removed
     // (FRU-655): `array_remove` of the labels of a row, in a `set`, and `= ANY` of them, in a `where`.
     // One more for who writes when the visibility changes (FRU-703): a `CASE` of two texts, in a `set`.
+    // One more selected for the counts of the bar (FRU-711): the deliveries that wait, a subquery of
+    // `count`, a BIGINT read through `mapWith(Number)`; test:`counts an empty workspace as zeros` reads it.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 29, sessions: 9 },
+      { accounts: 30, sessions: 9 },
     );
   });
 });

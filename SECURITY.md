@@ -1069,7 +1069,7 @@ whole.
   The other reads of the sites of the console are narrowed the same way: a page of the
   list, the sites to choose from (`…/sites/choices`), and one site (`…/sites/<id>`, `404` for a site
   not shared). test:`lets the guest read a site not shared with them in the reads of FRU-497 without their filter`.
-- The counts of the bar of the console (`GET /console/workspaces/<id>/rail`, FRU-711) are of the
+- The counts of the bar of the console (`GET /console/workspaces/<id>/rail`) are of the
   same reads, for the same roles: the sites the caller reads, the notes of those sites that are not
   done nor closed, and the tasks of the caller. A guest counts the sites shared with them and their
   notes; the sends of the connectors that did not arrive (`failing`) are about the tracker, and only
