@@ -71,6 +71,22 @@ const GROUPS: readonly { id: Group | 'all'; label: string }[] = [
   { id: 'developers', label: msg('Developers') },
 ];
 
+/**
+ * Under 560 px (FRU-727, the phone of the mockup): the search takes a line of its own, 44 px high and
+ * in 16 px, and the groups the next one, which scrolls sideways rather than going on two lines.
+ */
+const NARROW_SEARCH =
+  '@max-[560px]:max-w-none @max-[560px]:basis-full @max-[560px]:[&_input]:h-[44px] @max-[560px]:[&_input]:text-[16px]';
+const NARROW_GROUPS =
+  '@max-[560px]:ml-0 @max-[560px]:w-full @max-[560px]:overflow-x-auto @max-[560px]:[scrollbar-width:none] @max-[560px]:[&_button]:h-[44px]';
+
+/**
+ * A press of a finger reaches a control of 44 px (FRU-727): a button of a tile (24 px) takes presses 10 px
+ * above and under its box, inside the 64 px of the tile.
+ */
+const TOUCH =
+  'pointer-coarse:[&_button]:relative pointer-coarse:[&_button]:after:absolute pointer-coarse:[&_button]:after:-inset-y-[10px] pointer-coarse:[&_button]:after:inset-x-0';
+
 /** The id of the title « Add a connector », which « New connector » scrolls to. */
 export const ADD_TITLE = 'add-title';
 
@@ -139,12 +155,17 @@ export function Catalogue({
   );
 
   return (
-    <section aria-labelledby={ADD_TITLE}>
+    // FRU-727: the head and the tiles follow the width of the section, not the one of the window.
+    <section aria-labelledby={ADD_TITLE} className="@container">
       <div className="mb-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
         <h2 id={ADD_TITLE} className="text-body leading-auto font-semibold">
           {t('Add a connector')}
         </h2>
-        <div className="w-[220px] min-w-0 flex-shrink">
+        {/*
+         * The search grows up to 220 px, and the head goes to a second line where it has no room. Under
+         * 560 px it takes the whole width, 44 px high, in 16 px: iOS zooms on a field in a smaller font.
+         */}
+        <div className={`max-w-[220px] min-w-[160px] flex-[1_1_160px] ${NARROW_SEARCH}`}>
           <Field
             label={t('Search trackers and tools')}
             labelHidden
@@ -156,7 +177,11 @@ export function Catalogue({
             onChange={(event) => setTyped(event.target.value)}
           />
         </div>
-        <div role="group" aria-label={t('Kind of connector')} className="ml-auto flex flex-wrap gap-[2px]">
+        <div
+          role="group"
+          aria-label={t('Kind of connector')}
+          className={`ml-auto flex gap-[2px] ${TOUCH} ${NARROW_GROUPS}`}
+        >
           {GROUPS.map((each) => (
             <ViewTab key={each.id} pressed={group === each.id} onChange={() => setGroup(each.id)}>
               {t(each.label)}
@@ -176,9 +201,10 @@ export function Catalogue({
           {t('No connector matches « {search} ».', { search: typed.trim() })}
         </p>
       ) : (
-        // FRU-690: tiles of 64 px, four in a row at 1440 px, one at 390 px. A tile whose form is
-        // open, or that says why it did not connect, takes the whole row.
-        <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-[10px]">
+        // FRU-690: tiles of 64 px, one at 390 px. FRU-727: no tile narrower than 260 px, so that its
+        // button never squeezes its words: four in a row at 1440 px, two at 834 px. A tile whose form
+        // is open, or that says why it did not connect, takes the whole row.
+        <ul className="grid grid-flow-row-dense grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-[10px]">
           {shownEntries.map((entry) => {
             const under = underOf(entry.kind);
             const isConnected = connectedKinds.includes(entry.kind);
@@ -254,7 +280,8 @@ function Tile({
       data-source={name}
       data-state={connected ? 'connected' : offer.state}
     >
-      <div className="flex h-[62px] min-w-0 items-center gap-[12px]">
+      {/* At least 62 px and its 2 px of border: every tile has the height of the others. */}
+      <div className="flex min-h-[62px] min-w-0 items-center gap-[12px]">
         <ConnectorLogo kind={entry.kind} />
         <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
           <span className="flex min-w-0 items-center gap-[6px]">
@@ -266,7 +293,7 @@ function Tile({
             {why ?? t(entry.short)}
           </span>
         </span>
-        <span className="flex flex-none items-center gap-[4px]">
+        <span className={`flex flex-none items-center gap-[4px] ${TOUCH}`}>
           {connected ? <Pill tone="done">{t('Connected')}</Pill> : null}
           {offer.state === 'soon' && !connected ? <Pill tone="neutral">{t('Soon')}</Pill> : null}
           {offer.state === 'unset' && !connected ? <Pill tone="neutral">{t('Not set up')}</Pill> : null}
