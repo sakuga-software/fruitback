@@ -14,6 +14,7 @@ import {
   adoptAppearance,
   appearanceSender,
   forgetAppearance,
+  keepWithAccount,
   keptAppearance,
 } from './appearance.ts';
 import { APPEARANCE_CHOICES, readAppearanceChoice } from '../../worker/src/appearance.ts';
@@ -147,6 +148,26 @@ describe('the choices sent to the account (FRU-716)', () => {
 
     assert.deepEqual(await Promise.all([first, second, third]), [true, true, true]);
     assert.equal(sender.busy(), false);
+  });
+
+  it('a sign-out drops the choice that waits: it never leaves with the cookie of the next person', async () => {
+    const sent: (Appearance | null)[] = [];
+    let answer: () => void = () => {};
+    // The first request waits for `answer`; any later one is answered at once.
+    const save = (appearance: Appearance | null) => {
+      sent.push(appearance);
+      return sent.length === 1
+        ? new Promise<boolean>((resolve) => (answer = () => resolve(true)))
+        : Promise.resolve(true);
+    };
+    const first = keepWithAccount(ALICE, save);
+    // Pressed while the first one is on its way: it waits.
+    const second = keepWithAccount({ ...ALICE, accent: 'blue' }, save);
+    forgetAppearance(undefined, undefined);
+    answer();
+
+    await Promise.all([first, second]);
+    assert.deepEqual(sent, [ALICE]);
   });
 
   it('says that the account did not take the last choice: a refusal, or no answer', async () => {

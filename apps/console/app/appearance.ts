@@ -584,6 +584,11 @@ export function appearanceSender(save: SaveAppearance): {
   send: (appearance: Appearance) => Promise<boolean>;
   /** A choice is on its way, or waits: what the account answers is older than what is on screen. */
   busy: () => boolean;
+  /**
+   * A sign-out: a choice that waits never leaves. Sent later, it would carry the cookie of whoever
+   * signs in next in this tab, and write the choice of one person on the account of another.
+   */
+  drop: () => void;
 } {
   let flight: Promise<boolean> | undefined;
   let waiting: Appearance | undefined;
@@ -609,7 +614,13 @@ export function appearanceSender(save: SaveAppearance): {
     return flight;
   };
 
-  return { send, busy: () => flight !== undefined };
+  return {
+    send,
+    busy: () => flight !== undefined,
+    drop: () => {
+      waiting = undefined;
+    },
+  };
 }
 
 /** The sender of this tab, set by `keepWithAccount`; `adoptAppearance` waits behind it. */
@@ -641,11 +652,15 @@ export function adoptAppearance(
   applyAppearance(chosen, root ?? NO_ROOT, storage, systemDark);
 }
 
-/** A sign-out (FRU-716): the next person of this browser starts from the default look. */
+/**
+ * A sign-out (FRU-716): the next person of this browser starts from the default look, and a choice
+ * that still waits to be sent never leaves (raised in review).
+ */
 export function forgetAppearance(
   root: { style: Pick<CSSStyleDeclaration, 'setProperty' | 'removeProperty'> } | undefined = pageRoot(),
   storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = browserStorage(),
 ): void {
+  sender?.drop();
   applyAppearance(DEFAULT_APPEARANCE, root ?? NO_ROOT, storage, false);
 }
 
