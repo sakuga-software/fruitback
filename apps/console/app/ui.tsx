@@ -456,6 +456,11 @@ type IconButtonProps = {
   /** The button shows and hides the element `controls` (FRU-684): whether it is shown. */
   expanded?: boolean;
   controls?: string;
+  /**
+   * « late »: the red arrow of the notes not delivered yet, in the column « Sent to » of the Sites
+   * screen (FRU-717), at 14 px as the mockup draws it. Otherwise muted.
+   */
+  tone?: 'muted' | 'late';
   /** The picture: an `svg` with `aria-hidden`. */
   children: ReactNode;
 };
@@ -463,6 +468,9 @@ type IconButtonProps = {
 /** A button that is a picture: 28 px, or 24 px (« small »), its picture at 18 px. */
 const ICON_BUTTON =
   'kit-icon-button inline-flex flex-none items-center justify-center p-0 border-0 border-none border-current rounded-control bg-transparent text-muted cursor-pointer transform-none [transition:none] [&:hover:not(:disabled,[aria-disabled=true])]:bg-hover data-[hovered=true]:bg-hover data-[pressed=true]:bg-hover disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed [&_svg]:size-[18px] [&_svg]:m-0';
+
+/** The colour of the picture, and the size the tone draws it at. */
+const ICON_BUTTON_TONE = { muted: '', late: 'text-accent-strong! [&_svg]:size-[14px]!' } as const;
 
 const ICON_BUTTON_SIZE = {
   chip: 'size-control-md',
@@ -479,6 +487,7 @@ export function IconButton({
   menu = false,
   expanded,
   controls,
+  tone = 'muted',
   children,
 }: IconButtonProps) {
   return (
@@ -492,7 +501,7 @@ export function IconButton({
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
       {...(controls === undefined ? {} : { 'aria-controls': controls })}
       {...(onClick === undefined ? {} : { onPress: onClick })}
-      className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]}`}
+      className={`${ICON_BUTTON} ${ICON_BUTTON_SIZE[size]} ${ICON_BUTTON_TONE[tone]}`}
       data-size={size}
     >
       {children}

@@ -691,7 +691,25 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'starts the attempts again only for a delivery of this workspace and of this connector',
     by: 'keeps the count of the attempts before',
-    replace: { from: '.set({ next_at: now, attempts: 0 })', to: '.set({ next_at: now })' },
+    replace: {
+      after: 'async retryDelivery(',
+      from: '.set({ next_at: now, attempts: 0 })',
+      to: '.set({ next_at: now })',
+    },
+  },
+  {
+    breaks: 'starts the attempts of several deliveries again in one write, of this workspace only (FRU-717)',
+    by: 'starts them again for any workspace',
+    replace: { after: 'async retryDeliveries(', from: 'eq(connectors.workspace_id, workspace)', to: 'sql`true`' },
+  },
+  {
+    breaks: 'starts the attempts of several deliveries again in one write, of this workspace only (FRU-717)',
+    by: 'keeps the count of the attempts before',
+    replace: {
+      after: 'async retryDeliveries(',
+      from: '.set({ next_at: now, attempts: 0 })',
+      to: '.set({ next_at: now })',
+    },
   },
   {
     breaks: 'lists the deliveries of a connector newest first, without their body, to its workspace only',

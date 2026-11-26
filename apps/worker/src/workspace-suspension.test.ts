@@ -751,6 +751,8 @@ const CONSOLE_WRITES: readonly Write[] = [
   { method: 'DELETE', rest: (fx) => `/connectors/${fx.spareConnector}`, status: 204 },
   { method: 'POST', rest: () => '/connect', body: () => ({}), status: 201 },
   { method: 'POST', rest: (fx) => `/notes/${fx.note}/retry`, status: 204 },
+  // FRU-717: « Send again » on the row of a site.
+  { method: 'POST', rest: (fx) => `/sites/${fx.site.id}/retry`, status: 200 },
   // FRU-384: the status of a note the worker keeps, chosen in the console.
   {
     method: 'POST',
