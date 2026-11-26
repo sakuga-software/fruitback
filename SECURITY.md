@@ -1083,7 +1083,7 @@ whole.
   same roles as the counts above; how many of those 30 days did not arrive is about the tracker,
   and only a role with `see-tracker` gets it
   (test:`says the oldest open note, the notes of 30 days, and those not delivered to whoever sees the tracker`).
-- **When the widget was last seen on a site proves nothing, and gives no right.** A read of the pins
+- When the widget was last seen on a site proves nothing, and gives no right. A read of the pins
   of a page writes it, at most once an hour: by the script when the read has no token and the
   `Origin` of the site, by the extension when its token is a session of the workspace that the worker
   verifies. Any program can send the `Origin` of a site, so a person who knows the id of a site can
