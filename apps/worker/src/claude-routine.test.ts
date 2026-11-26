@@ -342,6 +342,45 @@ describe('the call of a trigger to a routine (FRU-594)', () => {
     assert.equal(listed.connectors.find((each) => each.id === routine.id)?.attention?.reason, 'key-refused');
   });
 
+  it('gives a call up at once when the routine is gone, and puts the connector in « attention » (FRU-627)', async () => {
+    const { world, alice, base, shop, member, routine, fake, deliver, panel } = await acme();
+    const attention = async () =>
+      (
+        (await (await call(world, 'GET', `${base}/connectors`, { token: alice.token })).json()) as {
+          connectors: { id: string; attention?: { reason: string; since: string } }[];
+        }
+      ).connectors.find((each) => each.id === routine.id)?.attention;
+    await call(world, 'POST', `/feedback?client=${shop.id}`, {
+      origin: shop.origin,
+      body: noteOf(shop, 'sd_gone'),
+      token: member,
+    });
+    // The routine, or its API trigger, was deleted at claude.ai.
+    fake.next.status = 404;
+    fake.next.body = '{"type":"error","error":{"type":"not_found_error"}}';
+
+    await deliver();
+
+    assert.equal(fake.fires.length, 1);
+    const read = await panel();
+    assert.equal(read.deliveries[0]?.lastStatus, 404);
+    assert.equal(read.deliveries[0]?.nextAt, undefined, 'a routine that is gone is not called again');
+    assert.equal(read.deliveries[0]?.lastError, 'The routine or its API trigger is gone');
+    assert.equal((await attention())?.reason, 'routine-gone');
+
+    // The same trigger answers again (the 404 was a passing one): the next call starts it and ends the
+    // attention. A trigger that stays gone keeps it until its connector is removed, as the console says.
+    delete fake.next.status;
+    delete fake.next.body;
+    await call(world, 'POST', `/feedback?client=${shop.id}`, {
+      origin: shop.origin,
+      body: noteOf(shop, 'sd_back'),
+      token: member,
+    });
+    await deliver();
+    assert.equal(await attention(), undefined);
+  });
+
   it('tries again after the waits of the list when the routine is over its limit', async () => {
     const { world, shop, member, fake, deliver, panel } = await acme();
     fake.next.status = 429;
