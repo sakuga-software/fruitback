@@ -780,7 +780,7 @@ test('« Send again » on a row asks the worker once, says what left, and says a
   await expect(under.getByRole('alert')).toHaveText(
     'The notes of this site were not sent again. Reload the page, then try again.',
   );
-  // An answer with no count (a `204`) is a refusal too, and the button comes back (review, #16115d).
+  // An answer with no count (a `204`) is a refusal too, and the button comes back (raised in review).
   reply = { status: 204, json: undefined };
   await button.click();
   release();

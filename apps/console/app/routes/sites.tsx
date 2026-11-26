@@ -937,7 +937,7 @@ function useResend(workspace: string, site: string): Resend {
     setSending(true);
     setAnswer(undefined);
     // Whatever happens to the answer, the button comes back: a press is never lost for good (raised
-    // in review, #16115d). A row that went meanwhile is not drawn again, and React drops its state.
+    // in review). A row that went meanwhile is not drawn again, and React drops its state.
     try {
       const asked = await call<{ sent?: unknown; left?: unknown } | undefined>(
         'POST',
