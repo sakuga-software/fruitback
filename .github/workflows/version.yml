@@ -36,6 +36,7 @@ jobs:
     outputs:
       release: ${{ steps.release.outputs.release }}
       current: ${{ steps.release.outputs.version }}
+      target: ${{ steps.release.outputs.target }}
       pending: ${{ steps.next.outputs.pending }}
       next: ${{ steps.next.outputs.version }}
 
@@ -65,8 +66,12 @@ jobs:
           newest=${tags%%$'\n'*}
           top=$(printf '%s\n%s\n' "${newest#v}" "$version" | sort -V | tail -n 1)
           if [ "$top" = "$version" ]; then
-            echo "v$version is new: released by this run."
+            # The commit that set the version, and not the commit of this run: a run waiting in the
+            # group of `concurrency` is cancelled by the next push, whose run then releases.
+            target=$(git log -1 --format=%H -- package.json)
+            echo "v$version is new: released by this run, on $target."
             echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "target=$target" >> "$GITHUB_OUTPUT"
           else
             echo "v$version is older than $newest: not released." >&2
             echo "release=false" >> "$GITHUB_OUTPUT"
@@ -211,7 +216,7 @@ jobs:
             gh pr edit "$open" --title "chore: version $VERSION" --body-file "$RUNNER_TEMP/version/body.md"
           fi
 
-  # Runs no code of the repository: `gh release create` on the commit of this run.
+  # Runs no code of the repository: `gh release create` on the commit that set the version.
   release:
     name: release of the version
     needs: [plan]
@@ -237,7 +242,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.plan.outputs.current }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ needs.plan.outputs.target }}
         run: |
           set -euo pipefail
           gh release create "v$VERSION" --target "$SHA" --title "v$VERSION" --generate-notes
