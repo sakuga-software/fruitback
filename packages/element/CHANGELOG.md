@@ -1,5 +1,40 @@
 # @fruitback/element
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies [4e3ad70]
+- Updated dependencies [57bb8e5]
+- Updated dependencies [21aa779]
+- Updated dependencies [4e2f1df]
+- Updated dependencies [6535b23]
+- Updated dependencies [1a60ff2]
+- Updated dependencies [880d540]
+- Updated dependencies [3d4f2eb]
+- Updated dependencies [26f4598]
+- Updated dependencies [f48ad10]
+- Updated dependencies [c7d700b]
+- Updated dependencies [9ff903d]
+- Updated dependencies [132f13b]
+- Updated dependencies [52fa16d]
+- Updated dependencies [2dd49ea]
+- Updated dependencies [04b7b96]
+- Updated dependencies [fbeaa0f]
+- Updated dependencies [a1877fe]
+- Updated dependencies [4b78560]
+- Updated dependencies [66f4f52]
+- Updated dependencies [5f5e51e]
+- Updated dependencies [4ddc561]
+- Updated dependencies [5aa014f]
+- Updated dependencies [9159f49]
+- Updated dependencies [d6b3084]
+- Updated dependencies [aba9530]
+- Updated dependencies [023a84b]
+- Updated dependencies [d96c822]
+- Updated dependencies [73281a2]
+  - @fruitback/widget@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes
