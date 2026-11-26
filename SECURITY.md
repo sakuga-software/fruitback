@@ -102,11 +102,11 @@ closing that is the visibility `members`, not CORS.
 
 The extension's site rules are the same claim, made by the reviewer's browser. A rule
 maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a mode, and it can
-be imported from a file somebody sent. In private mode the rule holds the client id the widget
+be imported from a file somebody sent. In extension mode the rule holds the client id the widget
 asserts; in team mode it holds none, and the site's own widget asserts its client id. Either way the
 client id is still a claim. What the worker checks differs by mode:
 
-- Private mode: the widget calls from the page, so the worker compares the page's exact origin
+- Extension mode: the widget calls from the page, so the worker compares the page's exact origin
   with that client's `origins`. A wildcard in a browser does not widen that list.
 - Team mode: the relay calls from the extension's origin, which the worker exempts from `origins`
   (see [What the extension relays](#what-the-extension-relays-and-what-it-refuses-to)). The binding
@@ -115,7 +115,7 @@ client id is still a claim. What the worker checks differs by mode:
   nothing. A wildcard needs only a base of two labels, so `https://*.vercel.app` is a valid pattern,
   and it would let the sites of other people spend the reviewer's session. The form and the import
   refuse such a rule, and for one already stored the bridge does not announce and the relay answers
-  `site-not-configured`. A wildcard stays valid in private mode, which carries no credential.
+  `site-not-configured`. A wildcard stays valid in extension mode, which carries no credential.
   One exception: a wildcard that the worker of the session lists as the previews of a
   site, because its workspace proved the domain. See
   [A domain a workspace proves it owns](#a-domain-a-workspace-proves-it-owns-to-cover-its-previews-fru-103).
@@ -403,11 +403,11 @@ test:`is refused over the cap on the routes of the sign-in, which need no sessio
 test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
 another way.
 
-### Private mode hides the pins from a visitor, and from nobody else
+### Extension mode hides the pins from a visitor, and from nobody else
 
-**The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
+**The widget the extension mounts in extension mode carries no credential.** `page.content.ts` mounts
 it with no transport, so it calls the worker exactly as a public-mode site does, and the notes on
-that page stay readable by anyone who can build `GET /feedback?url=…&client=…`. What private mode
+that page stay readable by anyone who can build `GET /feedback?url=…&client=…`. What extension mode
 changes is who is shown the feedback (the site embeds nothing, so a visitor sees nothing) never
 who may fetch it. Its reporters are self-declared for the same reason: verification comes from
 the session, and only the relay carries one.
@@ -416,7 +416,7 @@ What changes a read is `read`, not the mode, and the mode decides who can satisf
 public-mode site can run `read: 'authenticated'` by minting identity tokens itself: `identityToken`
 is a seam on `init`, and the widget sends what it returns on reads as well as writes; the credential
 then lives in that site's own page. Team mode is the one where the reviewer supplies it and the
-page never holds it, attached in the extension's background. Private mode can supply neither, so
+page never holds it, attached in the extension's background. Extension mode can supply neither, so
 worker-wide `authenticated` locks its widget out of its own reads.
 
 A worker that serves team mode can hold several clients. A session belongs to one
@@ -431,7 +431,7 @@ site's own and skip the check. See [docs/modes.md](docs/modes.md).
 
 ### The extension's page bridge can be forged by the page
 
-In private mode the widget runs in the page's own JavaScript realm, and the bridge is
+In extension mode the widget runs in the page's own JavaScript realm, and the bridge is
 `window.postMessage`. The parser refuses a malformed message; it **cannot** refuse a well-formed one
 the page wrote, because the two are identical. A page on an origin the reviewer enabled can point the
 widget at its own worker, or take it away.
@@ -840,15 +840,15 @@ request and the answer.
 That makes the extension something that will make a call for a page, so the background refuses more
 than it accepts. It sends nothing unless all of the following are true:
 
-|              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The origin   | comes from the sender the browser reports, never from the message                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| The endpoint | is the one that entry names: a page asking for another worker is refused, not redirected                                                                                                                                                                                                                                                                                                                                                                                                              |
-| The path     | is `/feedback`, `/feedback/<id>/replies`, `/feedback/<id>/check` or `/feedback/<id>/text` under one note, or `POST /attachments`: the paths the widget calls; any other path of writing, `/feedback/<id>/stage` included, is refused (test:`refuses a path that is not the one the widget calls`). A body in base64, a file of 10 MB at most, goes to `POST /attachments` only, and nothing else goes there (test:`refuses base64 to another path, text to /attachments, and a read of /attachments`) |
-| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| The session  | is open for that endpoint: with no session there is no call at all                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection                                                                                                                                                                                                                                                                                                                                                                                                                   |
+|              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The origin   | comes from the sender the browser reports, never from the message                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| The endpoint | is the one that entry names: a page asking for another worker is refused, not redirected                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| The path     | is `/feedback`, `/feedback/<id>/replies`, `/feedback/<id>/check`, `/feedback/<id>/text`, `/feedback/<id>/withdraw`, `/feedback/<id>/place` or `/feedback/<id>/status` under one note, or `POST /attachments`: the paths the widget calls; any other path of writing, `/feedback/<id>/stage` included, is refused (test:`refuses a path that is not the one the widget calls`). A body in base64, a file of 10 MB at most, goes to `POST /attachments` only, and nothing else goes there (test:`refuses base64 to another path, text to /attachments, and a read of /attachments`) |
+| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| The session  | is open for that endpoint: with no session there is no call at all                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
 to name its own endpoint could ask for a call to a _different_ worker that reviewer has paired with,
@@ -859,7 +859,7 @@ Pairing, refreshing and revoking are refused on an insecure endpoint too, and th
 of the two: a pairing code is spent for a refresh token worth thirty days, and every renewal spends
 that token again. The rule lives in the session layer rather than in the screen that warns about it,
 so a session stored before the rule existed cannot keep leaking one either. `http://localhost` is
-excepted, because it is the development loop and is not on a wire. The private mode's mount is
+excepted, because it is the development loop and is not on a wire. The extension mode's mount is
 deliberately not held to this rule: it carries no credential at all, and an http staging worker
 that works today has nothing to leak.
 
@@ -2165,6 +2165,30 @@ seen » is shown to owners and admins only.
   status is no secret of the team: the widget and the extension read the same ones.
   test:`lists the status of a kept note, who may change it, and the statuses of its site`.
 
+### The status of a note, from its thread on the page (FRU-718)
+
+- The thread of the widget changes the status of a note through `POST /feedback/<id>/status`, the
+  route above, with its rights: a session of the extension, read again in the store, of the person
+  who left the note or of a role with `manage-sites`. No second route writes a status, and nothing new
+  is stored. In team mode the extension relays the call with the session (the path
+  `/feedback/<id>/status` is on the list of the relay, and nothing around it).
+  test:`relays the status of one note from its thread, with the credential of the session (FRU-718)`.
+- A visitor changes no status, even of their own note. The key of a browser (`X-Fruitback-Visitor`)
+  is no session: with it, with no key, or with a token that is no session, the route is `401` and
+  writes nothing. A member who did not leave the note, a guest the site is shared with who did not
+  leave it, and a guest of another site are `403`.
+  test:`refuses a visitor, a key with no session, no key, a token that is no session, and a guest, and moves nothing`.
+- The read says where the thread offers the menu: `canSetStatus` on each note, after the cache, only
+  to a reader whose session reads the site, on the notes they left, or on every note for a role with
+  `manage-sites`, and only where the store of the site keeps statuses. A visitor, a reader with no
+  token and a guest with no right get none, and a note of a tracker gets none: its status changes in
+  the tracker. The flag only says where to offer: the route reads the session again, and decides.
+  test:`offers the menu to the author on their note, to a role that manages the sites on every note, and to nobody else`,
+  test:`offers no menu on the note of a tracker: its status changes in the tracker (Linear)`.
+- Each of these guards, taken out of a copy of its module, fails a test of `widget-status.test.ts`:
+  the author of the note and the session in the route, the notes of the reader and no menu for a
+  visitor in the read. The real module is the control of each one.
+
 ### The fields of a task, chosen in the console (FRU-652)
 
 - `POST /console/workspaces/<id>/notes/<note>/task` changes the assignee, the priority, the day and
@@ -2726,7 +2750,7 @@ visitor. It is public: no session, no cookie.
   that its team marks done, 10 addresses a minute for that site at most. The message names the host
   of the site and holds nothing else that they wrote.
 - The extension does not carry this route, and a widget it mounts never asks for an address
-  (`askForAddress: false`), in team mode and in private mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
+  (`askForAddress: false`), in team mode and in extension mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
 
 The badge on the icon of the extension shows `toCheck` of `GET /session/sites?origin=` for the
 site of the tab, as the popup reads it: no new data, and no new route.

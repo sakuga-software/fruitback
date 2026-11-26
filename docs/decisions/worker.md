@@ -3725,6 +3725,22 @@ replies, and on a public site mounted by the extension with no session, only the
   withdrawal does not depend on the replies being shown: the stage says it on its own.
 - The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
 
+## The status of a note, from its thread on the page (FRU-718)
+
+- **No new route.** The thread of the widget calls `POST /feedback/<id>/status` of FRU-367, with its
+  rights: a session that writes on the site, of the person who left the note or of a role with
+  `manage-sites`. A visitor known by their browser has no session, and changes no status, even of
+  their own note (decision of the orchestrator, 2026-11-26): `401`.
+- **The tracker follows by the same path as the console.** The worker's own store and an address
+  take a status; a note of a tracker is `403 statuses-not-taken`, and the console offers no status for
+  it either. No second path writes the state of a tracker.
+- **`canSetStatus: true` is added after the cache**, as `editable` (`statusSetterOf`). It reads no
+  session in the store: `memberOf` checks the token and the reach, so a reader with no token costs no
+  query, then `takesStatuses`, then the role. The route reads the session again, and decides. A store
+  that does not answer costs the menu, never the read: before this, a read whose session store was
+  down still answered (`accounts-postgres.test.ts`), and it still does. The cost, measured on a page
+  of 50 notes, is in the pull request of FRU-718.
+
 ## The author edits a note (FRU-475)
 
 **The rules, in short** (the ticket left every choice open; the agent decided the simplest and the

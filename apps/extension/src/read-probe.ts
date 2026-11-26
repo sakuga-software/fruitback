@@ -1,7 +1,7 @@
 /**
  * Whether the worker answers a reader that carries no credential (FRU-66).
  *
- * The private-mode widget calls the worker from the page, with no session. On a worker that reads
+ * The extension-mode widget calls the worker from the page, with no session. On a worker that reads
  * `authenticated`, each read answers `401`, and the widget leaves the page as it is: no pin and no
  * reason, the same screen as a page with no note. The popup asks the worker the same question, and
  * says the answer.
@@ -11,15 +11,15 @@
 
 /** What the popup says when the worker wants a session for a read. */
 export const READ_NEEDS_SESSION =
-  'This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.';
+  'This server answers a signed-in reader only, and in extension mode the extension holds no session. Notes do not show on this site.';
 
 /**
  * What the popup says when the site takes notes from its members only (FRU-330): the refusal of the
- * read says `canWrite: false`, and the widget of private mode offers no note. How to open the site
- * for private mode: « Anyone on the page », in the console.
+ * read says `canWrite: false`, and the widget of extension mode offers no note. How to open the site
+ * for extension mode: « Anyone on the page », in the console.
  */
 export const NOTES_NEED_SESSION =
-  'This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
+  'This site takes notes from its members only, and in extension mode the extension holds no session: no note can be sent from here. To review it in extension mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
 
 /**
  * FRU-395: the worker of the rule answers `404` to a read, so nothing is at that address: a pairing
@@ -80,4 +80,48 @@ export async function probeRead(
   } catch {
     return 'unknown';
   }
+}
+
+/**
+ * FRU-663: the same two refusals, on the Fruitback of this build. A site made there is read by its
+ * members by default, and its notes are « Members only »: the widget of extension mode shows no pin
+ * and takes no note. On the Cloud the fix is not an admin's: the person signs in, and a member turns
+ * the site on with their account. Extension mode stays open on the Cloud.
+ */
+export const CLOUD_NOTES_NEED_MEMBER =
+  'Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member.';
+export const CLOUD_READ_NEEDS_MEMBER =
+  'Only the members of this site see its notes here. Sign in to Fruitback to review it as a member.';
+/** Signed in, and a workspace of the account lists the site: one click turns it on with the account. */
+export const MEMBER_TURNS_ON =
+  'You are a member of this site. Turn it on with your account to see its notes and leave one.';
+/** Signed in, and no workspace of the account lists the site. */
+export const NOT_A_MEMBER =
+  'Only the members of this site see its notes, and your account is not one of them. Ask its team to invite you.';
+
+/** What the popup says of a refusal of a member's read, and the one button that fixes it, if any. */
+export type MemberRemedy = { sentence: string; action?: 'sign-in' | 'turn-on'; guide?: true };
+
+/**
+ * The line of the popup for an extension-mode rule whose read was refused for want of a session.
+ *
+ * `onCloud`: the rule is on the Fruitback of this build. `signedIn`: this browser holds the account of
+ * that Fruitback. `member`: a workspace of the account lists the origin (asked only when signed in).
+ * A worker run by somebody else keeps the sentences of FRU-66 and FRU-330, with the guide.
+ */
+export function memberRemedy(
+  answer: 'members-only' | 'wants-a-session',
+  where: { onCloud: boolean; signedIn: boolean; member?: boolean },
+): MemberRemedy {
+  if (!where.onCloud) {
+    return { sentence: answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION, guide: true };
+  }
+  if (!where.signedIn) {
+    return {
+      sentence: answer === 'members-only' ? CLOUD_NOTES_NEED_MEMBER : CLOUD_READ_NEEDS_MEMBER,
+      action: 'sign-in',
+    };
+  }
+
+  return where.member === true ? { sentence: MEMBER_TURNS_ON, action: 'turn-on' } : { sentence: NOT_A_MEMBER };
 }

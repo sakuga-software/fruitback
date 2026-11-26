@@ -8,6 +8,7 @@ import {
   EDIT_PATH,
   WITHDRAW_PATH,
   PLACE_PATH,
+  STATUS_PATH,
   FEEDBACK_PATH,
   REPLY_PATH,
   type RelaySeams,
@@ -96,8 +97,8 @@ describe('the relay refuses before it sends', () => {
     assert.deepEqual(sent, []);
   });
 
-  /** Private mode mounts our own widget, which calls the worker itself. Nothing relays for it. */
-  it('refuses a site in private mode', async () => {
+  /** Extension mode mounts our own widget, which calls the worker itself. Nothing relays for it. */
+  it('refuses a site in extension mode', async () => {
     const site: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
     const { relay, sent } = harness({ readSite: async () => site });
 
@@ -195,6 +196,22 @@ describe('the relay refuses before it sends', () => {
     }
   });
 
+  it('relays the status of one note from its thread, with the credential of the session (FRU-718)', async () => {
+    for (const endpoint of ['https://worker.test', 'https://worker.test/fruitback']) {
+      const { relay, sent } = harness({ readSite: async () => ({ ...TEAM, endpoint }) });
+      const url = `${endpoint}/feedback/issue_1/status?client=acme`;
+
+      const answer = await relay(
+        { ...WRITE, url, body: '{"url":"https://acme.dev/","status":"own:progress"}' },
+        'https://acme.dev',
+      );
+
+      assert.partialDeepStrictEqual(answer, { ok: true }, endpoint);
+      assert.equal(sent[0]?.url, url);
+      assert.equal(sent[0]?.headers.Authorization, 'Bearer access.1');
+    }
+  });
+
   /** Three paths, so a route the worker grows later is refused here until somebody adds it. */
   it('refuses a path that is not the one the widget calls', async () => {
     const { relay, sent } = harness();
@@ -226,6 +243,10 @@ describe('the relay refuses before it sends', () => {
       // FRU-605: a move of one note, and nothing around it.
       '/feedback/issue_1/place/x',
       '/feedback//place',
+      // FRU-718: the status of one note, and nothing around it.
+      '/feedback/issue_1/status/x',
+      '/feedback/issue_1/status/../../../session/pair',
+      '/feedback//status',
     ]) {
       const answer = await relay({ ...READ, url: `https://worker.test${path}` }, 'https://acme.dev');
       assert.partialDeepStrictEqual(answer, { ok: false, body: 'endpoint-not-declared-for-this-site' }, path);
@@ -434,6 +455,7 @@ describe('what the widget sends is what the relay allows', () => {
       resolved.includes('/feedback/issue_1/withdraw') && resolved.includes('/feedback/issue_1/place'),
       'the guard no longer sees the path of a withdrawal (FRU-605)',
     );
+    assert.ok(resolved.includes('/feedback/issue_1/status'), 'the guard no longer sees the path of a status (FRU-718)');
     assert.ok(resolved.includes(ATTACHMENTS_PATH), 'the guard no longer sees the path of a file (FRU-332)');
     // FRU-604: the address of a visitor with no account. The relay carries the calls of a session,
     // whose reader the worker names and never asks: it stays out of the relay (the case below).
@@ -447,7 +469,8 @@ describe('what the widget sends is what the relay allows', () => {
           CHECK_PATH.test(path ?? '') ||
           EDIT_PATH.test(path ?? '') ||
           WITHDRAW_PATH.test(path ?? '') ||
-          PLACE_PATH.test(path ?? ''),
+          PLACE_PATH.test(path ?? '') ||
+          STATUS_PATH.test(path ?? ''),
         path ?? '',
       );
     }

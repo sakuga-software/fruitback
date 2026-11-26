@@ -598,8 +598,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Who sees the notes?': 'Qui voit les notes ?',
   'Who can leave a note?': 'Qui peut laisser une note ?',
   'Members only': 'Membres uniquement',
-  'A note needs the extension, connected by a member. In private mode the extension holds no session, so a site you review in private mode needs « Anyone on the page ».':
-    'Une note demande l’extension, connectée par un membre. Le mode privé ne porte aucune session : un site que vous relisez en mode privé demande « Toute personne sur la page ».',
+  'A note needs the extension, connected by a member. In extension mode the extension holds no session, so a site you review in extension mode needs « Anyone on the page ».':
+    'Une note demande l’extension, connectée par un membre. Le mode extension ne porte aucune session : un site que vous relisez en mode extension demande « Toute personne sur la page ».',
   'Anyone on the page': 'Toute personne sur la page',
   'A visitor leaves a note and cannot read it back. Your members find it.':
     'Un visiteur laisse une note et ne peut pas la relire. Vos membres la trouvent.',

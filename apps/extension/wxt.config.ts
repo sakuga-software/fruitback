@@ -18,7 +18,7 @@ const CONSOLE = cloudConsole(process.env.WXT_FRUITBACK_CONSOLE, process.env.WXT_
 export const LICENSE_IN_OUTPUT = 'LICENSE';
 
 /**
- * The extension is the private mode (FRU-41): the client's site embeds **nothing**, and an ordinary
+ * The extension is the extension mode (FRU-41): the client's site embeds **nothing**, and an ordinary
  * visitor sees nothing because there is nothing in their page to see.
  *
  * **No host permission is asked for at install.** The obvious build declares its content scripts on

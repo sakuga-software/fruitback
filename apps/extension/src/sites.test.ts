@@ -8,10 +8,10 @@ describe('parseSite', () => {
    *
    * Written as a literal rather than built by this repository's own writer, because what has to keep
    * working is what a browser profile already holds: an entry stored before FRU-57, with no `mode`
-   * and a real client id. If it ever stopped reading as private mode, every reviewer using the
+   * and a real client id. If it ever stopped reading as extension mode, every reviewer using the
    * extension today would open their browser to a site that mounts nothing.
    */
-  it('reads an entry written before the modes existed as private mode', () => {
+  it('reads an entry written before the modes existed as extension mode', () => {
     assert.deepEqual(parseSite({ endpoint: 'https://worker.test', clientId: 'acme', enabled: true }), {
       mode: 'private',
       endpoint: 'https://worker.test',
@@ -50,7 +50,7 @@ describe('parseSite', () => {
     }
   });
 
-  it('refuses a private entry with no client id', () => {
+  it('refuses an extension-mode entry with no client id', () => {
     assert.equal(parseSite({ endpoint: 'https://worker.test' }), undefined);
     assert.equal(parseSite({ mode: 'private', endpoint: 'https://worker.test', clientId: '' }), undefined);
   });
