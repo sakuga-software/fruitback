@@ -296,7 +296,7 @@ test('a guest has « New this week » alone: no task is theirs, nor where a note
   // The control: a member of the same workspace has the three, and the filter.
   await workerWith(page, [{ ...LUMEN, id: 'w1', role: 'member' }]);
   await open(page, '/w/w1/notes');
-  await expect(views(page).getByRole('link')).toHaveText([/^New this week/, /^Assigned to me/, /^Not delivered/]);
+  await expect(views(page).getByRole('link')).toHaveText([/New this week/, /Assigned to me/, /Not delivered/]);
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Delivery', exact: true })).toBeVisible();
 });

@@ -885,7 +885,10 @@ function EntryCount({ count, alert, red }: { count: number | undefined; alert: n
   // FRU-722: what did not arrive is red, with no dot: the dot says a failure of a connector.
   if (red && count > 0)
     return (
-      <span data-alert-count="" className={`${COUNT} font-semibold text-accent-strong`}>
+      <span
+        data-alert-count=""
+        className="ms-auto flex-none text-hint leading-none font-semibold text-accent-strong tabular-nums"
+      >
         {count}
       </span>
     );
@@ -902,7 +905,10 @@ function ViewMark({ view, account }: { view: ViewId; account: Account }) {
   if (view === 'assigned') return <PersonMark account={account} />;
 
   return (
-    <span data-view-mark="" className={`${ENTRY_ICON} ${view === 'undelivered' ? 'text-accent-strong' : ''}`}>
+    <span
+      data-view-mark=""
+      className={`inline-flex flex-none ${view === 'undelivered' ? 'text-accent-strong' : 'text-muted'}`}
+    >
       <RailIcon name={view === 'new' ? 'fresh' : 'braces'} />
     </span>
   );
