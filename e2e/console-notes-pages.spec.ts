@@ -255,6 +255,8 @@ test('the note opened and the place in the list stay when its panel closes', asy
   await sixtieth.locator('[data-note-title]').click();
   await expect(page).toHaveURL(/[?&]task=n59(&|$)/);
   await expect(page.getByRole('dialog')).toBeVisible();
+  // From 1024 px the panel is beside the list: the list does not go back to its top under it.
+  await expect(sixtieth).toBeInViewport();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
