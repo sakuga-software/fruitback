@@ -57,7 +57,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **« Who can leave a note? » is asked for a site that its members read, and only there** (FRU-330):
   `writers-pick.tsx`, in the form of the Sites screen. Not in the setup any more (FRU-610, below). The
   page of a site sets it in its tab « Access » since FRU-703, below. « Members only » is chosen
-  for a new site, and its detail says that private mode carries no session. The form sends `writers`
+  for a new site, and its detail says that extension mode carries no session. The form sends `writers`
   only with `visibility: 'members'`. A row and the summary of the setup say the exception, « Notes
   from anyone on the page », and nothing for « Members only » or for a worker of before.
   **A gesture that cannot be undone asks twice** (FRU-165): « Remove » a site and « Disconnect » a

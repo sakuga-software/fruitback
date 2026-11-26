@@ -148,7 +148,7 @@ export function workerCard(document: Document, card: WorkerCard, options: Worker
       document,
       'p',
       'worker-text',
-      t('Not connected. Private-mode sites read without a session; a team site would show nothing.'),
+      t('Not connected. Extension-mode sites read without a session; a team site would show nothing.'),
     ),
   );
   const form = make(document, 'form', 'worker-pair');
@@ -363,7 +363,7 @@ export function preferencesSection(document: Document, options: PreferencesOptio
     });
   });
   card.append(
-    row(document, t('Name on my notes'), t('Prefilled in private mode. Team mode signs with your session.'), name),
+    row(document, t('Name on my notes'), t('Prefilled in extension mode. Team mode signs with your session.'), name),
   );
 
   card.append(

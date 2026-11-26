@@ -12,7 +12,7 @@ import type { PageHolder } from './copy.ts';
  * for one that looked before it. A site reads the property in both cases.
  *
  * **The event fires again when the property goes away** — the reviewer switched this site off, or to
- * private mode. Nothing here can destroy a widget the site owns, so the site is told and destroys
+ * extension mode. Nothing here can destroy a widget the site owns, so the site is told and destroys
  * its own. One event, read the property, act on what it says:
  *
  * ```js

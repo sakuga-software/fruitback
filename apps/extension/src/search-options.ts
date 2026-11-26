@@ -42,7 +42,7 @@ export type SearchState = {
   scope: Scope;
   q: string;
   stage: StageFilter;
-  /** Absent: this site has no list of its own here (a private site, a site with no session). */
+  /** Absent: this site has no list of its own here (an extension-mode site, a site with no session). */
   site?: SiteList;
   pinsShown: boolean;
   /** The address of the tab, `path` and query: the rows of the site on it say « This page ». */

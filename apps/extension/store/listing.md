@@ -159,7 +159,7 @@ Fruitback needs a server. A public sandbox is available for the review. It holds
 1. Open https://demo.fruitback.com/?widget=off
    (a demo shop page that does not embed Fruitback)
 2. Click the Fruitback icon in the toolbar.
-3. Keep the mode "Private · the extension mounts the widget".
+3. Keep the mode "Extension · the extension shows the widget".
    Worker endpoint: https://api.demo.fruitback.com
    Client id: demo
 4. Click "Turn on for this site" and accept the permission prompt for demo.fruitback.com.

@@ -1,9 +1,9 @@
 # The extension, and the two worlds
 
-**This describes the private mode**, where the client's site embeds nothing and the extension
-injects the widget. FRU-46 since named three modes — public, private and team — and the team mode
+**This describes the extension mode**, where the client's site embeds nothing and the extension
+injects the widget. FRU-46 since named three modes — public, extension and team — and the team mode
 turns the extension into a relay rather than an injector. Nothing below was rewritten for that; it
-is the private mode as FRU-41 built it. What each mode does and does not protect is
+is the extension mode as FRU-41 built it. What each mode does and does not protect is
 [../modes.md](../modes.md); the one thing to carry here is that **this mode holds no credential**, so
 it changes who is shown the feedback and never who may fetch it.
 
@@ -11,19 +11,19 @@ it changes who is shown the feedback and never who may fetch it.
 
 ### The rules, in short
 
-- **The private-mode widget carries no credential**, and nothing about the mode is access control.
+- **The extension-mode widget carries no credential**, and nothing about the mode is access control.
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
   its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
   reads `401`. The page shows no pin and no reason, so the popup asks the same read and says so
   (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
   line. A `401` that also says `canWrite: false` is a site whose notes are « Members only »
-  (FRU-330): the popup says that private mode can send no note there, and how an admin opens the
+  (FRU-330): the popup says that extension mode can send no note there, and how an admin opens the
   site (« Anyone on the page »). The probe was measured from an extension page with **no** host permission on the worker,
   because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
   FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
-  private-mode client can stay `public` beside a team-mode one.
-- **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
+  extension-mode client can stay `public` beside a team-mode one.
+- **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in extension mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
 - **In the popup a button stays on one line, and two buttons never touch** (FRU-169). Buttons side by
@@ -128,7 +128,7 @@ it changes who is shown the feedback and never who may fetch it.
   unchanged. The decision lives in `src/bridge.ts` and not in the entrypoint, because an entrypoint
   binds `browser` and `window` at import and neither guard could be run at all.
 - **A site that embeds the widget _and_ a reviewer who has the extension get two docks.** Known,
-  harmless, and not solved here. It is the private mode's defect only: in team mode there is one
+  harmless, and not solved here. It is the extension mode's defect only: in team mode there is one
   widget and it is the site's.
 - **A rule that is switched off gives its access back** (FRU-115), with `permissions.remove`, from the
   background after it stores the change. The access to a worker goes with its last site that is on,
@@ -205,9 +205,9 @@ it changes who is shown the feedback and never who may fetch it.
 - **The page world builds the widget again only for a mount that differs from the one on screen**
   (FRU-186). The `ready` handshake forces the bridge past its comparison, so when the page world
   had in fact received the first message, the same `mount` arrives twice. Before, the second one
-  rebuilt the widget under an open composer: the CI flake of `extension.spec.ts` in private mode
+  rebuilt the widget under an open composer: the CI flake of `extension.spec.ts` in extension mode
   (the composer field « not visible » for 30 s, twice in a row on `e47f5b0`). A page that posts
-  `ready` itself got the same effect. test:`private mode: the same decision posted again keeps the
+  `ready` itself got the same effect. test:`extension mode: the same decision posted again keeps the
   open composer and its note` fails without the check, 3 runs out of 3.
 - **The first browser check of that guard proved nothing, and the mutation is what said so.** It
   marked `[data-fruitback-host]` at index 1 and called it the extension's — but the playground mounts
@@ -283,7 +283,7 @@ it changes who is shown the feedback and never who may fetch it.
   version to say.
 - **A site of a workspace is never mounted with no relay by another copy**: only the page script of
   the copy that decided hears the `mount`. A page script of another protocol hears no message of this
-  one, so it cannot take a `relay: true` for a private mount.
+  one, so it cannot take a `relay: true` for an extension-mode mount.
 - **The popup says it**: « Another copy of Fruitback (0.4.0) runs on this page. Reload the page. If
   this stays, remove that copy in chrome://extensions. » (`about:addons` on Firefox). **Reload first**
   (heavy review of #533): a tab left open across an update of this extension keeps the page script
@@ -305,7 +305,7 @@ it changes who is shown the feedback and never who may fetch it.
 
 - **The form of a rule refuses a worker whose path ends in `/pair`, or that carries a `#`**, in the
   popup and on the page of the extension (`complaint` in `site-form.ts`). Measured in production on
-  2026-10-23: a rule of private mode kept `https://api.fruitback.com/pair`, a pairing link pasted where
+  2026-10-23: a rule of extension mode kept `https://api.fruitback.com/pair`, a pairing link pasted where
   the worker goes, and every page read `/pair/feedback`, which answered `404`, with nothing on screen.
 - **A whole link is offered as a pairing**: « Connect with this link » (remedy `pair`) opens « Workers
   and sessions » on the card of the worker before `/pair`, with the code filled in, as a link opened in
@@ -464,7 +464,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **What a rule does has not changed**: the checks of a new rule, the grant asked in the click, the
   switch, the refusal of a team wildcard, `PREVIEWS_NOT_PROVEN`, `STALE_TEAM_WILDCARD` and
   `TOO_LARGE_FOR_ACCOUNT`. **Save** goes through `editor.save`, under the checks of a new rule; it
-  keeps the rule on or off as it was, keeps the label of a private rule, and keeps the mount of a site
+  keeps the rule on or off as it was, keeps the label of an extension-mode rule, and keeps the mount of a site
   of a workspace while its worker stays.
 - **A change of storage draws the table again, never the panel**: somebody may be typing in it. The
   panel is drawn when a row is chosen, and goes when its rule is removed.
@@ -755,7 +755,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   it pointed at is gone ».
 - **« Whole site » reads `GET /session/notes` (FRU-306) of the worker of the rule, with the session
   of this browser**, as the popup reads `GET /session/sites`. Only a rule the extension mounts in team
-  mode with a session held for its worker has it; a private site, or a site that embeds its own
+  mode with a session held for its worker has it; an extension-mode site, or a site that embeds its own
   widget, has no scope. **The worker is the one source**: one page of 50, its `total`, « Show more »
   for the next; a new search (after 300 ms without typing) or a new opening asks again, and nothing is
   stored. **A list belongs to the words it was read with** (`q`): new words drop any read still on
@@ -826,7 +826,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   so the background sets it again when the tab, the rules or the preference change
   (`setPanelOnClick`). Firefox has no such behaviour: the row is not drawn there.
 - **« Name on my notes »** is kept in the local area of the extension (`notesName`) and given to a
-  widget the extension mounts in private mode: the composer starts with it when the reporter kept no
+  widget the extension mounts in extension mode: the composer starts with it when the reporter kept no
   name on that site, and the box « remember me » stays as it was, so the site keeps nothing it was not
   asked to. Team mode signs with the session. It is not part of the signature of a mount: a change of
   it never builds the widget again over a note being written; the next mount takes it.
@@ -925,7 +925,7 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 
 - **The widget the extension mounts in team mode gets `siteNotes`**: « All pages » of its list reads
   `GET /session/notes` (FRU-306) through the bridge and the background, as « Whole site » of the side
-  panel does (`src/site-notes.ts`). With no relay (private mode) it gets none: there is no session
+  panel does (`src/site-notes.ts`). With no relay (extension mode) it gets none: there is no session
   here, and the list keeps « This page » alone.
 - **The page asks, the background decides** (`src/site-notes-relay.ts`): `site-notes-request` carries
   an id, the words of a search and a cursor, nothing else. The background reads the origin off the
@@ -1575,7 +1575,7 @@ the account is a member of. The pairing by code stays. `SECURITY.md` says what e
 - **No credential crosses plain `http://`** (FRU-57). `isSecureWorkerEndpoint` requires https or
   loopback, and `pair`, `refresh` and the revoke in `logout` all ask it — in `session.ts`, not only
   in the popup that warns first, so a session stored before the rule cannot keep spending its token
-  over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
+  over the wire. `isWorkerEndpoint` is **not** tightened: it gates the extension mode's mount, which
   carries no credential.
 - **`postJson` bounds its own request.** `refreshOnce` holds the in-flight promise so a second
   caller joins it rather than spending the token twice, so a worker that accepts a connection and
@@ -1986,12 +1986,14 @@ test rather than on an assertion.
 
 ### The rules, in short
 
-Three modes: **public** (the site embeds the widget, everyone sees the pins), **private** (the site
+Three modes: **public** (the site embeds the widget, everyone sees the pins), **extension** (the site
 embeds nothing and the extension injects the widget) and **team** (the site embeds a dormant widget
-the extension activates and relays for). Private is FRU-41, team is FRU-57, and FRU-46 is where
+the extension activates and relays for). Extension mode is FRU-41, team is FRU-57, and FRU-46 is where
 they were named for a reader — [docs/modes.md](../modes.md) and
 [docs/reviewing.md](../reviewing.md). Which one an origin is in is one field on its entry, and **an
-entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
+entry with no `mode` reads as extension mode** — that is every entry a reviewer's browser already holds.
+The stored value of extension mode is `private`, its name before FRU-662: the rename changed the
+words only, so a saved rule, a rules file and an import read as before.
 
 - **An entry's key is a pattern, and `resolveSite` is the only lookup** (FRU-43). A key is an exact
   origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
@@ -2025,12 +2027,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
-  private mode only: the relay calls from the extension origin, which the worker exempts.
+  extension mode only: the relay calls from the extension origin, which the worker exempts.
 - **A wildcard in team mode covers nothing** (FRU-75). `https://*.vercel.app` is a valid pattern, and
   in team mode it would lend the reviewer's session to the sites of other people. `lendsSession` is
   the one predicate: `resolveSite` skips such an entry, so the bridge, the relay and the popup all
   refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
-  background does not register it. A wildcard stays valid in private mode, which carries no token.
+  background does not register it. A wildcard stays valid in extension mode, which carries no token.
 - **One team wildcard serves: the previews a worker lists** (FRU-103). `lendsSession(pattern, site,
   proven)` answers no only when the worker of the rule listed that very wildcard for the site the
   rule mounts, in an answer of `GET /session/sites` that is less than two hours old
@@ -2229,9 +2231,9 @@ download were built and type-checked, not seen. Since FRU-45, `e2e/extension.spe
 in a real Chromium and adds its rules through it. The prompt and the download are still not exercised:
 automation cannot answer the prompt, and the fixture declares its hosts instead.
 
-### Private mode on a worker that wants a session (FRU-66)
+### Extension mode on a worker that wants a session (FRU-66)
 
-A private-mode widget calls the worker from the page, with no credential. On a worker that reads
+An extension-mode widget calls the worker from the page, with no credential. On a worker that reads
 `authenticated` each read answers `401`, and the widget leaves the page as it is, which is the rule
 for a `401` (FRU-40). The reviewer saw a page with no pins and no reason.
 
@@ -2240,14 +2242,14 @@ client of the rule, and the popup writes one line on a `401`. Only a `401` is a 
 that is down, slow or rate-limited gets no line, because the popup did not measure why. The popup
 does not wait for the answer, so the switch never sits behind a slow worker.
 
-**Not taken: carry a session in private mode.** Mounting the private-mode widget on the relay would
+**Not taken: carry a session in extension mode.** Mounting the extension-mode widget on the relay would
 let a paired reviewer read an `authenticated` worker. The relay checks the endpoint the page
-declares against the stored one, and in private mode the page declares nothing, so that check would
+declares against the stored one, and in extension mode the page declares nothing, so that check would
 have to be designed again rather than reused. Nobody has asked for it. Open it again when somebody
-needs a private-mode client on a worker that holds sessions, and not before.
+needs an extension-mode client on a worker that holds sessions, and not before.
 
 **Measured, because the test cannot see it.** The E2E copy of the extension holds a host permission
-on both workers, so its `fetch` skips CORS. The shipped extension holds none in private mode. From a
+on both workers, so its `fetch` skips CORS. The shipped extension holds none in extension mode. From a
 page of the unmodified build, with `permissions.contains` answering `false` for the worker, a `fetch`
 of `/feedback` on an `authenticated` worker reads `status: 401` (Chromium 1234): the worker puts its
 CORS headers on the refusal for an extension origin.
@@ -2315,7 +2317,7 @@ CORS headers on the refusal for an extension origin.
 
 ### The reasons, and the history
 
-Private mode injects a widget into a site that ships none. Team mode is for the team that ships its
+Extension mode injects a widget into a site that ships none. Team mode is for the team that ships its
 own: the widget is in their build, dormant, and it wakes up for a reviewer carrying the extension.
 FRU-56 had already put the seam in — `init({ transport })` — and this fills it.
 
@@ -2340,7 +2342,7 @@ event it receives without ever getting a second widget — which is what the sni
 unchanged decision, and this does not re-announce one that is already in place.
 
 Withdrawal travels on the **same** event, with the global gone. Nothing here can destroy a widget
-the site owns, so a reviewer who switches the site off — or to private mode — would otherwise leave
+the site owns, so a reviewer who switches the site off — or to extension mode — would otherwise leave
 it on screen with a transport every call is now refused for: stale pins, and a composer that fails
 without saying why. The site reads the property rather than assuming an arrival, and destroys its
 own.
@@ -2360,7 +2362,7 @@ system that the page did not write, so it is what the declaration is checked aga
 would make the widget report success against a worker nobody on that page chose. A failed call is a
 state the widget already handles correctly; a lie is not.
 
-The cost is that team mode needs a popup entry, like private mode. That is smaller than it reads: a
+The cost is that team mode needs a popup entry, like extension mode. That is smaller than it reads: a
 reviewer already has to enable the origin and grant it, or no content script runs there at all.
 
 ### Everything else the relay refuses
@@ -2385,7 +2387,7 @@ written by the page**. The isolated world carries the request across and decides
   pairing is disabled on any insecure endpoint, because pairing is handed a refresh token worth
   thirty days. The rule itself is in `session.ts`, where `pair`, `refresh` and the revoke all ask
   it: a warning on a screen is not a rule, and a session stored before the rule existed would
-  otherwise keep spending its token in the clear. `isWorkerEndpoint` is deliberately **not** tightened: it gates the private mode's
+  otherwise keep spending its token in the clear. `isWorkerEndpoint` is deliberately **not** tightened: it gates the extension mode's
   mount, which carries no credential, and an http staging worker that works today has nothing to
   leak. Raised in review.
 
@@ -3010,7 +3012,7 @@ as `framed`, a bridge in each frame, a capture with no move. Not measured in Fir
   Once a day at most, kept in `storage.local` under `latestRelease`; an error of the network, or no
   answer in 5 s (the request is aborted), keeps what was known and shows nothing new. A link that is not a page of the releases of the repository
   is not shown. `src/update-notice.ts`, held by `update-notice.test.ts`.
-- **Not the worker:** `/health` and the routes of a session say no version, and the private mode has
+- **Not the worker:** `/health` and the routes of a session say no version, and the extension mode has
   no worker. **Not `runtime.requestUpdateCheck`:** it asks the store of the install, which a folder
   loaded by hand does not have, and Firefox does not have it.
 - **One line, `updateLine` of the kit**: the muted grey, the link in the accent in a target of 44 px,

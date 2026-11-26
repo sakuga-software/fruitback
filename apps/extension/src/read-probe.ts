@@ -1,7 +1,7 @@
 /**
  * Whether the worker answers a reader that carries no credential (FRU-66).
  *
- * The private-mode widget calls the worker from the page, with no session. On a worker that reads
+ * The extension-mode widget calls the worker from the page, with no session. On a worker that reads
  * `authenticated`, each read answers `401`, and the widget leaves the page as it is: no pin and no
  * reason, the same screen as a page with no note. The popup asks the worker the same question, and
  * says the answer.
@@ -11,15 +11,15 @@
 
 /** What the popup says when the worker wants a session for a read. */
 export const READ_NEEDS_SESSION =
-  'This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.';
+  'This server answers a signed-in reader only, and in extension mode the extension holds no session. Notes do not show on this site.';
 
 /**
  * What the popup says when the site takes notes from its members only (FRU-330): the refusal of the
- * read says `canWrite: false`, and the widget of private mode offers no note. How to open the site
- * for private mode: « Anyone on the page », in the console.
+ * read says `canWrite: false`, and the widget of extension mode offers no note. How to open the site
+ * for extension mode: « Anyone on the page », in the console.
  */
 export const NOTES_NEED_SESSION =
-  'This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
+  'This site takes notes from its members only, and in extension mode the extension holds no session: no note can be sent from here. To review it in extension mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
 
 /**
  * FRU-395: the worker of the rule answers `404` to a read, so nothing is at that address: a pairing

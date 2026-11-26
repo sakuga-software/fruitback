@@ -18,7 +18,7 @@ export type BridgeSeams = {
    * build's Fruitback, with no session for it. Asked for a widget we mount through the relay only.
    */
   readSignedOut?: (site: SiteConfig) => Promise<boolean>;
-  /** « Name on my notes » (FRU-302): given to a widget we mount in private mode. */
+  /** « Name on my notes » (FRU-302): given to a widget we mount in extension mode. */
   readName?: () => Promise<string | undefined>;
   /** « Show CSS selectors » (FRU-349): said to a widget we mount, in either mode. */
   readShowSelectors?: () => Promise<boolean>;
@@ -180,7 +180,7 @@ function decide(site: SiteConfig | undefined, locale?: string, name?: string): B
     clientId: site.clientId,
     ...(site.label !== undefined ? { label: site.label } : {}),
     ...(locale !== undefined ? { locale } : {}),
-    // Private mode only: in team mode the session of the reviewer signs the note.
+    // Extension mode only: in team mode the session of the reviewer signs the note.
     ...(name !== undefined && name.trim() !== '' && name.length <= NAME_MAX ? { name: name.trim() } : {}),
   };
 }

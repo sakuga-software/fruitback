@@ -24,7 +24,7 @@ import {
  *
  * The archive is the one that the stores were given. The copy gets host access to the local
  * origins, as in `extension.ts`, and nothing else changes. Its two modes that talk to a worker:
- * private (the extension mounts its own widget) and team (the site mounts the published widget, the
+ * extension mode (the extension mounts its own widget) and team (the site mounts the published widget, the
  * extension pairs and relays).
  */
 test.use({ build: PUBLISHED_EXTENSION, browserArgs: [NO_NETWORK_BUT_LOCALHOST] });
@@ -95,7 +95,7 @@ async function mountTheSiteWidget(page: Page): Promise<void> {
   }, AUTHENTICATED_WORKER_ORIGIN);
 }
 
-test(`extension ${VERSION}, private mode: the note goes to this worker and comes back`, async ({ extension }) => {
+test(`extension ${VERSION}, extension mode: the note goes to this worker and comes back`, async ({ extension }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   // The background registers the scripts of the origin after the rule is stored: poll by reloading.
@@ -104,9 +104,9 @@ test(`extension ${VERSION}, private mode: the note goes to this worker and comes
     await expect(page.getByRole('button', { name: /Leave feedback|Leave a note/ })).toBeVisible({ timeout: 2_000 });
   }).toPass();
 
-  await plantOnTheLatteCard(page, /Leave feedback|Leave a note/, 'Publiée, mode privé');
+  await plantOnTheLatteCard(page, /Leave feedback|Leave a note/, 'Publiée, mode extension');
   const [note] = await notesOn(page);
-  expect(note?.text).toBe('Publiée, mode privé');
+  expect(note?.text).toBe('Publiée, mode extension');
 
   await page.reload();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);

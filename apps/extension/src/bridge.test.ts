@@ -83,8 +83,8 @@ describe('createApply', () => {
     ]);
   });
 
-  // FRU-302: « Name on my notes », for a widget we mount in private mode only.
-  it('sends the name of the preferences with a private mount, and none in team mode', async () => {
+  // FRU-302: « Name on my notes », for a widget we mount in extension mode only.
+  it('sends the name of the preferences with an extension-mode mount, and none in team mode', async () => {
     const posts: BridgeMessage[] = [];
     const post = (m: BridgeMessage): void => void posts.push(m);
     await createApply({ readSite: async () => SITE, readName: async () => '  Camille  ', post })();
@@ -338,7 +338,7 @@ describe('the session the widget is told of (FRU-315)', () => {
     );
   });
 
-  it('says nothing of a session to a widget of the private mode', async () => {
+  it('says nothing of a session to a widget of the extension mode', async () => {
     const { posts, apply } = applying(PRIVATE, { signedOut: true });
     await apply();
 

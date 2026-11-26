@@ -189,7 +189,7 @@ extensionTest(
   'switch on: a widget the extension mounts never asks « Want to know when it’s fixed? » after a note',
   async ({ extension }) => {
     await offer(true);
-    // Private mode on the public worker: the reviewer has no session there, so the worker takes the
+    // Extension mode on the public worker: the reviewer has no session there, so the worker takes the
     // note as a visitor's and offers a token. The control: the answer carries it, so the absence below
     // is the product's rule (the extension mounts with askForAddress: false), and not a missing token.
     await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
