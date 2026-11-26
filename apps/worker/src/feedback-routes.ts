@@ -151,7 +151,7 @@ export async function getFeedback(
     const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'withdraw'));
     const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-718: and change the status of a note from its thread, with the rights of the route of a status.
-    const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, context, checks);
+    const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, context?.accounts, checks);
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -892,13 +892,15 @@ async function agentsOf(
 /**
  * Who may change the status of the notes of this read from their thread (FRU-718), with the rights of
  * `POST /feedback/<id>/status` (FRU-367): `every` note for a member whose role manages the sites, the
- * notes they left (`own`) for any other person who writes on this site with a session, and `none` for
- * everybody else: a visitor, a token of a site, a guest on a site not shared with them. Only where the
- * store of the site keeps statuses (the worker's own store, or an address), on a site with one place.
- * The route decides again; this only says where the thread offers the menu.
+ * notes they left (`own`) for any other person whose session reads this site, and `none` for everybody
+ * else: a visitor, a token of a site, a guest on a site not shared with them. Only where the store of
+ * the site keeps statuses (the worker's own store, or an address), on a site with one place.
  *
- * WARNING: asked at each request, after the cache, as `mine`. A reader with no token costs no query:
- * `memberOf` answers before it reads anything.
+ * Only where the thread offers the menu: the route reads the session again in the store, and decides.
+ * So this reads none: `memberOf` checks the token and the reach, and a reader with no token costs no
+ * query. A store that does not answer costs the menu, never the read.
+ *
+ * WARNING: asked at each request, after the cache, as `mine`.
  */
 async function statusSetterOf(
   request: Request,
@@ -906,20 +908,26 @@ async function statusSetterOf(
   store: NoteStore,
   client: ClientConfig | undefined,
   site: string | undefined,
-  context: RequestContext | undefined,
+  accounts: AccountStore | undefined,
   checks: CallerChecks,
 ): Promise<'every' | 'own' | 'none'> {
   const workspace = client?.workspace;
-  const accounts = context?.accounts;
-  if (context === undefined || accounts === undefined || workspace === undefined || site === undefined) return 'none';
+  if (accounts === undefined || workspace === undefined || site === undefined) return 'none';
   if ((client?.destinations?.length ?? 0) > 1) return 'none';
-  // First: with no token, `writerIn` answers at once, and a visitor costs no query.
-  const account = await checks.writerIn(request, config, context, workspace, site);
-  if (account === undefined) return 'none';
-  if (!(await takesStatuses(store, client))) return 'none';
-  const reach = await accounts.reach(workspace, account);
+  try {
+    const account = await checks.memberOf(request, config, workspace, site);
+    if (account === undefined) return 'none';
+    if (!(await takesStatuses(store, client))) return 'none';
+    const reach = await accounts.reach(workspace, account);
 
-  return reach !== undefined && can(reach.role, 'manage-sites') ? 'every' : 'own';
+    return reach !== undefined && can(reach.role, 'manage-sites') ? 'every' : 'own';
+  } catch (error) {
+    console.error(
+      `[fruitback] who may change a status was not read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return 'none';
+  }
 }
 
 /** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */

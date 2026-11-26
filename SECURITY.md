@@ -2145,22 +2145,22 @@ seen » is shown to owners and admins only.
 
 ### The status of a note, from its thread on the page (FRU-718)
 
-- The thread of the widget changes the status of a note through `POST /feedback/<id>/status` of
-  FRU-367, the route above, with its rights: a session of the extension, read again in the store,
-  of the person who left the note or of a role with `manage-sites`. No second route writes a status,
-  and nothing new is stored. In team mode the extension relays the call with the session (the path
+- The thread of the widget changes the status of a note through `POST /feedback/<id>/status`, the
+  route above, with its rights: a session of the extension, read again in the store, of the person
+  who left the note or of a role with `manage-sites`. No second route writes a status, and nothing new
+  is stored. In team mode the extension relays the call with the session (the path
   `/feedback/<id>/status` is on the list of the relay, and nothing around it).
   test:`relays the status of one note from its thread, with the credential of the session (FRU-718)`.
-- **A visitor changes no status, even of their own note.** The key of a browser
-  (`X-Fruitback-Visitor`) is no session: with it, with no key, or with a token that is no session,
-  the route is `401` and writes nothing. A member who did not leave the note, a guest the site is
-  shared with who did not leave it, and a guest of another site are `403`.
+- A visitor changes no status, even of their own note. The key of a browser (`X-Fruitback-Visitor`)
+  is no session: with it, with no key, or with a token that is no session, the route is `401` and
+  writes nothing. A member who did not leave the note, a guest the site is shared with who did not
+  leave it, and a guest of another site are `403`.
   test:`refuses a visitor, a key with no session, no key, a token that is no session, and a guest, and moves nothing`.
 - The read says where the thread offers the menu: `canSetStatus` on each note, after the cache, only
-  to a reader with a session that writes on the site, on the notes they left, or on every note for a
-  role with `manage-sites`, and only where the store of the site keeps statuses. A visitor, a reader
-  with no token and a guest with no right get none, and a note of a tracker gets none: its status
-  changes in the tracker. The flag only says where to offer: the route decides again.
+  to a reader whose session reads the site, on the notes they left, or on every note for a role with
+  `manage-sites`, and only where the store of the site keeps statuses. A visitor, a reader with no
+  token and a guest with no right get none, and a note of a tracker gets none: its status changes in
+  the tracker. The flag only says where to offer: the route reads the session again, and decides.
   test:`offers the menu to the author on their note, to a role that manages the sites on every note, and to nobody else`,
   test:`offers no menu on the note of a tracker: its status changes in the tracker (Linear)`.
 - Each of these guards, taken out of a copy of its module, fails a test of `widget-status.test.ts`:

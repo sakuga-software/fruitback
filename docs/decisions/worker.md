@@ -3717,9 +3717,12 @@ replies, and on a public site mounted by the extension with no session, only the
 - **The tracker follows by the same path as the console.** The worker's own store and an address
   take a status; a note of a tracker is `403 statuses-not-taken`, and the console offers no status for
   it either. No second path writes the state of a tracker.
-- **`canSetStatus: true` is added after the cache**, as `editable` (`statusSetterOf`): `writerIn`
-  first, so a reader with no token costs no query, then `takesStatuses`, then the role. Measured on
-  the read of a page of 50 notes (PGlite, 3 runs): see the pull request. The route decides again.
+- **`canSetStatus: true` is added after the cache**, as `editable` (`statusSetterOf`). It reads no
+  session in the store: `memberOf` checks the token and the reach, so a reader with no token costs no
+  query, then `takesStatuses`, then the role. The route reads the session again, and decides. A store
+  that does not answer costs the menu, never the read: before this, a read whose session store was
+  down still answered (`accounts-postgres.test.ts`), and it still does. The cost, measured on a page
+  of 50 notes, is in the pull request of FRU-718.
 
 ## The author edits a note (FRU-475)
 
