@@ -3924,6 +3924,13 @@ of the caller, one in 50 archived), 300 deliveries that did not arrive, and 50 o
 | `GET …/notes?unresolved=1`, for scale | 26.3 to 28.1 ms | 37.6 to 53.8 ms | 9              |
 | `GET …/sites?limit=24`, for scale     | 13.1 to 18.3 ms | 20.3 to 38.3 ms | 7              |
 
+With FRU-722, on the same workspace with 300 of its notes not delivered (three runs, 60 calls):
+`GET …/rail?since=` 15.0 to 16.1 ms median, 17.0 to 19.7 ms p95, 7 statements (the deliveries, then
+the count of the notes not delivered in a statement of its own); a guest 7.6 to 7.8 ms, 5 statements;
+`GET …/notes?undelivered=1` 11.4 to 11.9 ms; `GET …/notes?since=` 7.6 to 9.6 ms; `GET …/notes`, for
+scale, 14.5 to 15.4 ms. Counted in a `FILTER` beside the others, the notes not delivered took 150 ms:
+the keys were matched again for each note; in a `WHERE` they are hashed once.
+
 The count of the notes is one pass over the rows of the workspace by `note_index_by_workspace`
 (9.1 to 11.4 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make;
 each of its counts is the condition `filtered` builds for the list, with its filter added; the

@@ -432,29 +432,36 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       // The filter of `list` itself: the notes of the workspace that are not archived, of the sites the
       // caller reads. Each count is the condition `list` builds for its own filter, not a copy of it.
       const base = only === undefined ? {} : { sites: only };
+      const counted = (query: Omit<NoteQuery, 'limit'>) =>
+        sql<number>`count(*) FILTER (WHERE ${filtered(workspace, { ...base, ...query })})`.mapWith(Number);
 
       return run(async (db) => {
-        // The deliveries that did not arrive, as `list` reads them, only when they are counted.
-        const pending = undelivered === true ? await pendingOf(db, workspace) : undefined;
-        const counted = (query: Omit<NoteQuery, 'limit'>) =>
-          sql<number>`count(*) FILTER (WHERE ${filtered(workspace, { ...base, ...query }, pending)})`.mapWith(Number);
         const [row] = await db
           .select({
             open: counted({ unresolved: true }),
             assigned: counted({ assignee: account }),
-            ...(since === undefined ? {} : { fresh: counted({ since }) }),
-            ...(pending === undefined ? {} : { undelivered: counted({ undelivered: true }) }),
+            fresh: since === undefined ? sql<null>`NULL` : counted({ since }),
           })
           .from(note_index)
           .where(filtered(workspace, base));
+        // The notes whose delivery did not arrive, in a statement of their own, after the deliveries:
+        // in a `FILTER` the keys were matched again for each note (150 ms for 50 000 notes, measured);
+        // in a `WHERE` PostgreSQL hashes them once, as for `list` (FRU-722).
+        let late: number | undefined;
+        if (undelivered === true) {
+          const pending = await pendingOf(db, workspace);
+          const [counted] = await db
+            .select({ notes: count() })
+            .from(note_index)
+            .where(filtered(workspace, { ...base, undelivered: true }, pending));
+          late = Number(counted?.notes ?? 0);
+        }
 
         return {
           open: row?.open ?? 0,
           assigned: row?.assigned ?? 0,
-          ...(since === undefined ? {} : { fresh: (row as { fresh?: number } | undefined)?.fresh ?? 0 }),
-          ...(pending === undefined
-            ? {}
-            : { undelivered: (row as { undelivered?: number } | undefined)?.undelivered ?? 0 }),
+          ...(since === undefined ? {} : { fresh: Number(row?.fresh ?? 0) }),
+          ...(late === undefined ? {} : { undelivered: late }),
         };
       });
     },
