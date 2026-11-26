@@ -163,7 +163,8 @@ describe('the status of a note, from the head of its thread (FRU-718)', () => {
     trigger.click();
     const menu = root.querySelector<HTMLElement>('.fruitback-thread-status-menu') as HTMLElement;
     assert.equal(menu.hidden, false);
-    menu.dispatchEvent(new page.view.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
+    menu.dispatchEvent(new KeyboardEventCtor('keydown', { key: 'Escape', bubbles: true }));
     assert.equal(menu.hidden, true);
     assert.equal(root.activeElement, trigger);
     assert.ok(root.querySelector('.fruitback-thread'), 'the thread stays open');
