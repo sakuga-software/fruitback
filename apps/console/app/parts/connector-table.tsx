@@ -137,7 +137,10 @@ export function ConnectorsTable({
                 <Health
                   connector={connector}
                   late={waits}
-                  read={!receives(connector) || waits !== undefined}
+                  read={
+                    waits !== undefined ||
+                    (connector.health === undefined ? !receives(connector) : connector.health.failing === 0)
+                  }
                   placeAttention={using?.some((site) =>
                     placesOf(site).some((place) => place.connector === connector.id && place.attention !== undefined),
                   )}
