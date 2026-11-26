@@ -119,15 +119,23 @@ describe('a reply from the panel of a note in the console (FRU-712)', () => {
     // And the panel of the console, which reads the note again.
     const panel = await callOn(world, 'GET', `${base}/notes/${note}`, { token: alice.token });
     assert.equal(panel.status, 200);
-    const read = (await panel.json()) as { note: { comments: { body: string }[] } };
+    const read = (await panel.json()) as { note: { id: string; note: { id: string }; comments: { body: string }[] } };
     assert.deepEqual(
       read.note.comments.map((each) => each.body),
       [written.body.comment.body],
     );
+    // The console names the note by the id the widget gave it, the tracker by its own issue: the two
+    // differ, and the reply is under the issue of the tracker that holds the note (review of #989).
+    assert.equal(read.note.note.id, 'sd_one');
+    assert.notEqual(read.note.id, 'sd_one');
   });
 
   it('writes it in the store of the worker for a note the worker keeps', async () => {
-    const { bob, reply, replies } = await acme({ kept: true });
+    const { world, bob, base, note, reply, replies } = await acme({ kept: true });
+    // The store of the worker names the note by its row: another id than the one the widget gave it.
+    const panel = await callOn(world, 'GET', `${base}/notes/${note}`, { token: bob.token });
+    const { id } = ((await panel.json()) as { note: { id: string } }).note;
+    assert.match(id, /^\d+$/);
 
     const written = await reply(bob.token, { body: 'Seen, on it.' });
     assert.equal(written.status, 201, JSON.stringify(written.body));
