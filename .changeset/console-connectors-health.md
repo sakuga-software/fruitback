@@ -1,5 +1,0 @@
----
-'@fruitback/console': minor
----
-
-The Connectors screen has a table of the connectors and a catalogue with the logo of each tracker. A row says the connector, its account, the sites that use it and its health: « N notes not delivered » in red for an address, a routine or Slack whose sends wait, with « Retry » to send them again; « Healthy » when none waits; « Needs attention » when the tracker refuses the connector or a place of a site; « Connected » for a tracker, whose deliveries the worker does not report yet. The red count of « Connectors » in the bar follows the sends that wait. The catalogue lists Linear, Jira, GitHub, GitLab, Asana, ClickUp, Trello, Notion, Slack, Webhook, the REST API and a Claude Code routine as tiles of 64 px, with a search and the groups Trackers, Agents and Developers; each tile says in one line what a note becomes there, and « Connected », « Connect », « Soon » or « Not set up ». The logos are SVG files that the console serves itself. The settings of a connector open in a dialog, in place of the accordion under its row, and « New connector » leads to the search of the catalogue.
