@@ -6,7 +6,13 @@ import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { ADMIN_PAGE } from './instance-admin.ts';
 import { ADMIN_ROLE_LOCK, createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, migrationsThrough, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createPgliteDatabase,
+  migrationsThrough,
+  ownMigratedDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { migrate, migrated } from './postgres-migrate.ts';
 
 /**
@@ -373,7 +379,7 @@ describe(
   () => {
     /** Two pools of one connection each on one new database: two replicas, as far as the server can tell. */
     async function twoReplicas() {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const databases = [
         createPgDatabase(own.url, 'public', { max: 1 }),
         createPgDatabase(own.url, 'public', { max: 1 }),
@@ -482,7 +488,7 @@ describe(
   },
   () => {
     it('removes one of them: the other gets « last-admin », and one administrator stays', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       // Two replicas of one connection each, and a third connection that holds the table of the actions.
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
@@ -544,7 +550,7 @@ describe(
   },
   () => {
     it('suspends one of them: the other gets « last-admin », and one administrator stays', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       // Two replicas of one connection each, and a third connection that holds the table of the actions.
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
@@ -606,7 +612,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     it('refuses the suspension: it waits for the removal, then reads that the account is no administrator', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
         PgDatabase,
@@ -668,7 +674,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     it('suspends it once: one call changes it and writes one action, and the other changes nothing', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
         PgDatabase,
@@ -727,7 +733,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     it('refuses the deletion: it waits for the removal, then reads that the account is no administrator', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
         PgDatabase,
@@ -792,7 +798,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     it('demotes one of them: the other gets « last-owner », and one owner stays', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
         PgDatabase,
@@ -859,7 +865,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     it('deletes one of them: the other gets « last-admin », and one administrator stays', async () => {
-      const own = await ownDatabase();
+      const own = await ownMigratedDatabase();
       const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
         PgDatabase,
         PgDatabase,

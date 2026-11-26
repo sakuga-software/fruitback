@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { createPostgresKv } from './kv-postgres.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, PGLITE_ELSEWHERE, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 
 /**
  * A clock that moves only when the test moves it. On the clock of the machine, a test of a 60 ms
@@ -261,7 +261,7 @@ function onPostgres(open: () => Promise<Database>) {
 // PGlite is PostgreSQL in the process, and runs with every `pnpm test`. The real server is the job
 // « postgres » of CI: `test:postgres` fails when its address is missing.
 const pglite = onPostgres(createPgliteDatabase);
-contract('PostgreSQL (PGlite)', pglite.connect, { closed: pglite.closed });
+contract('PostgreSQL (PGlite)', pglite.connect, { skip: PGLITE_ELSEWHERE, closed: pglite.closed });
 const real = onPostgres(createRealDatabase);
 contract('PostgreSQL (a real server)', real.connect, { skip: NO_REAL_POSTGRES, closed: real.closed });
 

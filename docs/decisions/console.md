@@ -790,7 +790,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   opening a task and closing its panel reads nothing, so the list and its scroll stay where they were.
   **The screen keeps 500 notes at most** (`NOTES_KEPT`): past them it says that a filter or the search
   finds the others. A read again, after a write, reads back the notes shown, in reads of 50 (the most
-  the worker reads at once), so 10 reads at most. `e2e/console-notes-pages.spec.ts` holds it, with
+  the worker reads at once), so 10 reads at most. The state of the read of the next notes (« Loading… », what a screen reader hears) is kept apart from the list (`moreStore` of `parts/notes-more.tsx`), so that it draws the end of the list and not every row: at 450 rows a draw of the list was 140 ms of script (measured, FRU-724), and a press of « Load more » made two. The days of the rows are written with one `Intl.DateTimeFormat` for each language and options (`ago.ts`), which made a quarter of that script. `e2e/console-notes-pages.spec.ts` holds it, with
   the races. **A read again keeps the rows on the screen**
   until its answer replaces them: only the first read says « Loading… », and nothing a pointer can
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with

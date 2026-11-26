@@ -34,6 +34,20 @@ export const TEST_DATABASE_URL = process.env.FRUITBACK_TEST_DATABASE_URL || unde
 export const NO_REAL_POSTGRES: string | false =
   TEST_DATABASE_URL === undefined ? 'FRUITBACK_TEST_DATABASE_URL is not set: the CI job « postgres » sets it' : false;
 
+/**
+ * The reason a subject on PGlite is skipped, or `false` (FRU-720).
+ *
+ * `test:postgres`, the script of the CI job `postgres`, sets `FRUITBACK_TEST_POSTGRES=required`.
+ * That job runs the cases on a real server. The jobs `test` run every file, so they run the cases on
+ * PGlite. Run again in `postgres`, the cases on PGlite took 29 % of its time, on a runner whose 4
+ * cores were busy. `test-discovery.test.ts` holds that only `test:postgres` sets the variable, and
+ * that only a subject on PGlite takes this reason.
+ */
+export const PGLITE_ELSEWHERE: string | false =
+  process.env.FRUITBACK_TEST_POSTGRES === 'required'
+    ? 'the CI jobs « test » run the cases on PGlite: the job « postgres » runs the cases on a server'
+    : false;
+
 export type Row = Record<string, unknown>;
 
 let counter = 0;
@@ -277,6 +291,22 @@ afterAll(async () => {
 });
 
 /**
+ * `ownDatabase`, a copy of the migrated template of this process (FRU-720). For a case that opens
+ * its own pools on one database, two replicas for instance, and whose subject is not the migrations.
+ * A copy takes about 50 ms; the migrations on an empty database about 330 ms (measured locally).
+ */
+export async function ownMigratedDatabase(): ReturnType<typeof ownDatabase> {
+  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
+  migratedTemplate ??= makeMigratedTemplate();
+  const template = await migratedTemplate.catch((error: unknown) => {
+    migratedTemplate = undefined;
+    throw error;
+  });
+
+  return ownDatabase(template.name);
+}
+
+/**
  * A new database on the real server, with every migration of the worker applied and no row
  * (FRU-480), and a pool on it. `close` drops it. For a case whose subject is not the migrations, as
  * `createMigratedPgliteDatabase` is on PGlite.
@@ -285,13 +315,7 @@ afterAll(async () => {
  * instead of an empty one where the store applies the 39 migrations again.
  */
 export async function createMigratedRealDatabase(): Promise<PgDatabase> {
-  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
-  migratedTemplate ??= makeMigratedTemplate();
-  const template = await migratedTemplate.catch((error: unknown) => {
-    migratedTemplate = undefined;
-    throw error;
-  });
-  const own = await ownDatabase(template.name);
+  const own = await ownMigratedDatabase();
   const database = createPgDatabase(own.url, 'public');
 
   return {

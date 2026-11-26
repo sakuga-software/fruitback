@@ -20,6 +20,7 @@ import {
 } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
@@ -94,7 +95,7 @@ async function anotherApplicationIn(database: Database): Promise<void> {
 }
 
 for (const { label, open, skip } of [
-  { label: 'PGlite', open: () => createPgliteDatabase(SCHEMA), skip: false as string | false },
+  { label: 'PGlite', open: () => createPgliteDatabase(SCHEMA), skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: () => createRealDatabase(SCHEMA), skip: NO_REAL_POSTGRES },
 ]) {
   describe(`a worker in a schema of its own, on ${label} (FRU-219)`, { skip: skip !== false }, () => {
@@ -176,7 +177,7 @@ for (const { label, open, skip } of [
 
 describe('a database of today, with no schema named (FRU-219)', () => {
   for (const { label, open, skip } of [
-    { label: 'PGlite', open: () => createPgliteDatabase(), skip: false as string | false },
+    { label: 'PGlite', open: () => createPgliteDatabase(), skip: PGLITE_ELSEWHERE },
     { label: 'a real server', open: () => createRealDatabase(), skip: NO_REAL_POSTGRES },
   ]) {
     it(
