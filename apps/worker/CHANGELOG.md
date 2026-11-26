@@ -1,5 +1,73 @@
 # @fruitback/worker
 
+## 0.8.0
+
+### Minor Changes
+
+- 57bb8e5: The thread of a note says « An agent is working on this note » when a call of the site's trigger started a Claude Code routine session for it. A member of the team who can see the tracker also gets « Open the session », a link to that session. Guests, reviewers and visitors see the line without the link. The read gives `agent: {}`, or `agent: { url }` to a member of the team. Only `https` addresses are given.
+- 7751a1f: A workspace can connect Asana: by consent at Asana on a server whose operator sets `FRUITBACK_ASANA_OAUTH`, or by a personal access token anywhere. Each note becomes a task of the project a site chooses, with its files attached, and its pin takes the stage of its completion or of its section. Fruitback keeps the tokens encrypted, revokes a consent when its connector goes, and says « Needs attention » when Asana refuses it.
+- 950e993: The trigger of a site can start a Claude Code routine of the team. « Connectors » takes the Fire URL and the token of the routine: Fruitback keeps the token encrypted, sends it to api.anthropic.com only, and never shows it again. A call carries identifiers only, and notes sent together start one session. The panel of the routine shows « Session started » with the link of each session. A refused token stops the call at once, and the routine needs attention.
+- 84e078e: A workspace can connect ClickUp: by consent at ClickUp on a server whose operator sets `FRUITBACK_CLICKUP_OAUTH`, or by a personal token anywhere. Each note becomes a task of the list a site chooses, with its files attached, and its pin takes the stage of the status of the task. Fruitback keeps the token encrypted, and says « Needs attention » when ClickUp refuses it.
+- 21aa779: The person who left a note gets one e-mail when the team marks it done: a member at the address of their account, a visitor at the address they gave just after the note, once per browser. The worker keeps that address for one message, 90 days at most (table `done_notices`, migration `0042`), and takes it on `POST /feedback/<note>/notify` with the token of the note. The icon of the extension shows, for the site of the tab, how many notes of the reviewer are done and waiting for their check.
+- 4e2f1df: The author of a note can edit its text while the note is open: new, to do or in progress, and no longer only while it is new. On a note sent to Linear, Fruitback leaves the description of the issue as it is and posts a comment « Edited the note » with the new text, and the thread shows that new text. An address receives a new `note.edited` event, which carries identifiers only, and the console lists it among the deliveries. Notes sent to GitHub, and sites whose replies are hidden, still take no edit.
+- e171e51: A workspace can connect GitLab, on gitlab.com or on a self-managed GitLab that the internet reaches, by a project access token (Reporter, scope `api`). Each note becomes an issue of the project a site chooses, with its labels and its files, and its pin takes the stage of the state of the issue. The token is kept encrypted, every call to a self-managed GitLab is guarded against an internal address, and the connector says « Needs attention » when GitLab refuses the token or a project.
+- 1529f61: A workspace can connect Jira Cloud, by consent at Atlassian (OAuth 2.0), on a server whose operator sets `FRUITBACK_JIRA_OAUTH`. Each note becomes an issue of the project a site chooses, with its files attached, and its pin takes the stage of the status of the issue. Fruitback takes no API token of Jira, keeps the token of the consent encrypted, and says « Needs attention » when Atlassian refuses it or ends it.
+- 1a60ff2: A note whose Linear place is gone now says why, everywhere. When Linear refuses a note with `INPUT_ERROR` and no longer finds the team or the project of the site, the worker writes Linear's reason to its log, keeps the state on the destination of the site, and answers `502 destination-unavailable` with a link to help. The console shows « Needs attention » on that destination and on the card of the site, with what to change. The widget keeps the text and says the team cannot receive the note: a member gets a link to the site in the console, anybody else a link to the guide « A note that did not go ». A widget of before still reads a `502` and keeps the note.
+- e526c7d: `/mcp` writes a task with no page and no pin. The new `create_task`, for a key that writes, takes a
+  title and, if you like, a text, a status, an assignee, a priority, a due day and labels, as « New
+  task » of the console does. It refuses an argument it does not take, a site that is not of the key,
+  and a status, a member or a label that is not of the site or of the workspace, and then writes
+  nothing. Its answer says what it wrote. `update_task` and `set_note_status` now change such a task
+  too. A task an agent writes starts no agent. In the console, the log of a key says « Wrote a task ».
+- 01b7b9b: `/mcp` reads and changes the tasks Fruitback keeps. `list_notes` and `get_note` give the fields of a
+  task, and `list_notes` filters by assignee, priority, label and due day, as the console does. The new
+  `task_choices` gives the ids of the labels and of the members, and `update_task` changes the status,
+  the assignee, the priority, the due day and the labels, for a key that writes. On a worker that keeps
+  no task, no tool of a task is listed. In the console, the right of a key that writes is « Read, reply
+  and change the tasks », and its log says « Changed the fields of a task ».
+- 880d540: The author of an open note can move it to another element of the same page, from « ⋯ » in its thread. The widget asks for the new element, then the note moves there. On Linear, the issue keeps its description and gets a comment « Moved the note » that names the element, and the thread reads the note's new place from that comment. An address receives a new `note.moved` event, which carries identifiers only, and the console lists it with the other deliveries. Notes sent to GitHub cannot be moved.
+- f7d4236: The administrator of a self-hosted instance reads a banner when a newer release is out, and can dismiss it. The worker answers it on `GET /console/admin/release`. The upgrade guide says what a pull takes for each kind of image tag.
+- 6cfe11e: The page of a site has a tab « Access »: who reads the notes and who leaves them, as four levels (Closed, Read only, Contribute, and Collaborate to come), and a table of what a visitor may do. A visitor's right to change the text of their own note and to take it back is a setting of each site, `never` or `while-open`, kept by the worker in two new columns. « Who can leave a note » now decides on a site that everyone reads too: « Read only » is read by anyone and written by its members. The migration gives every site that everyone read « Anyone on the page », and every site of before `never` for both rights, so no site changes.
+- 25734d3: A workspace can post its notes in a Slack channel, by an Incoming Webhook. Each verified note, or each note if the connector says so, is posted with its link, its element and its capture, while the notes stay in Fruitback. The webhook is kept encrypted, and the panel of the connector lists the notes that did not reach Slack.
+- d6cae1c: Several tasks that Fruitback keeps can be selected at once, by their boxes, with Shift and a click for a range, or with Cmd or Ctrl and A for the page. A bar under the list changes their status, assignee, priority, labels or due day, archives them or deletes them, in one call that changes all of them or none; the menu of a selected task acts on the whole selection.
+- 687ed1f: A task is copied as its link, its ID or Markdown for an agent, from its menu, its panel, Cmd/Ctrl+Shift+C and Cmd/Ctrl+Shift+. The tool `notes_as_text` of a whole site ends with its tasks written by hand.
+- 01b7b9b: A task is written by hand in the console, with a title and, if you like, a text, a status and its fields. It has no page and no pin.
+- 2e93317: An address that receives the notes of a site is told of each change of their tasks: `note.status_changed` with the status before and after, `note.replied` with the id of the reply, and `note.updated` with the names of the fields that changed (assignee, priority, labels, day). Each holds ids and names only, is signed and tried again as a note, and a change that changes nothing sends nothing. A note sent to an address now takes replies, kept in Fruitback. The console names these events in the deliveries that did not arrive.
+- 36dbf5c: A task that Fruitback keeps has an assignee, a priority, a day and labels. The list and the board of the notes show them.
+- 9390cc2: The list of the notes filters the tasks Fruitback keeps by assignee, priority, label and due day.
+- 5a3f29a: A task that Fruitback keeps can be put in its place in its column of the board, archived, brought back and deleted.
+- 4f057d0: A note opens in a panel over the list: its text, its page, its element, its replies, and the fields of its task.
+- 8245be6: `FRUITBACK_TASKS=off` turns off the tasks of a server: a site needs a destination, and the notes the server kept before are read-only. `on` is the default.
+- fbeaa0f: A visitor with no account sees « You · this browser » on the notes they left from this browser. At the first note, the widget makes a random key for the site and keeps it in the page's `localStorage`. It sends the key in the `X-Fruitback-Visitor` header, and the worker keeps only a SHA-256 digest of it with the note. A read that sends the same key gets `mine: true` on those notes. Another browser, a missing key, or a key of another shape gets nothing. The key is not a proof of identity, and it does not let a visitor edit or withdraw a note yet. Nothing changes for a member, and a widget mounted with an identity token or by the extension makes no key. Migration `0050_note_index_author_visitor` adds the column `note_index.author_visitor`. Every row of before keeps an empty value.
+- a1877fe: A visitor with no account deletes their own note while it is open, from the same browser, after a confirmation. The widget menu reads « Delete the note », in red. The question is « Delete your note? », and it says that the pin goes away for everyone and that the issue in the tracker is closed as withdrawn. `POST /feedback/<id>/withdraw` takes the key of the browser on a site that takes notes from anybody, with the checks of a member's withdrawal. Nothing is deleted in the store: the note is closed with a reply, Linear cancels the issue, and an address gets `note.withdrawn`. The index marks the row (`note_index.removed_at`, migration `0051_note_index_removed_at`), and a read of the page no longer shows that note to anybody. The team keeps the note, closed, in its tracker and in the console. A member's withdrawal is unchanged.
+- 4b78560: A visitor with no account edits the text of their own note while it is open, from the same browser. `POST /feedback/<id>/text` takes the key of the browser instead of a session, on a site that takes notes from anybody. Every check of a member's edit still applies: the author kept in the index, the open stage read again under the lock, and one place. The reply names the visitor « not verified », and a tracker gets the new text in that reply. Another browser, a missing key and a closed note are refused. An edit counts with the visitor's replies, 5 a minute. In the widget, the visitor's menu reads « Edit the text » with no « Move the note ». The note says « You can edit it until a member picks it up. », and the field says « Edited text is sent to Linear too ».
+- 5f5e51e: « Keep for later » becomes a batch under « Send » (FRU-608). With notes waiting, the main button
+  says « Send all 3 », the icon « Add to batch » shows the count, and a menu beside « Send » offers
+  « Send only this note ». The batch goes in as few requests as the worker allows, says « Sending 2 of
+  3… », and ends on a receipt with the link of each ticket; a partial send keeps the note that did not
+  go, with « Copy text » and « Send again ». A batch now starts an agent once, with every note in
+  `notes`.
+- d96c822: The author of an open note can withdraw it from « ⋯ » in its thread. The thread asks first, then closes the note, and nothing is deleted. A reply under the note says who withdrew it. On Linear, the issue gets the same reply as a comment and moves to the team's first canceled state. An address receives a new `note.withdrawn` event, which carries identifiers only, and the console lists it with the other deliveries. The read gives `withdrawable: true` for the note the reader may withdraw. Notes sent to GitHub cannot be withdrawn.
+
+### Patch Changes
+
+- c40459d: Linear keeps one pair of tokens for each Linear workspace, and a new consent ends the pair of before. A Linear connected in a second Fruitback workspace therefore ended the first one. Now every Linear connector of the same Linear workspace shares the pair. A consent or a refresh brings them all back, and disconnecting one connector revokes the pair only when no other connector uses it.
+
+  A connection that Linear ended is reconnected in place: « Reconnect Linear » in the panel of the connector keeps its sites, their places and its settings. A « Connect » for a Linear workspace that the workspace already holds brings the old connector back instead of making a second one. The extension says, under « Sent to », that the notes of the site do not reach a tracker that refuses the connection. For an owner or an admin, it opens that connector in the console.
+
+- 2270f4b: An owner or an admin reconnects a Linear that Linear ended from the popup itself: « Reconnect Linear » under « Sent to » opens the consent at Linear in a new tab, and Linear brings the browser back to the panel of the connector in the console, with its sites and its settings. A worker that refuses, or a tracker other than Linear, still opens the connector in the console.
+- 3fa0cf6: A task sent on to an address moves to the group of its new status in the list and the board of the console as soon as its status changes, as a task with no destination does. Before, it stayed in its old group until its page was read again.
+- Updated dependencies [57bb8e5]
+- Updated dependencies [3d4f2eb]
+- Updated dependencies [c7d700b]
+- Updated dependencies [2dd49ea]
+- Updated dependencies [687ed1f]
+- Updated dependencies [01b7b9b]
+- Updated dependencies [04b7b96]
+- Updated dependencies [d96c822]
+- Updated dependencies [73281a2]
+  - @fruitback/shared@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
