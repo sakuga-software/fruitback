@@ -170,6 +170,21 @@ describe('the choices sent to the account (FRU-716)', () => {
     assert.deepEqual(sent, [ALICE]);
   });
 
+  it('after a sign-out, a request still on its way does not stop the next person from getting their own choice', async () => {
+    const { storage, root } = browser();
+    let answer: () => void = () => {};
+    const save = () => new Promise<boolean>((resolve) => (answer = () => resolve(true)));
+    const ana = keepWithAccount(ALICE, save);
+    forgetAppearance(root, storage);
+    // Ben signs in, in this tab, before the request of Ana is answered.
+    const ben: Appearance = { ...DEFAULT_APPEARANCE, mode: 'dark', dark: 'midnight', accent: 'indigo' };
+    adoptAppearance({ appearance: ben }, root, storage, false);
+
+    assert.deepEqual(keptAppearance(storage), ben);
+    answer();
+    await ana;
+  });
+
   it('says that the account did not take the last choice: a refusal, or no answer', async () => {
     const refused = appearanceSender(async () => false);
     assert.equal(await refused.send(ALICE), false);

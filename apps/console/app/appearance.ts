@@ -586,12 +586,16 @@ export function appearanceSender(save: SaveAppearance): {
   busy: () => boolean;
   /**
    * A sign-out: a choice that waits never leaves. Sent later, it would carry the cookie of whoever
-   * signs in next in this tab, and write the choice of one person on the account of another.
+   * signs in next in this tab, and write the choice of one person on the account of another. A
+   * request already on its way carries the cookie of the person who chose, so it ends as it is; it no
+   * longer makes the sender busy, so the `/console/me` of the next person is adopted at once.
    */
   drop: () => void;
 } {
   let flight: Promise<boolean> | undefined;
   let waiting: Appearance | undefined;
+  // The run of before the last sign-out: it ends, and is busy for nobody.
+  let dropped: Promise<boolean> | undefined;
   const one = async (appearance: Appearance): Promise<boolean> =>
     save(isDefault(appearance) ? null : appearance).catch(() => false);
   const drain = async (): Promise<boolean> => {
@@ -616,9 +620,10 @@ export function appearanceSender(save: SaveAppearance): {
 
   return {
     send,
-    busy: () => flight !== undefined,
+    busy: () => flight !== undefined && flight !== dropped,
     drop: () => {
       waiting = undefined;
+      dropped = flight;
     },
   };
 }
