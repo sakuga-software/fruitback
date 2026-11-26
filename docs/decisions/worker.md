@@ -3926,6 +3926,18 @@ refused by its sentence. What follows is the history.
   no column for its note: its body, the JSON that was sent, names the site and the reference, and
   the list reads them from the deliveries of the workspace, which are few since one that arrived is
   removed. No migration for that link.
+- **« Send again » on the row of a site** (FRU-717): `POST …/sites/<site>/retry` (`manage-sites`, a
+  site of the workspace, else `404`) makes due now the deliveries that « Send again » finds on each
+  note of the site (`NoteIndex.undeliveredOfSite`, the oldest note first), **100 at most**
+  (`SITE_RETRY_LIMIT`), in one write (`AccountStore.retryDeliveries`), and answers
+  `{ sent, left }`. **It sends nothing itself**: the loop of the worker does, one pass at a time, and
+  a delivery that arrived is gone, so a second press, before or during a pass, makes the same rows
+  due again and no note goes twice (test:`sends nothing twice when somebody presses again, before or during the pass`).
+  Why 100: the SQL does not set it (the write takes 1.5 to 2 ms for 100 ids, 5 ms for 1 000, 24 to
+  28 ms for 5 000, `EXPLAIN ANALYZE`, three runs each). The loop does: it sends 20 deliveries a pass,
+  each 15 seconds (`deliverDue`, `DELIVERY_PASS_MS`), oldest `next_at` first. 100 rows made due at
+  once leave in about 75 seconds, and the deliveries of the other workspaces due after the press
+  wait that long at most. A site with more says `left`, and a press again sends the next 100.
 - **An index that does not answer is `503`**, said in the log; a worker with no database has no
   list (`404`).
 
@@ -4042,7 +4054,16 @@ nothing more.
   another workspace (median, p95, page and counts together): the first page, 29 ms and 42 ms; a
   page after a cursor at the 50 000th note, 33 ms and 54 ms; `site` and `stage`, 13 ms and 19 ms;
   `place`, 32 ms and 59 ms; `mine`, 20 ms and 37 ms; « Send again » before its update, 13 ms and
-  18 ms. **A page itself is an index-only scan of `note_index_by_date`, 0.08 ms**: the time is the
+  18 ms.
+- **FRU-717, « Send again » on a site, measured on PostgreSQL 17 in a local container**, through
+  `handleConsoleApi` with each SQL statement counted: a workspace of 200 sites and 50 000 notes
+  (half on one site), 6 410 deliveries that did not arrive (10, 100, 1 000 and 5 000 on four sites,
+  300 spread), and 50 other workspaces of 2 000 notes and 100 deliveries. 60 calls after 10 of
+  warm-up, the deliveries given up again before each, three runs: **30 to 49 ms median, 36 to 75 ms
+  p95, 7 SQL statements, whatever the number of notes of the site** (5 with no delivery to make
+  due). « Send again » on one note, on the same data: 32 to 34 ms median, 6 statements. The time is
+  the read of the deliveries of the workspace (`pendingOf`, 11.5 ms for its 6 410 bodies), the same
+  read as one note's; then the notes of the site by those keys, and the write. **A page itself is an index-only scan of `note_index_by_date`, 0.08 ms**: the time is the
   counts, a pass over the notes of the workspace. **A search is a pass too**: 295 ms and 386 ms
   for two words, 123 ms and 177 ms for a word found nowhere. A trigram index (`pg_trgm`) would
   take it down; it is an extension, not done here.

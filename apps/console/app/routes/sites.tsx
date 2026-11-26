@@ -9,6 +9,7 @@ import {
   CutLink,
   Dialog,
   Field,
+  IconButton,
   LinkButton,
   LoadFailed,
   Mark,
@@ -361,8 +362,12 @@ const CELL = 'border-b border-line/60 p-0 text-left align-top font-normal';
 /** The host is in the head of its row, not in a heading of the page: `CutLink` draws it in a `span`. */
 const IN_A_CELL = 'span';
 
-/** What a press on a row leaves to the control it lands on: a link, a button, a field or a menu. */
-const CONTROLS = 'a, button, input, [role="menu"], [role="menuitem"], [role="dialog"], [role="tooltip"]';
+/**
+ * What a press on a row leaves to the control it lands on: a link, a button, a field or a menu. And
+ * « Send again » of the row (FRU-717), whose button a press goes through while it is disabled: it
+ * then lands on its wrapper, and must not open the page of the site.
+ */
+const CONTROLS = 'a, button, input, [role="menu"], [role="menuitem"], [role="dialog"], [role="tooltip"], [data-resend]';
 
 /**
  * The table of the sites (FRU-688): a head of 32 px, and a line of 36 px per site. A press anywhere
@@ -867,23 +872,25 @@ function SentTo({
         )}
       </Tip>
       {late > 0 && resend !== undefined ? (
-        // The red arrow of the mockup, as the link a member has: a button, named for a screen reader.
-        <button
-          type="button"
-          aria-label={
-            late === 1
-              ? t('Send again the note of {site} not delivered yet', { site: name })
-              : t('Send again the {count} notes of {site} not delivered yet', { count: late, site: name })
-          }
-          title={resend.sending ? t('Sending…') : lateWords}
-          aria-busy={resend.sending}
-          disabled={resend.sending}
-          onClick={() => void resend.send()}
-          data-resend=""
-          className={`${LATE} cursor-pointer border-0 bg-transparent p-0 disabled:cursor-progress disabled:text-muted disabled:hover:bg-transparent`}
-        >
-          <NoteIcon name="retry" />
-        </button>
+        // The red arrow of the mockup, as the link a member has: a button of the kit, named for a
+        // screen reader, and its words in a tooltip, as the places beside it.
+        <span data-resend="" className="contents">
+          <Tip tip={resend.sending ? t('Sending…') : lateWords} className="flex-none">
+            <IconButton
+              label={
+                late === 1
+                  ? t('Send again the note of {site} not delivered yet', { site: name })
+                  : t('Send again the {count} notes of {site} not delivered yet', { count: late, site: name })
+              }
+              disabled={resend.sending}
+              onClick={() => void resend.send()}
+              size="small"
+              tone="late"
+            >
+              <NoteIcon name="retry" />
+            </IconButton>
+          </Tip>
+        </span>
       ) : null}
       {resend === undefined ? null : (
         // Said to a screen reader when it changes: the line under the row is for the eye.
@@ -900,7 +907,7 @@ function SentTo({
               : t('{count} not delivered yet: see the notes of {site}', { count: late, site: name })
           }
           title={lateWords}
-          className={LATE}
+          className="inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]"
         >
           <NoteIcon name="retry" />
         </Link>
@@ -908,10 +915,6 @@ function SentTo({
     </>
   );
 }
-
-/** The red arrow of the notes not delivered yet (FRU-688): a link to a member, a button to who manages. */
-const LATE =
-  'inline-flex size-control-sm flex-none items-center justify-center rounded-control text-accent-strong hover:bg-chip focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&_svg]:size-[14px]';
 
 /** « Send again » of the row of a site (FRU-717): its state, and what to say under the row. */
 type Resend = { sending: boolean; said: string; send: () => Promise<void>; notices: ReactNode[] };

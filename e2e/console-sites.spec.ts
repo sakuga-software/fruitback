@@ -350,13 +350,16 @@ test('the list is a table, one line of 36 px per site, named by its address and 
   const linear = cell(first, 'sent').locator('svg[data-mark="linear"]');
   await expect(linear).toHaveAttribute('viewBox', '0 0 24 24');
   expect.soft(await styles(linear, ['width', 'height'])).toEqual({ width: '14px', height: '14px' });
-  // Notes an address did not take yet: the icon of a retry in red, to the notes of the site.
+  // Notes an address did not take yet: the icon of a retry in red. To an owner, a button that sends
+  // them again (FRU-717); a member has the link to the notes of the site.
   const support = cell(row(page, 'support.acme.dev'), 'sent');
   await expect(support.locator('svg[data-mark="rest"]')).toHaveAttribute('viewBox', '0 0 16 16');
-  const late = support.getByRole('link', { name: '2 not delivered yet: see the notes of support.acme.dev' });
-  await expect(late).toHaveAttribute('href', '/w/w1/notes?site=s3');
+  const late = support.getByRole('button', { name: 'Send again the 2 notes of support.acme.dev not delivered yet' });
+  await late.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('2 not delivered yet');
+  await page.mouse.move(0, 0);
   expect.soft(contrast(await painted(late, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(3);
-  await expect(cell(first, 'sent').getByRole('link', { name: /not delivered/ })).toHaveCount(0);
+  await expect(cell(first, 'sent').getByRole('button', { name: /not delivered/ })).toHaveCount(0);
   // No tracker: the drop of Fruitback, and the notes kept there.
   await expect(cell(row(page, 'preview.lumen.studio'), 'sent')).toHaveText('Kept in Fruitback');
 
@@ -717,6 +720,68 @@ test('the new notes of a site are in their column, and lead to the notes of the 
   // A press opens the Notes screen with this site and « New » chosen.
   await row(page, 'acme.dev').getByRole('link', { name: 'See the 6 new notes of acme.dev', exact: true }).click();
   await expect(page).toHaveURL(/\/w\/w1\/notes\?site=s2&stage=new$/);
+});
+
+test('« Send again » on a row asks the worker once, says what left, and says a refusal under the row (FRU-717)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  const asked: string[] = [];
+  let release: () => void = () => {};
+  let reply: { status: number; json: unknown } = { status: 200, json: { sent: 2, left: 0 } };
+  // Registered after the stub of the worker, so it answers first. Each answer waits for `release`.
+  await page.route('**/console/workspaces/w1/sites/*/retry', async (route) => {
+    asked.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+    await new Promise<void>((resolve) => (release = resolve));
+    await route.fulfill(reply);
+  });
+  await open(page);
+  const support = row(page, 'support.acme.dev');
+  const button = cell(support, 'sent').getByRole('button', {
+    name: 'Send again the 2 notes of support.acme.dev not delivered yet',
+    exact: true,
+  });
+  const under = support.locator('tr[data-notices]');
+  await expect(under).toHaveCount(0);
+
+  // Two presses at once ask once, and the row does not open the page of the site.
+  await button.dblclick();
+  await expect(button).toBeDisabled();
+  expect(asked).toEqual(['POST /console/workspaces/w1/sites/s3/retry']);
+  await expect(page).toHaveURL(/\/w\/w1\/sites$/);
+  release();
+  await expect(under).toHaveText('2 notes of this site are on their way again.');
+  await expect(cell(support, 'sent').getByRole('status')).toHaveText('2 notes of this site are on their way again.');
+  await expect(button).toBeEnabled();
+  // The line of the answer is the only thing that comes: no other row moves.
+  await expect(table(page).locator('tr[data-notices]')).toHaveCount(1);
+
+  // Past the limit of one press, the rest waits for a press again.
+  reply = { status: 200, json: { sent: 100, left: 20 } };
+  await button.click();
+  release();
+  await expect(under).toHaveText('100 notes of this site are on their way again. Press again to send the 20 others.');
+
+  // A refusal says its cause under the row, and the button stays to try again.
+  reply = { status: 500, json: { error: 'unknown' } };
+  await button.click();
+  release();
+  await expect(under.getByRole('alert')).toHaveText('Fruitback hit an error. Try again in a moment.');
+  await expect(button).toBeEnabled();
+  reply = { status: 409, json: { error: 'workspace-suspended' } };
+  await button.click();
+  release();
+  await expect(under.getByRole('alert')).toHaveText(
+    'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.',
+  );
+  reply = { status: 403, json: { error: 'forbidden' } };
+  await button.click();
+  release();
+  await expect(under.getByRole('alert')).toHaveText(
+    'The notes of this site were not sent again. Reload the page, then try again.',
+  );
+  expect(asked).toHaveLength(5);
+  await expectNoViolation(page, 'a row that says a refusal');
 });
 
 test('the team of a Linear leads to its page at Linear, and only an address of Linear does (FRU-574)', async ({
@@ -1406,6 +1471,12 @@ test('a member installs and changes nothing; a guest does not read where the not
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
   await expect(table(page).getByRole('columnheader', { name: 'Sent to' })).toHaveCount(1);
   await expect(cell(row(page, 'staging.acme.dev'), 'sent')).toHaveText('Team Acme web');
+  // FRU-717: a member does not send the notes again, and reads them on the Notes screen.
+  const late = cell(row(page, 'support.acme.dev'), 'sent');
+  await expect(late.getByRole('button', { name: /Send again/ })).toHaveCount(0);
+  await expect(
+    late.getByRole('link', { name: '2 not delivered yet: see the notes of support.acme.dev', exact: true }),
+  ).toHaveAttribute('href', '/w/w1/notes?site=s3');
   await more(page, 'staging.acme.dev').click();
   await expect(page.getByRole('menuitem')).toHaveText(['Open its page', 'See the notes']);
   await page.keyboard.press('Escape');
