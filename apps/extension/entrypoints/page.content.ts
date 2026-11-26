@@ -22,7 +22,7 @@ import { version as VERSION } from '../package.json';
 import { areaInTab, frameRole, holdsWidget } from '../src/frames.ts';
 
 /**
- * The page's own world, which mounts the widget in private mode and announces itself in team mode
+ * The page's own world, which mounts the widget in extension mode and announces itself in team mode
  * (FRU-41, FRU-57).
  *
  * **`world: 'MAIN'` is not a preference here, it is the ticket.** A content script in the isolated
@@ -188,7 +188,7 @@ export default defineContentScript({
      * The isolated world posts its decision when it starts, and posts it again when this world says
      * it is ready. When both reach this listener, the second one is the same mount. Building the
      * widget again for it closed a composer the reviewer had just opened, and lost the note: measured
-     * on CI, where the second message came after the click (`extension.spec.ts`, private mode). A
+     * on CI, where the second message came after the click (`extension.spec.ts`, extension mode). A
      * page can post `ready` too, and gets the same answer. Only a mount that differs builds again.
      */
     let mounted: string | undefined;
@@ -225,7 +225,7 @@ export default defineContentScript({
      * Taken back, and said out loud.
      *
      * In team mode the widget belongs to the site, so nothing here can destroy it. Without this
-     * event a reviewer who switches the site off — or to private mode — leaves the site's widget on
+     * event a reviewer who switches the site off — or to extension mode — leaves the site's widget on
      * screen with a transport every call is now refused for: stale pins, and a composer that fails
      * silently. The site is told and destroys its own, which is the same event it mounted on.
      * Raised in review.
@@ -452,7 +452,7 @@ export default defineContentScript({
       const signature = JSON.stringify({ ...message, name: undefined });
       if (widget !== undefined && signature === mounted) return;
 
-      // Private mode. The transport goes away with the announcement, so the site's own widget — if
+      // Extension mode. The transport goes away with the announcement, so the site's own widget — if
       // this page has one — cannot pick up a relay the reviewer's entry no longer allows.
       withdraw();
       // Mounting twice would put a second dock and a second set of pins on the page. A second mount

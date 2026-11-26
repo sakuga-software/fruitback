@@ -40,6 +40,7 @@ import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
 import { type FruitbackNotes, NOTES_ENDPOINT, notesTransport } from './notes.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
+import type { StatusAnswer, StatusFailure } from './thread-status.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
 import {
   type AttachOffer,
@@ -712,6 +713,20 @@ export function init(given: FruitbackOptions): Fruitback {
 
         return answer;
       },
+    },
+    // FRU-718: a member changes the status of a note from its thread. The read says `canSetStatus` where
+    // the worker would take it. No read after it, as for a withdrawal: the stage goes on the issue (the
+    // overlay draws the pins again), and the lists follow.
+    status: {
+      send: async (issue: NoteIssue, stage: NoteStage) => {
+        const answer = await sendStatus(options, view, issue, stage);
+        if (typeof answer === 'string') return answer;
+        sidebar.refresh();
+        tellNotes({ kind: 'list' });
+
+        return answer;
+      },
+      nameOf: (stage: NoteStage) => readStatuses.find((status) => status.key === `own:${stage}`)?.name,
     },
     // FRU-603: the verdict of the author, from the thread of the note, in every mode. The worker
     // decides who may: the read says `mine` to the author it names, and the thread offers it then.
@@ -2080,6 +2095,36 @@ async function sendWithdraw(
   const comment = noteCommentSchema.safeParse(body.comment);
 
   return { stage: body.stage as NoteStage, ...(comment.success ? { comment: comment.data } : {}) };
+}
+
+/**
+ * A status of a note from its thread (FRU-718), through the transport of the host: the built-in status
+ * of a stage, `own:<stage>`. `refused`: the worker takes none from this reader on this note now (`403`,
+ * `404`, a `409` of a status hidden or changed); trying again does not change it.
+ */
+async function sendStatus(
+  options: MountOptions,
+  view: Window & typeof globalThis,
+  issue: NoteIssue,
+  stage: NoteStage,
+): Promise<StatusAnswer | StatusFailure> {
+  const response = await callWorker(options, {
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/status?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), status: `own:${stage}` }),
+  });
+  const failure = noteWriteFailure(response, (answer) => REFUSED.has(answer.status));
+  if (failure !== undefined) return failure;
+  let body: { stage?: unknown; status?: unknown };
+  try {
+    body = JSON.parse(response.body) as typeof body;
+  } catch {
+    return 'retry';
+  }
+  if (typeof body.stage !== 'string' || !(NOTE_STAGES as readonly string[]).includes(body.stage)) return 'retry';
+
+  return { stage: body.stage as NoteStage, status: typeof body.status === 'string' ? body.status : `own:${stage}` };
 }
 
 /**

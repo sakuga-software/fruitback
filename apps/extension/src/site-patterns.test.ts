@@ -179,7 +179,7 @@ describe('resolveSite', () => {
     assert.ok(lendsSession('https://*.vercel.app', team));
   });
 
-  it('still answers with a team rule that names the origin, and with a private wildcard under a team one', () => {
+  it('still answers with a team rule that names the origin, and with an extension-mode wildcard under a team one', () => {
     const team = { mode: 'team', endpoint: 'https://worker.test', enabled: true } as const;
     const sites = {
       'https://*.staging.acme.dev': team,

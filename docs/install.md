@@ -8,7 +8,7 @@ Do the instance first, then the site. The widget needs the address of the worker
 site.
 
 Which mode you are installing changes step 3 and nothing else. Step 3 is where public mode puts the
-widget on the page, team mode ships it dormant, and private mode ships nothing at all: there the
+widget on the page, team mode ships it dormant, and extension mode ships nothing at all: there the
 extension mounts it, and the reviewer's side is [reviewing.md](reviewing.md). [modes.md](modes.md) is
 the page that picks between the three, and it is worth reading first: who may read a site is the
 visibility you choose at step 2, and the mode decides who can satisfy it.
@@ -52,7 +52,7 @@ In the console, add the address of the site, and choose **who sees the notes**:
 
 - Members of the workspace, the default. A read needs the session of a member. The visibility
   does not pick the mode: in team mode the extension supplies the session once the reviewer connects
-  it, and private mode carries none ([modes.md](modes.md)). « Who can leave a note » is « Members
+  it, and extension mode carries none ([modes.md](modes.md)). « Who can leave a note » is « Members
   only » on a new site: a visitor with no session is refused. With « Anyone on the page »,
   a visitor can send a note, and sees no pin, theirs included.
 - « Everyone who visits »: a read needs nothing: this is the public mode. Every note, the name its
@@ -222,7 +222,7 @@ let widget: ReturnType<typeof init> | undefined;
 const sync = () => {
   const extension = window.fruitbackExtension;
 
-  // Gone: the reviewer switched this site off, or to private mode. The extension cannot destroy a
+  // Gone: the reviewer switched this site off, or to extension mode. The extension cannot destroy a
   // widget your site owns, so it tells you and you do.
   if (extension === undefined) {
     widget?.destroy();

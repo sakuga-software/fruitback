@@ -57,7 +57,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **« Who can leave a note? » is asked for a site that its members read, and only there** (FRU-330):
   `writers-pick.tsx`, in the form of the Sites screen. Not in the setup any more (FRU-610, below). The
   page of a site sets it in its tab « Access » since FRU-703, below. « Members only » is chosen
-  for a new site, and its detail says that private mode carries no session. The form sends `writers`
+  for a new site, and its detail says that extension mode carries no session. The form sends `writers`
   only with `visibility: 'members'`. A row and the summary of the setup say the exception, « Notes
   from anyone on the page », and nothing for « Members only » or for a worker of before.
   **A gesture that cannot be undone asks twice** (FRU-165): « Remove » a site and « Disconnect » a
@@ -897,21 +897,34 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `connector-logos.tsx` (the logos). **The rules, in short:**
   - **« Your connectors » is a table** (`DataTable`, a card for each row under 680 px): the
     connector with its logo and its name (FRU-404), its account (one line, cut at its end, the whole
-    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites;
-    none for a routine), its health, and at its end « Retry » and « … ».
-  - **The health says only what the worker says** (FRU-714 asks for the rest): « Needs attention »
-    when the tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not
-    delivered » and « N calls not delivered » for a connector that receives (an address, a routine,
-    a plugin with `receives`, Slack), from `GET …/connectors/<id>/deliveries`; « Healthy » when that
-    list was read and is empty; « Connected » for a tracker, whose deliveries no route reports yet;
-    « Not read » when the list of an address was not read, with a line above the table and « Try
-    again ». **Never « Healthy » for what was not read.** A red word is `accent-strong`, on a tint of
-    the accent; a green one is `done`, on a tint of `done`. **No « Last delivery », and no count of
-    notes in « Used by »**: no route gives them (FRU-714).
+    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites,
+    and the notes that went there: « 2 sites · 31 notes »; none for a routine), its health, « Last
+    delivery », and at its end « Retry » and « … ».
+  - **The health says only what the worker says.** Since FRU-714 the worker says it with the list:
+    `health` of each connector, `{ failing, notes?, lastDeliveredAt? }`. « Needs attention » when the
+    tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not delivered »
+    and « N calls not delivered » for a connector that receives (an address, a routine, a plugin with
+    `receives`, Slack), from `GET …/connectors/<id>/deliveries`, which is read **only for a connector
+    whose `failing` is above 0**, of any kind (the ids of « Retry », and notes apart from calls); « Healthy » for
+    one whose `failing` is 0, and for a tracker whose health the worker said: a tracker takes a note
+    in the request or refuses it there, so nothing of it waits. « Last delivery » is `ago` of
+    `lastDeliveredAt`, « None yet » without it. A worker that says no `health` (one of before, or
+    deliveries that did not answer) gets the screen of before: every list of an address read, «
+    Connected » for a tracker, no count of notes and an empty « Last delivery ». « Not read » when the
+    list of an address was not read, with a line above the table and « Try again »; « N sends not
+    delivered » instead when the worker said that N wait, as the bar counts them, with no « Retry ». **Never «
+    Healthy » for what was not read.** A red word is `accent-strong`, on a tint of the accent; a green
+    one is `done`, on a tint of `done`.
+  - **A routine whose `/fire` answered `404` is « Needs attention »** (`routine-gone`, FRU-627): its
+    panel says that claude.ai says the routine or its API trigger is gone, since when, and to connect
+    a new trigger and disconnect this one; the box « Start an agent » of a site that calls it says the same in place of « Fruitback
+    tries again », which a call given up makes false. The panels of a tracker read only the refusals of
+    a tracker (`trackerTrouble` of `api.ts`).
   - **« Retry »** is on a row whose sends wait, for an owner or an admin: it asks each of them again
     (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
     again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
-    screen last read them (`failingRead` of the frame); on another screen it stays until a read says
+    screen last read them (`failingRead` of the frame): `failing` of each connector, or the list
+    read for one whose health the worker did not say; on another screen it stays until a read says
     another number, and before any read the bar counts nothing (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
@@ -1567,6 +1580,35 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   selected task, copy every selected note in the order of the screen, those this person may not
   change too: the links and the IDs one per line, the Markdown grouped by page, then the tasks
   written by hand.
+
+## The shortcuts of the keyboard, and the fields (FRU-726)
+
+### The rules, in short
+
+- **One guard for every shortcut of the console, `keys.ts`**: « C » (New task), « / » (the search of
+  the notes, the sites and the members), j and k (the rows), Cmd or Ctrl and A, and Escape (the
+  selection), the copies (Cmd or Ctrl, Shift and C or the full stop), and the arrows and Escape of
+  the panel of a task. A new shortcut goes through it.
+- **A shortcut reads `composedPath()`, never `event.target` alone.** The target of a key typed in a
+  Shadow root is its host element, which is no field. The Fruitback widget on the console is one: each
+  « c » of a note opened « New task » and was missing from the note, and the button read
+  « New taskC ».
+- **A field keeps its keys**: a text input, a `textarea`, a `select`, an element you can edit, and a
+  `textbox` or `searchbox`, wherever they are in the path. A box, a radio, a button, and a button that
+  says `combobox` are no field: Cmd or Ctrl and A on the box of a row still selects every task. A
+  dialog (the panel of a task included, as since FRU-656), a menu and a list of options keep their
+  keys too, in a Shadow root as well.
+- **A shortcut of one key (« C », « / », j, k) takes no Cmd, Ctrl or Alt**, no key that a handler took
+  already, and no key while an IME composes a word (`isComposing`, or the key 229 of Safari).
+- `keys.test.ts` tests the guard on the path of a key typed in a Shadow root.
+  `e2e/console-shortcut-fields.spec.ts` types « c » and « / » in a field of a Shadow root and in the
+  widget mounted on the console, and presses them out of a field as its control.
+
+### The reasons, and the history
+
+- The widget keeps the keys of its fields from the page since FRU-726 (`docs/decisions/widget.md`),
+  for every site. The console has its own guard all the same: another component with a Shadow root,
+  or a widget older than the fix, takes the same path.
 
 ## The tab « Access » of a site (FRU-703)
 

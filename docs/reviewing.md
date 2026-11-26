@@ -5,7 +5,7 @@ mode you want is in [modes.md](modes.md).
 
 Both extension modes start the same way (install it, switch an origin on) and diverge on one
 question: **does that site embed the widget itself?** If it does, that is team mode and you will pair
-with the worker. If it does not, that is private mode and the extension mounts the widget for you.
+with the worker. If it does not, that is extension mode and the extension mounts the widget for you.
 
 ## 1. Install it
 
@@ -136,15 +136,15 @@ click the extension. While this browser holds no session at all, the foot of the
 « Use your own Fruitback server », and the options page asks for the three things below. Once it holds one, the popup names
 the site it is about and asks for them itself:
 
-| Field              |                                                              |                                                               |
-| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| « Mode »           | `Private · the extension shows the widget`                   | for a site that embeds nothing                                |
-|                    | `Team · the site embeds it, the extension adds your session` | for a site that ships a dormant widget                        |
-| « Server address » | `https://feedback.acme.dev`                                  | your worker, not the site                                     |
-| « Client id »      | `acme`                                                       | **private mode only**: in team mode the site declares its own |
+| Field              |                                                              |                                                                 |
+| ------------------ | ------------------------------------------------------------ | --------------------------------------------------------------- |
+| « Mode »           | `Extension · the extension shows the widget`                 | for a site that embeds nothing                                  |
+|                    | `Team · the site embeds it, the extension adds your session` | for a site that ships a dormant widget                          |
+| « Server address » | `https://feedback.acme.dev`                                  | your worker, not the site                                       |
+| « Client id »      | `acme`                                                       | **extension mode only**: in team mode the site declares its own |
 
 Then « Turn on for this site ». The browser asks for permission on that origin; refuse it and nothing
-runs. The row afterwards reads `On · acme` in private mode, and in team mode
+runs. The row afterwards reads `On · acme` in extension mode, and in team mode
 `On · team mode · the site's own widget`: where the client id would be, because there the site
 declares its own. Either row carries « Turn off here » and « Change ».
 
@@ -156,28 +156,28 @@ it goes back when you sign out and no site that is on uses that worker.
 A grant reaches the next page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
-If a private-mode site shows no note, open the popup. When the worker reads `authenticated`, the
-popup says `This server answers a signed-in reader only, and in private mode the extension holds no session. Notes do not show on this site.`,
-with a link to [the three modes](modes.md). Private mode carries no session, so the fix is on the
+If an extension-mode site shows no note, open the popup. When the worker reads `authenticated`, the
+popup says `This server answers a signed-in reader only, and in extension mode the extension holds no session. Notes do not show on this site.`,
+with a link to [the three modes](modes.md). Extension mode carries no session, so the fix is on the
 worker's side: read `public` for that client, or use team mode. The popup says nothing when the
 worker is down or slow, because it did not measure why.
 
-If a private-mode site takes no note, the site is « Members only », the default of a new
+If an extension-mode site takes no note, the site is « Members only », the default of a new
 site of the console: the popup says
-`This site takes notes from its members only, and in private mode the extension holds no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.`
+`This site takes notes from its members only, and in extension mode the extension holds no session: no note can be sent from here. To review it in extension mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.`
 The widget offers no note there. An admin of the site adds its address again on the Sites screen of
 the console with « Anyone on the page » (the site keeps its notes and its id), or the reviewer
 connects the browser and uses team mode.
 
 A team-mode endpoint must be `https`, or loopback for the dev loop: a session is a bearer
 credential and it does not cross plain `http`, so the popup refuses the entry rather than storing one
-that would be shown as « On » and refuse every call. Private mode accepts plain `http://`, and
+that would be shown as « On » and refuse every call. Extension mode accepts plain `http://`, and
 that is deliberate: the widget it mounts carries no credential, so there is nothing on the wire to
 protect, and an `http://` staging site is exactly the thing this mode is for.
 
 ## 3. Pair, in team mode
 
-Private mode needs nothing more: the widget is mounted, and it reads as an anonymous visitor would.
+Extension mode needs nothing more: the widget is mounted, and it reads as an anonymous visitor would.
 The popup offers no pairing there, because a session would change nothing. If you already hold a
 session with that worker, the popup still shows it, with « Sign out ».
 Team mode relays every call through your session, so until you pair the site can reach nothing:
@@ -287,12 +287,12 @@ because that is what it does.
 A team-mode rule names one origin, never a wildcard. The relay spends your session for the page a
 team rule covers, and a wildcard such as `https://*.vercel.app` covers sites that are not yours. The
 popup, the options page and an imported file all refuse a wildcard in team mode. A wildcard stays
-valid in private mode, which carries no session. A team wildcard that an earlier version stored runs
+valid in extension mode, which carries no session. A team wildcard that an earlier version stored runs
 nowhere now: the options page says so on its row, and offers to remove it.
 
 A wildcard is a convenience in your browser, and grants nothing on the worker. The worker compares
 each page's exact origin with the `origins` of its client, so `pr-12.staging.acme.dev` has to be listed
-there too, or its notes are refused. That check applies in private mode, where the widget calls from the
+there too, or its notes are refused. That check applies in extension mode, where the widget calls from the
 page; in team mode the call comes from the extension, which the worker does not hold to `origins`.
 
 ### Share rules with a team

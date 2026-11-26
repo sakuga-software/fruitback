@@ -323,20 +323,25 @@ export async function deliverDue({
         console.warn('[fruitback] a routine started with no address of a session in its answer', delivery.id);
       }
       await noteRoutine(delivery.connectorId, undefined);
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
 
       return true;
     }
 
     // 401 and 403: the token is refused (deleted, or regenerated). It will be refused at each attempt
     // left, so the call is given up now and the connector needs attention, as a key a tracker refuses.
-    // 404: the routine or its API trigger is gone. 429 and the others are tried again.
+    // 404: the routine or its API trigger is gone, and the connector needs attention too (FRU-627).
+    // Each new call of a trigger still tries it once: if that same trigger answers again (the 404 was
+    // a passing one of claude.ai), the call starts it and ends the attention. Otherwise the attention
+    // stays until the connector is removed: a new trigger has its own Fire URL, so its own connector,
+    // and the console says to connect it and disconnect this one. 429 and the others are tried again.
     const refused = status === 401 || status === 403;
     if (refused) {
       error = 'The routine refused its token: generate a new one at claude.ai/code/routines';
       await noteRoutine(delivery.connectorId, 'key-refused');
     } else if (status === 404) {
       error = 'The routine or its API trigger is gone';
+      await noteRoutine(delivery.connectorId, 'routine-gone');
     }
     const wait = refused || status === 404 || final ? undefined : RETRY_AFTER_SECONDS[delivery.attempts];
     await accounts.settleDelivery(delivery.id, {
@@ -354,7 +359,7 @@ export async function deliverDue({
   /** What `/fire` said of the token, on the connector (FRU-102). It never rejects. */
   const noteRoutine = async (
     connector: string,
-    trouble: 'key-refused' | 'key-lacks-access' | undefined,
+    trouble: 'key-refused' | 'key-lacks-access' | 'routine-gone' | undefined,
   ): Promise<void> => {
     await accounts.noteConnector(connector, trouble, now()).catch((failure: unknown) => {
       console.error('[fruitback] the state of a connector was not kept', connector, failure);
@@ -408,7 +413,7 @@ export async function deliverDue({
     }
     if (answer.ok) {
       await noteRoutine(delivery.connectorId, undefined);
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
       await attachments?.endAt(files, now() + SIGNED_URL_MS).catch((error: unknown) => {
         console.error('[fruitback] the files of a delivery that arrived keep their transit', delivery.id, error);
       });
@@ -471,7 +476,7 @@ export async function deliverDue({
 
     if (status !== undefined && status >= 200 && status < 300) {
       // The note arrived: that is written first, or a store of files that fails would send it again.
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
       // The receiver has the addresses of the files: they answer until the end of their signature,
       // and the files go then. A store that does not answer leaves them to the end of their transit,
       // 7 days at most, and the log says so.

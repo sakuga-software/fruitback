@@ -75,6 +75,9 @@ export const connectors = pgTable(
     // The name a workspace gave the connector (FRU-404), NULL for none: `label` stays the worker's.
     name: text('name'),
     linear_organization: text('linear_organization'),
+    // FRU-714: when the last send to the connector arrived: a note that a tracker took, or a delivery
+    // of the queue that an address took. NULL: none arrived since the column exists.
+    delivered_at: instant('delivered_at'),
   },
   (table) => [
     unique('connectors_installation_key').on(table.installation),
@@ -118,7 +121,7 @@ export const sites = pgTable(
     // the next one, as the mockup does. `addSite` writes the value in any case.
     visitor_edit: text('visitor_edit').notNull().default('while-open'),
     visitor_delete: text('visitor_delete').notNull().default('while-open'),
-    // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0054` adds it
+    // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0055` adds it
     // with 10, the value of the mockup, for every site, those of before included.
     visitor_notes_per_hour: integer('visitor_notes_per_hour').notNull().default(10),
   },

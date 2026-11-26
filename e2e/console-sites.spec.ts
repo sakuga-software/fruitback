@@ -1165,9 +1165,9 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   const form = page.getByRole('dialog', { name: 'Add a site' });
   const writers = form.getByRole('radiogroup', { name: 'Who can leave a note?' });
 
-  // A new site is « Members only », and the detail says what private mode needs.
+  // A new site is « Members only », and the detail says what extension mode needs.
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
-  await expect(writers).toContainText('In private mode the extension holds no session');
+  await expect(writers).toContainText('In extension mode the extension holds no session');
   await expect(writers).toContainText(/«\sAnyone on the page\s»/);
   await expectNoViolation(page, 'the form with « Who can leave a note? »', '[role="dialog"]');
 

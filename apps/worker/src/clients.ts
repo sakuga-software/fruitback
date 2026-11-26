@@ -93,7 +93,7 @@ const clientSchema = z.object({
    *
    * **This is the closest thing to a mode, and there is deliberately no `mode` field beside it**
    * (FRU-46). A client's mode is decided in the reviewer's browser — one field on the site's entry
-   * in the extension — and the worker cannot observe it: a private-mode read and a public-mode read
+   * in the extension — and the worker cannot observe it: an extension-mode read and a public-mode read
    * are the same anonymous `GET`. A field here would be a declaration nothing checks and nothing
    * enforces, and a switch that controls nothing is worse than no switch. What the worker can say is
    * what it actually decides, which is this one. The modes are named for a reader in

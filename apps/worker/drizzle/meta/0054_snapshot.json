@@ -1,5 +1,5 @@
 {
-  "id": "c7347361-50b2-4d70-ad51-922a96c74b6f",
+  "id": "2fa26c50-cf0e-4137-9620-d849b36e1f3d",
   "prevId": "ce077596-97a9-4918-a6bb-c1b553759161",
   "version": "7",
   "dialect": "postgresql",
@@ -999,6 +999,12 @@
         "linear_organization": {
           "name": "linear_organization",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": false
         }
@@ -3332,13 +3338,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'while-open'"
-        },
-        "visitor_notes_per_hour": {
-          "name": "visitor_notes_per_hour",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 10
         }
       },
       "indexes": {

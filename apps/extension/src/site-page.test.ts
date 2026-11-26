@@ -103,9 +103,9 @@ describe('the page of the extension (FRU-301)', () => {
     assert.deepEqual(
       lines.map((line) => [...line.querySelectorAll('td')].slice(1, 4).map((cell) => cell.textContent)),
       [
-        ['Private', 'feedback.acme.dev', 'Granted'],
+        ['Extension', 'feedback.acme.dev', 'Granted'],
         ['Team', 'api.fruitback.com', 'No access'],
-        ['Private', 'feedback.acme.dev', 'Runs nowhere'],
+        ['Extension', 'feedback.acme.dev', 'Runs nowhere'],
       ],
     );
     assert.equal(lines[1]?.getAttribute('aria-selected'), 'true');
@@ -138,7 +138,7 @@ describe('the page of the extension (FRU-301)', () => {
 
     assert.equal(aside.getAttribute('aria-label'), 'Site details');
     assert.equal(aside.querySelector('.panel-pattern')?.textContent, 'https://staging.acme.dev');
-    assert.equal(aside.querySelector('[role="tab"][aria-selected="true"]')?.textContent, 'Private');
+    assert.equal(aside.querySelector('[role="tab"][aria-selected="true"]')?.textContent, 'Extension');
     assert.equal(
       aside.querySelector('.panel-hint')?.textContent,
       'The site needs no code: the extension shows the widget for you only.',

@@ -6,7 +6,7 @@ import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 
 /**
- * `0054_sites_visitor_notes_per_hour` (FRU-704) on a database that holds sites already. Every site
+ * `0055_sites_visitor_notes_per_hour` (FRU-704) on a database that holds sites already. Every site
  * takes 10 notes of a visitor an hour, the value of the mockup, those of before included: Fruitback
  * has no users yet. The routes are told it only where a visitor writes.
  */
@@ -17,7 +17,7 @@ for (const { label, open, skip } of DATABASES) {
   describe(`the notes of a visitor in an hour, on ${label} (FRU-704)`, { skip: skip !== false }, () => {
     it('gives every site of before and after 10 an hour, and tells the routes only where a visitor writes', async () => {
       const database = await opening(open);
-      await migrate(database, migrationsThrough('0053_sites_visitor_rights_default'));
+      await migrate(database, migrationsThrough('0054_connector_delivered_at'));
       for (const statement of [
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_acme', 'Acme', 'ws_acme', now())`,
         `INSERT INTO sites (id, workspace_id, origin, visibility, writers, created_at) VALUES

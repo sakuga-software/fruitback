@@ -59,11 +59,7 @@ export type MoreFooter = {
   settled: () => void;
 };
 
-/**
- * « ⋯ » and its menu. The arrows go from one item to the next, Home and End to the ends, Enter or
- * Space takes one, Escape closes the menu and gives the focus back to « ⋯ », Tab closes it and goes
- * on. Escape stops there: the thread stays open.
- */
+/** « ⋯ » and its menu, with the keys of `wireMenu`. */
 export function moreMenu(document: Document, issue: NoteIssue, t: Translator, more: MoreFooter): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'fruitback-thread-more-wrap';
@@ -84,6 +80,8 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', t.text('more.open'));
   menu.hidden = true;
+  // Set by `wireMenu`, below: an item closes the menu before it runs.
+  let close: (refocus: boolean) => void = () => undefined;
 
   const item = (
     key: `more.${'edit' | 'editText' | 'copyLink' | 'move' | 'withdraw' | 'delete'}`,
@@ -135,10 +133,31 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     ...(more.withdraw === undefined ? [] : [withdrawItem(more.withdraw)]),
   ];
 
+  close = wireMenu(document, { wrap, trigger, menu, items });
+  wrap.append(trigger, menu);
+
+  return wrap;
+}
+
+/** The parts of a menu of a thread: the button that opens it, the list, and its items in order. */
+export type MenuParts = { wrap: HTMLElement; trigger: HTMLButtonElement; menu: HTMLElement; items: HTMLElement[] };
+
+/**
+ * The keys and the clicks of a menu of a thread (FRU-605), « ⋯ » and the status (FRU-718). The arrows
+ * go from one item to the next, Home and End to the ends, Enter or Space takes one, Escape closes the
+ * menu and gives the focus back to its button, Tab closes it and goes on. Escape stops there: the
+ * thread stays open. `first`: the item the menu opens on, by the arrow down or a click. Answers what
+ * closes the menu, with the focus back on its button or not.
+ */
+export function wireMenu(
+  document: Document,
+  { wrap, trigger, menu, items }: MenuParts,
+  first = 0,
+): (refocus: boolean) => void {
   function open(focus: 'first' | 'last'): void {
     menu.hidden = false;
     trigger.setAttribute('aria-expanded', 'true');
-    (focus === 'first' ? items[0] : items[items.length - 1])?.focus();
+    (focus === 'first' ? items[first] : items[items.length - 1])?.focus();
   }
 
   function close(refocus: boolean): void {
@@ -157,8 +176,8 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     event.preventDefault();
     open(event.key === 'ArrowDown' ? 'first' : 'last');
   });
-  // On the whole of « ⋯ » and its menu, the trigger included: while the menu is open, Escape closes
-  // the menu only. The thread closes on an Escape that reaches the document.
+  // On the whole of the menu and its button: while the menu is open, Escape closes the menu only. The
+  // thread closes on an Escape that reaches the document.
   wrap.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || menu.hidden) return;
     event.preventDefault();
@@ -172,7 +191,7 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
 
       return;
     }
-    const at = items.indexOf(deepActiveElement(document) as HTMLButtonElement);
+    const at = items.indexOf(deepActiveElement(document) as HTMLElement);
     const next: Record<string, number> = {
       ArrowDown: (at + 1) % items.length,
       ArrowUp: (at - 1 + items.length) % items.length,
@@ -183,16 +202,14 @@ export function moreMenu(document: Document, issue: NoteIssue, t: Translator, mo
     event.preventDefault();
     items[next[key]]?.focus();
   });
-  // The focus leaves the menu and « ⋯ »: the menu closes, as a click out of it does.
+  // The focus leaves the menu and its button: the menu closes, as a click out of it does.
   wrap.addEventListener('focusout', (event) => {
     const to = (event as FocusEvent).relatedTarget;
     if (to !== null && wrap.contains(to as Node)) return;
     close(false);
   });
 
-  wrap.append(trigger, menu);
-
-  return wrap;
+  return close;
 }
 
 async function clipboardOf(document: Document): Promise<Clipboard> {

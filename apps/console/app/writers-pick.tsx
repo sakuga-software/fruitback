@@ -7,8 +7,8 @@ import { useLocale } from './use-locale';
  * « Who can leave a note » (FRU-330), under « Who sees the notes? »: shown only for a site that its
  * members read, where it decides something. A site that everyone reads takes a note from anybody.
  *
- * WARNING: private mode carries no session. The detail of « Members only » says so: a site that a
- * reviewer opens in private mode takes no note unless it says « Anyone on the page ».
+ * WARNING: extension mode carries no session. The detail of « Members only » says so: a site that a
+ * reviewer opens in extension mode takes no note unless it says « Anyone on the page ».
  */
 export function WritersPick({
   visibility,
@@ -32,7 +32,7 @@ export function WritersPick({
           value: 'members',
           label: t('Members only'),
           detail: t(
-            'A note needs the extension, connected by a member. In private mode the extension holds no session, so a site you review in private mode needs « Anyone on the page ».',
+            'A note needs the extension, connected by a member. In extension mode the extension holds no session, so a site you review in extension mode needs « Anyone on the page ».',
           ),
         },
         {

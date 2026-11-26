@@ -131,7 +131,7 @@ describe('« Servers and sessions » (FRU-302)', () => {
 
     assert.equal(
       section.querySelector('.worker-text')?.textContent,
-      'Not connected. Private-mode sites read without a session; a team site would show nothing.',
+      'Not connected. Extension-mode sites read without a session; a team site would show nothing.',
     );
     assert.equal(input?.getAttribute('aria-label'), 'Connection code');
     assert.equal(input?.value, 'ABCD-EFGH-JKMN');

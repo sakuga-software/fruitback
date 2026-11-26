@@ -234,6 +234,13 @@ export const noteIssueSchema = z.object({
    */
   withdrawable: z.literal(true).optional(),
   /**
+   * `true` on a note whose status the reader may change from its thread (FRU-718), with the rights of
+   * `POST /feedback/<id>/status`: a member who left it, or a role that manages the sites, with a
+   * session, on a site whose store keeps statuses. Absent for every other note and reader: a visitor,
+   * a guest with no right on the site, a note of a tracker. Read-envelope field.
+   */
+  canSetStatus: z.literal(true).optional(),
+  /**
    * An agent works on this note (FRU-618): a call of the trigger of its site started a session of a
    * routine for it. `url`, the address of that session (https only), only for a member of the team who
    * sees the tracker: a reviewer cannot open a session of the team. Read-envelope field, after the cache.

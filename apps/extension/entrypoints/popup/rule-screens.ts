@@ -65,7 +65,7 @@ export function siteWithoutAccess(
 
 export const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
 /**
- * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66), and, in both
+ * Why an extension-mode site shows no note on a worker that reads `authenticated` (FRU-66), and, in both
  * modes, a rule whose worker is not at its address (FRU-395).
  *
  * The line is empty until the worker answers, and stays empty unless the answer is a `401`. The
@@ -92,7 +92,7 @@ export function readability(site: SiteConfig, pageUrl: string): HTMLElement {
       guide.href = MODES_GUIDE;
       guide.target = '_blank';
       guide.rel = 'noreferrer';
-      // FRU-330: a site whose notes are « Members only » refuses the notes of private mode too.
+      // FRU-330: a site whose notes are « Members only » refuses the notes of extension mode too.
       const sentence = answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION;
       line.append(`${t(sentence)} `, guide);
     },
@@ -104,7 +104,7 @@ export function readability(site: SiteConfig, pageUrl: string): HTMLElement {
 /**
  * Ask for the mode, and for what that mode cannot work without.
  *
- * The client id is asked for in private mode only. In team mode the site embeds its own widget and
+ * The client id is asked for in extension mode only. In team mode the site embeds its own widget and
  * declares its own client id, and a second one stored here would be a value nothing reads.
  */
 export function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLElement {
@@ -227,7 +227,7 @@ export function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnTy
   return wrapper;
 }
 
-/** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */
+/** What this entry is switching, in one phrase: a client id in extension mode, the mode in team. */
 export function describeSite(site: SiteConfig): string {
   if (site.mode === 'private') return site.clientId;
   if (site.mount !== undefined) {
@@ -240,7 +240,7 @@ export function describeSite(site: SiteConfig): string {
 export function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   for (const [value, text] of [
-    ['private', 'Private · the extension shows the widget'],
+    ['private', 'Extension · the extension shows the widget'],
     ['team', 'Team · the site embeds it, the extension adds your session'],
   ]) {
     const option = document.createElement('option');

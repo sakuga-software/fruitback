@@ -85,7 +85,7 @@ test.describe('with the address of the tab', () => {
     expect(await background(launch)).toBe(FRUITBACK_RED);
 
     // The side panel: « Leave a note » in orange. The popup's is played in `popup-layout.spec.ts`,
-    // which has a site of a workspace: a private rule has no « Leave a note » in the popup.
+    // which has a site of a workspace: an extension-mode rule has no « Leave a note » in the popup.
     const panel = await panelBehind(extension, site);
     const leave = panel.getByRole('button', { name: 'Leave a note' });
     await expect(leave).toBeVisible();
