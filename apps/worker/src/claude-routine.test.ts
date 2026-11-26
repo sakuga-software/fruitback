@@ -368,7 +368,8 @@ describe('the call of a trigger to a routine (FRU-594)', () => {
     assert.equal(read.deliveries[0]?.lastError, 'The routine or its API trigger is gone');
     assert.equal((await attention())?.reason, 'routine-gone');
 
-    // A trigger made again under the same id starts at the next call, and the attention ends.
+    // The same trigger answers again (the 404 was a passing one): the next call starts it and ends the
+    // attention. A trigger that stays gone keeps it until its connector is removed, as the console says.
     delete fake.next.status;
     delete fake.next.body;
     await call(world, 'POST', `/feedback?client=${shop.id}`, {

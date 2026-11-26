@@ -331,7 +331,10 @@ export async function deliverDue({
     // 401 and 403: the token is refused (deleted, or regenerated). It will be refused at each attempt
     // left, so the call is given up now and the connector needs attention, as a key a tracker refuses.
     // 404: the routine or its API trigger is gone, and the connector needs attention too (FRU-627).
-    // 429 and the others are tried again.
+    // Each new call of a trigger still tries it once: if that same trigger answers again (the 404 was
+    // a passing one of claude.ai), the call starts it and ends the attention. Otherwise the attention
+    // stays until the connector is removed: a new trigger has its own Fire URL, so its own connector,
+    // and the console says to connect it and disconnect this one. 429 and the others are tried again.
     const refused = status === 401 || status === 403;
     if (refused) {
       error = 'The routine refused its token: generate a new one at claude.ai/code/routines';
