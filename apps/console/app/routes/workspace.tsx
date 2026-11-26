@@ -25,7 +25,21 @@ import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
-import { type SavedView, type ViewId, VIEWS, viewAddress, viewOf, viewsFor } from '../saved-views';
+import {
+  type PersonalView,
+  type SavedView,
+  type ViewId,
+  VIEWS,
+  deleteView,
+  readPersonalViews,
+  renameView,
+  sameFilters,
+  viewAddress,
+  viewOf,
+  viewsFor,
+} from '../saved-views';
+import { DeleteViewDialog, ViewNameDialog, viewProblem } from '../parts/view-dialogs';
+import { NoteIcon } from '../note-icons';
 import { weekStart } from '../parts/notes-model';
 
 /**
@@ -52,9 +66,19 @@ type WorkspaceContext = {
    * may be wrong now (a task was written), and the bar shows none.
    */
   viewCounted: (view: ViewId, count: number | undefined) => void;
+  /**
+   * FRU-723: the views of the person in this workspace, oldest first, as the worker keeps them.
+   * `undefined` while they are read, or when the read failed: the Notes screen then offers no « Save view ».
+   */
+  personalViews: readonly PersonalView[] | undefined;
+  /** FRU-723: the Notes screen kept a view of the person: the bar shows it at once, as the one on screen. */
+  viewSaved: (view: PersonalView) => void;
 };
 
-type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted'>;
+type Read = Omit<
+  WorkspaceContext,
+  'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted' | 'personalViews' | 'viewSaved'
+>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -171,6 +195,23 @@ export default function WorkspaceFrame() {
     };
   }, [id]);
 
+  // FRU-723: the views of the person, read once when the frame mounts and at each change of workspace.
+  const [personal, setPersonal] = useState<{ workspace: string; views: readonly PersonalView[] }>();
+  // The view whose menu asked « Rename » or « Delete »: kept while its dialog closes, so its name stays.
+  const [editing, setEditing] = useState<{ action: 'rename' | 'delete'; view: PersonalView; open: boolean }>();
+  useEffect(() => {
+    setPersonal(undefined);
+    if (id === undefined) return;
+    let current = true;
+    void readPersonalViews(id).then((views) => {
+      if (current && views !== undefined) setPersonal({ workspace: id, views });
+    });
+
+    return () => {
+      current = false;
+    };
+  }, [id]);
+
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
@@ -239,6 +280,11 @@ export default function WorkspaceFrame() {
         return { workspace, counts };
       });
     },
+    personalViews: personal?.workspace === context.workspace.id ? personal.views : undefined,
+    viewSaved: (view) => {
+      const workspace = context.workspace.id;
+      setPersonal((was) => (was?.workspace === workspace ? { workspace, views: [...was.views, view] } : was));
+    },
   };
 
   const sections = sectionsFor(context.workspace);
@@ -246,10 +292,16 @@ export default function WorkspaceFrame() {
   // FRU-697: the Notes screen with the filters of a view, and no other, is that view: its entry is the
   // one on screen, not « Notes ».
   const views = viewsFor(context.workspace.role);
-  const inView =
-    pathname === `/w/${context.workspace.id}/notes`
-      ? views.find((view) => view.id === viewOf(new URLSearchParams(search))?.id)
-      : undefined;
+  const onNotes = pathname === `/w/${context.workspace.id}/notes`;
+  const inView = onNotes ? views.find((view) => view.id === viewOf(new URLSearchParams(search))?.id) : undefined;
+  // FRU-723: a view of the person is the one on screen the same way, after the views of the mockup.
+  const mine = outlet.personalViews ?? [];
+  const address = Object.fromEntries(new URLSearchParams(search));
+  const inMine = onNotes && inView === undefined ? mine.find((view) => sameFilters(address, view.filters)) : undefined;
+  const workspaceId = context.workspace.id;
+  const close = () => setEditing((was) => (was === undefined ? was : { ...was, open: false }));
+  const replaced = (change: (views: readonly PersonalView[]) => readonly PersonalView[]) =>
+    setPersonal((was) => (was?.workspace === workspaceId ? { workspace: workspaceId, views: change(was.views) } : was));
 
   return (
     <Frame
@@ -258,9 +310,12 @@ export default function WorkspaceFrame() {
           workspace={context.workspace}
           workspaces={context.me.workspaces}
           sections={sections}
-          current={inView === undefined ? current?.path : undefined}
+          current={inView === undefined && inMine === undefined ? current?.path : undefined}
           views={views}
           {...(inView === undefined ? {} : { currentView: inView.id })}
+          personal={mine}
+          {...(inMine === undefined ? {} : { currentPersonal: inMine.id })}
+          onPersonal={(view, action) => setEditing({ action, view, open: true })}
           {...(viewCounts?.workspace === context.workspace.id ? { viewCounts: viewCounts.counts } : {})}
           onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
           onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
@@ -279,6 +334,35 @@ export default function WorkspaceFrame() {
       <Screen>
         <Outlet context={outlet} />
       </Screen>
+      <ViewNameDialog
+        open={editing?.action === 'rename' && editing.open}
+        title={t('Rename the view')}
+        saveLabel={t('Rename')}
+        initial={editing?.view.name ?? ''}
+        onClose={close}
+        onSave={async (name) => {
+          const view = editing?.view;
+          if (view === undefined) return undefined;
+          const answer = await renameView(workspaceId, view.id, name);
+          if (!answer.ok) return viewProblem(answer);
+          replaced((each) => each.map((kept) => (kept.id === view.id ? answer.data : kept)));
+
+          return undefined;
+        }}
+      />
+      <DeleteViewDialog
+        open={editing?.action === 'delete' && editing.open}
+        name={editing?.view.name ?? ''}
+        onClose={close}
+        onDelete={async () => {
+          const view = editing?.view;
+          if (view === undefined) return true;
+          const deleted = await deleteView(workspaceId, view.id);
+          if (deleted) replaced((each) => each.filter((kept) => kept.id !== view.id));
+
+          return deleted;
+        }}
+      />
     </Frame>
   );
 }
@@ -380,6 +464,12 @@ type RailProps = {
   currentView?: ViewId;
   /** The count of each view, when the Notes screen read it. A view with no count shows none. */
   viewCounts?: Readonly<Partial<Record<ViewId, number>>>;
+  /** FRU-723: the views of the person, under the views of the mockup, each with a menu. */
+  personal?: readonly PersonalView[];
+  /** The view of the person on screen. */
+  currentPersonal?: string;
+  /** « Rename » or « Delete » from the menu of a view of the person. */
+  onPersonal?: (view: PersonalView, action: 'rename' | 'delete') => void;
 };
 
 /**
@@ -397,6 +487,13 @@ type RailEntry = {
   alert?: number;
   /** FRU-722: a count of what did not arrive, red when it is more than zero (« Not delivered »). */
   redCount?: boolean;
+  /** What tells two entries of one address apart: the id of a view of the person (FRU-723). */
+  key?: string;
+  /**
+   * FRU-723: a menu at the right of the entry, beside its link and not in it. It shows under the
+   * pointer, with the focus, and always on a screen of touch.
+   */
+  menu?: ReactNode;
 };
 
 /** The words of each view of the bar (FRU-697). */
@@ -513,6 +610,9 @@ export function Rail({
   views = [],
   currentView,
   viewCounts = {},
+  personal = [],
+  currentPersonal,
+  onPersonal = () => undefined,
 }: RailProps) {
   useLocale();
   const name = (
@@ -593,18 +693,42 @@ export function Rail({
           ...(section.path === 'connectors' && failing > 0 ? { alert: failing } : {}),
         }))}
       />
-      {views.length === 0 ? null : (
+      {views.length === 0 && personal.length === 0 ? null : (
         <RailNav
           label={t('Views')}
           heading
-          entries={views.map((view) => ({
-            to: viewAddress(workspace.id, view),
-            label: t(VIEW_LABELS[view.id]),
-            current: view.id === currentView,
-            mark: <ViewMark view={view.id} account={account} />,
-            ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
-            ...(view.alert === true ? { redCount: true } : {}),
-          }))}
+          entries={[
+            ...views.map((view) => ({
+              to: viewAddress(workspace.id, view),
+              label: t(VIEW_LABELS[view.id]),
+              current: view.id === currentView,
+              mark: <ViewMark view={view.id} account={account} />,
+              ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
+              ...(view.alert === true ? { redCount: true } : {}),
+            })),
+            // FRU-723: the views of the person, with the name they gave, and a menu to rename or delete.
+            ...personal.map((view) => ({
+              key: view.id,
+              to: viewAddress(workspace.id, view),
+              label: view.name,
+              current: view.id === currentPersonal,
+              icon: 'filter' as const,
+              menu: (
+                <Menu
+                  trigger="icon"
+                  triggerLabel={t('Actions of the view {name}', { name: view.name })}
+                  items={[
+                    { id: 'rename', label: t('Rename…') },
+                    // The menu is the first time a deletion is asked, and the dialog the second.
+                    { id: 'delete', label: t('Delete…'), danger: true },
+                  ]}
+                  onAction={(action) => onPersonal(view, action === 'delete' ? 'delete' : 'rename')}
+                >
+                  <NoteIcon name="more" />
+                </Menu>
+              ),
+            })),
+          ]}
         />
       )}
       {admin ? (
@@ -947,25 +1071,37 @@ export function RailNav({
           {label}
         </div>
       ) : null}
-      {entries.map((entry) => (
-        <Link
-          key={entry.to}
-          to={entry.to}
-          // A move between screens and frames cross-fades the screen, the bar held (FRU-356).
-          viewTransition
-          {...(entry.current ? { 'aria-current': 'page' as const } : {})}
-          className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ENTRY_REST}`}
-        >
-          {entry.mark ??
-            (entry.icon === undefined ? null : (
-              <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>
-                <RailIcon name={entry.icon} />
-              </span>
-            ))}
-          <span className="min-w-0 truncate">{entry.label}</span>
-          <EntryCount count={entry.count} alert={entry.alert} red={entry.redCount === true} />
-        </Link>
-      ))}
+      {entries.map((entry) => {
+        const link = (
+          <Link
+            key={entry.key ?? entry.to}
+            to={entry.to}
+            // A move between screens and frames cross-fades the screen, the bar held (FRU-356).
+            viewTransition
+            {...(entry.current ? { 'aria-current': 'page' as const } : {})}
+            className={`${ENTRY} ${entry.current ? ENTRY_CURRENT : ENTRY_REST} ${entry.menu === undefined ? '' : 'flex-1 pr-[32px]'}`}
+          >
+            {entry.mark ??
+              (entry.icon === undefined ? null : (
+                <span className={`${ENTRY_ICON} ${entry.current ? 'text-ink-soft' : ''}`}>
+                  <RailIcon name={entry.icon} />
+                </span>
+              ))}
+            <span className="min-w-0 truncate">{entry.label}</span>
+            <EntryCount count={entry.count} alert={entry.alert} red={entry.redCount === true} />
+          </Link>
+        );
+        if (entry.menu === undefined) return link;
+
+        return (
+          <div key={entry.key ?? entry.to} data-entry-menu="" className="group/entry relative flex min-w-0">
+            {link}
+            <span className="absolute top-1/2 right-[2px] flex -translate-y-1/2 opacity-0 group-hover/entry:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 pointer-coarse:opacity-100">
+              {entry.menu}
+            </span>
+          </div>
+        );
+      })}
     </nav>
   );
 }

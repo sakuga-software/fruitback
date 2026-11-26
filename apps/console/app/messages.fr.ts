@@ -1119,6 +1119,25 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // FRU-722: the views « New this week » and « Not delivered », and their filters.
   'New this week': 'Nouvelles cette semaine',
   'Not delivered': 'Non livrées',
+  // FRU-723: the views of the person, saved from the bar of filters of the notes.
+  'Save view': 'Enregistrer la vue',
+  'Urgent bugs': 'Bugs urgents',
+  'Only you see your views, in each browser where you sign in.':
+    'Vous seul voyez vos vues, dans chaque navigateur où vous vous connectez.',
+  'Rename the view': 'Renommer la vue',
+  'Rename…': 'Renommer…',
+  'Actions of the view {name}': 'Actions de la vue {name}',
+  'Delete the view': 'Supprimer la vue',
+  'The view « {name} » goes from your bar. Its notes stay where they are.':
+    'La vue « {name} » quitte votre barre. Ses notes restent où elles sont.',
+  'Delete « {name} »': 'Supprimer « {name} »',
+  'The view was not deleted. Try again.': 'La vue n’a pas été supprimée. Réessayez.',
+  'You keep 20 views already. Delete one, then save this one.':
+    'Vous gardez déjà 20 vues. Supprimez-en une, puis enregistrez celle-ci.',
+  'This view has a filter that you cannot keep.': 'Cette vue a un filtre que vous ne pouvez pas garder.',
+  'Give the view a name of one line, 60 characters at most.':
+    'Donnez à la vue un nom d’une ligne, de 60 caractères au plus.',
+  'The view was not saved. Try again.': 'La vue n’a pas été enregistrée. Réessayez.',
   Left: 'Laissée',
   'This week': 'Cette semaine',
   'Any time': 'N’importe quand',

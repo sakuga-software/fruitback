@@ -5387,3 +5387,48 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `get_note`, where a note of a page is `{ note }`.
 - **A task put in To do at its creation starts the agent of its site** (`moved-to-todo`), as a move
   of a person there does.
+
+## The views of a person (FRU-723)
+
+### The rules, in short
+
+- **`GET`, `POST …/views`, `POST`, `DELETE …/views/<view>`** (`console-saved-views.ts`): the views a
+  person keeps in a workspace, oldest first, `{ id, name, filters, createdAt }`. A view of another
+  person, or of another workspace, is `404`, as a view that does not exist. Every role that reads the
+  notes (`read-feedback`) keeps views.
+- **`filters` are the names and values of the address of the Notes screen** (`VIEW_FILTERS`, the
+  `FILTERS` of the console), and are checked by `queryOf` of `console-notes.ts`, the reader of the
+  list itself: a value the list refuses is `400 invalid-filters` with its field. `created=week` is
+  checked as `since`, and `due` with a day, as the console sends them. A view has a filter at least:
+  with none it is « Notes ».
+- **A person keeps only filters they can read**: `place` and `undelivered` need `see-tracker`, and a
+  guest names only a site shared with them, or `403`. The views are checked again at each read: a
+  view that the role of its person no longer reads is not answered, and is kept.
+- **The table `saved_views` is beside the membership** (`member_id`, `ON DELETE CASCADE`), as
+  `last_seen`: a person who leaves loses their views, and the workspace takes them with it.
+- **20 views a person in a workspace** (`MAX_SAVED_VIEWS`), counted under a lock of the row of the
+  membership (`FOR UPDATE`): two saves at the same moment count each other. A name is trimmed, 60
+  characters at most, on one line.
+
+### The reasons
+
+- **In the database, not in `localStorage`**: the ticket asks that a view follows its person from one
+  browser to another. The console reads them once with the frame of a workspace, as the counts of the
+  bar.
+- **Beside the membership and not the account**: a view names sites, labels and people of one
+  workspace, and means nothing in another one. A person who comes back to a workspace is another
+  member, with what they read then.
+- **Checked by the reader of the list**: a second list of rules would drift from the list, and a view
+  would then name a filter the list refuses. The check at each read costs no statement: the role and
+  the sites are read once (`reach`).
+- **The lock**: without it, 24 saves at once kept more than 20 views on a real PostgreSQL, three runs
+  out of three; with it, 20 (test:`counts two views saved at once against the limit` on PGlite, and the
+  case of the conformance suite on a server).
+
+### What it costs
+
+Measured in the process, `handleSavedViews` called with the store of the accounts on PostgreSQL 17 in
+a container, the statements counted in the log of the server: 50 workspaces of 200 members, every
+member with 20 views (10 000 members, 200 000 views). 60 calls after 10, three runs: `GET …/views`
+1.9 to 2.3 ms median, 2.6 to 3.3 ms p95, 2 statements (`reach`, then the views). The plan finds the
+member by `member_userId_idx` and the views by `saved_views_by_member` (0.04 ms of execution).
