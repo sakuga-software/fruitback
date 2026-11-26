@@ -152,8 +152,10 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **The copy does not leave the Shadow root** (`composed: false`). The handlers of the widget run on
   it, and a `preventDefault` of the copy cancels the key. The browser types the text, pastes, and
   composes with an IME from the key itself: nobody cancelled it, and an untrusted copy types nothing.
-- **A handler of the widget on the document does not hear a key of its fields.** The thread hears
-  Escape again on the root, through `isTypingCopy`. A new one does the same.
+- **A handler of the widget on the document does not hear a key of its fields.** The thread (Escape)
+  and the Tab trap of a modal dialog (a Tab from the search of the list) hear the copy again on the
+  root, through `isTypingCopy`. A new one does the same. The capture mode does not: a field of the
+  widget keeps its arrows during a capture.
 - **The keys of the widget stay off while a field of the page has focus** (`pageFieldHasFocus`): the
   capture mode leaves the arrows, Enter, Space and Escape to it, and the thread does not close on its
   Escape. Tab still comes back into an open popover or panel, which are modal.

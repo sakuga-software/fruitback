@@ -1,4 +1,3 @@
-import { deepActiveElement } from './focus.ts';
 import { isElement } from './dom.ts';
 
 /**
@@ -57,7 +56,9 @@ export function isTypingCopy(event: Event): boolean {
 
 /** Whether a field of the page, out of the widget's `root`, has the focus: the widget's keys then stay off. */
 export function pageFieldHasFocus(document: Document, root: Node): boolean {
-  const active = deepActiveElement(document);
+  // `deepActiveElement` of `focus.ts`, here so that `focus.ts` can read `isTypingCopy` with no cycle.
+  let active = document.activeElement;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
 
   return active !== null && !root.contains(active) && takesText(active);
 }
