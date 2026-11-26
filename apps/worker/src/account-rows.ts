@@ -174,6 +174,8 @@ export function connectorOf(row: Record<string, unknown> | undefined): Connector
     ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
     settings: connectorSettingsOf(row.settings),
+    // FRU-714: read by `connectors` only. A read that does not select it says no delivery.
+    ...(typeof row.delivered_at === 'number' ? { deliveredAt: new Date(row.delivered_at).toISOString() } : {}),
     ...(reason === undefined
       ? {}
       : {
