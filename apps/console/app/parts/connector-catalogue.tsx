@@ -323,7 +323,8 @@ function Tile({
       <div className="flex min-h-[62px] min-w-0 items-center gap-[12px]">
         <span className="relative flex-none">
           <ConnectorLogo kind={entry.kind} />
-          {connected > 0 ? <Count count={connected} said={adds} /> : null}
+          {/* The label of « Add » says the count, except while it is busy (raised in review). */}
+          {connected > 0 ? <Count count={connected} said={adds && offer.busy === undefined} /> : null}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-[4px]" title={detail === '' ? undefined : detail}>
           <span className="flex min-w-0 items-center gap-[6px]">

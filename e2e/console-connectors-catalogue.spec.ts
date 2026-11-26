@@ -367,6 +367,7 @@ test('several connections of one kind: a row each, a count on the logo, and « A
   const count = linear.locator('[data-count]');
   await expect(count).toHaveText('2');
   await expect(count).toHaveAttribute('aria-hidden', 'true');
+  await expect(linear.locator('.sr-only')).toHaveCount(0);
   expect.soft(await painted(count, 'backgroundColor')).toEqual(rgb(DONE));
   const logo = await box(linear.locator('img[data-logo="linear"]').locator('..'));
   const disc = await box(count);
@@ -392,6 +393,8 @@ test('several connections of one kind: a row each, a count on the logo, and « A
   const going = linear.getByRole('button', { name: 'Going to Linear…', exact: true });
   await expect(going).toBeDisabled();
   await expect(linear.getByRole('button', { name: /^Add another Linear/ })).toHaveCount(0);
+  // The count is then said in words, since the button no longer says it.
+  await expect(linear.locator('.sr-only')).toHaveText('2 connected');
   leave();
   await expect
     .poll(() => worker.sent.map((each) => each.pathname))
