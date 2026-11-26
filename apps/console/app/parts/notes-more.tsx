@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Button, Problem } from '../ui';
 import { ReadProblem } from '../read-problem';
 import { t } from '../i18n';
@@ -7,6 +7,41 @@ import { NOTES_KEPT } from '../notes-chunks';
 
 /** The read of the next notes: none on its way, on its way, or failed (FRU-724). */
 export type More = 'idle' | 'reading' | 'failed';
+
+/** The read of the next notes, and the notes the last one added, said to a screen reader. */
+type MoreState = { state: More; arrived: number | undefined };
+
+/**
+ * Where the screen keeps the read of the next notes (FRU-724). Not a state of the screen: a change of
+ * it (« Loading… », the words said to a screen reader) draws the end of the list again, not every
+ * row above it. At 450 rows a draw of the whole list was 140 ms of script (measured), and one went
+ * with each press of « Load more ».
+ */
+export type MoreStore = {
+  get: () => MoreState;
+  set: (changes: Partial<MoreState>) => void;
+  subscribe: (listener: () => void) => () => void;
+};
+
+export function moreStore(): MoreStore {
+  let value: MoreState = { state: 'idle', arrived: undefined };
+  const listeners = new Set<() => void>();
+
+  return {
+    get: () => value,
+    set(changes) {
+      const next = { ...value, ...changes };
+      if (next.state === value.state && next.arrived === value.arrived) return;
+      value = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+
+      return () => void listeners.delete(listener);
+    },
+  };
+}
 
 /**
  * How far before the end of the list the next notes are read: about twenty rows of 36 px, so that a
@@ -26,8 +61,7 @@ export function NotesMore({
   shown,
   total,
   more,
-  state,
-  arrived,
+  store,
   onMore,
 }: {
   /** The notes on the screen, and in the whole list. */
@@ -35,12 +69,12 @@ export function NotesMore({
   total: number;
   /** Whether the list has next notes to read: a cursor, and fewer notes than the screen keeps. */
   more: boolean;
-  state: More;
-  /** The notes the last read of the next notes added, said to a screen reader. */
-  arrived: number | undefined;
+  /** The read of the next notes, and the notes the last one added. */
+  store: MoreStore;
   onMore: () => void;
 }) {
   useLocale();
+  const { state, arrived } = useSyncExternalStore(store.subscribe, store.get);
   const end = useRef<HTMLDivElement>(null);
   // Whether the end of the list is near the window: the observer says it, and a read that ends reads
   // on while it stays there (a tall window, a chunk that did not fill it).

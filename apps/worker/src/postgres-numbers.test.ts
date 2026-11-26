@@ -11,6 +11,7 @@ import * as authSchema from './auth-schema.ts';
 import type { PgDatabase } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
@@ -201,7 +202,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixty BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixty-one BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -218,6 +219,7 @@ it('knows the sixty BIGINT columns of the worker, and that better-auth has none'
     'connect_requests.expires_at',
     'connectors.attention_at',
     'connectors.created_at',
+    'connectors.delivered_at',
     'deliveries.created_at',
     'deliveries.last_at',
     'deliveries.next_at',
@@ -269,7 +271,7 @@ it('knows the sixty BIGINT columns of the worker, and that better-auth has none'
 });
 
 for (const { label, open, skip } of [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const) {
   describe(`a BIGINT that a store reads, on ${label} (FRU-180)`, { skip: skip !== false }, () => {
@@ -305,7 +307,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 20);
+      assert.equal(nullable.length, 21);
       assert.deepEqual(wrong, []);
     });
 

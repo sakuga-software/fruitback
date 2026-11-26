@@ -526,8 +526,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     - **The head**: the handle (below), the status in a chip of 24 px (the edge and the corner of a
       control, the round of its stage as the list draws it, `createStageRing`, then its word), the way
       out to the ticket, the menu of the author and the cross, each 26 px drawn and 44 px to press.
-      **The status is read only**: no route of the worker and no message of the protocol change a
-      status from a page; the chevron of the mock-up waits for FRU-718.
+      **The status is read only** for a reader the read does not say `canSetStatus` to: no chevron,
+      no button. For the others it is a button with the chevron of the mock-up (FRU-718, below).
     - **The way out is the mark of its tracker, the identifier and the sign of a new tab**
       (« DEV-004 »): the mark of Linear (simple-icons, CC0) or of GitHub (Phosphor) when `trackerOf`
       reads the address, none otherwise. Its name is « DEV-004, in a new tab ».
@@ -2090,6 +2090,31 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `retry`; `403`, `404` and another `409` are `refused`.
 - **The reply of a withdrawal reads in the words of the reader** (`editFromPage`): the name, then
   « Withdrew the note », from the text the worker writes in either language of the team.
+
+## The status of a note, from the head of its thread (FRU-718)
+
+### The rules, in short
+
+- **Offered where the read says `canSetStatus`**: a member with a session who left the note, or a role
+  that manages the sites, on a site whose store keeps statuses. The chip of the status becomes a
+  button, the same chip with the chevron of the mock-up, 24 px drawn and 44 px to press. For every
+  other reader, a visitor and a guest with no right among them, the chip stays read only.
+- **The five stages of Fruitback, and nothing else** (decision of the orchestrator, 2026-11-26): the
+  menu lists New, To do, In progress, Done and Closed, each with the round of its stage, and sends the
+  built-in status of the stage (`own:<stage>`). A stage is named by the name the team gave its
+  built-in status, else by its word. A status the team added, and the states of a tracker, are chosen
+  in the console or in the tracker.
+- **The route of FRU-367, and no other**: `POST /feedback/<id>/status`, through the transport of the
+  host. The extension relays it with the session (`STATUS_PATH`, `relay.ts`): no message of the
+  protocol of the extension changes. A note of a tracker has no `canSetStatus`: its status changes
+  in the tracker, as in the console.
+- **A menu of `wireMenu`**, the keys of « ⋯ » (FRU-605): `menuitemradio`, the stage of the note
+  checked, the menu opens on it. Taking it sends nothing. Escape closes the menu, not the thread.
+- **No read after it, as after a withdrawal**: the stage and the status the worker answers go on the
+  issue (`applyStatus`), the word of the store goes (the name of the status or of the stage says it
+  until the next read), and the pins are drawn again with this thread kept open, which says « Status
+  changed: In progress. ». A failure says why, and the stage stays: `403`, `404` and `409` are
+  `refused`, `401` asks to sign in again, `429` to wait.
 
 ## The colour of « Send » (FRU-601)
 

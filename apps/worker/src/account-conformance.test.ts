@@ -16,6 +16,7 @@ import {
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   createMigratedPgliteDatabase,
   createMigratedRealDatabase,
   onDatabase,
@@ -31,6 +32,7 @@ const PGLITE = onDatabase(
   'createPostgresAccountStore',
   createMigratedPgliteDatabase,
   createPostgresAccountStore,
+  PGLITE_ELSEWHERE,
 );
 
 const SUBJECTS: Subject<AccountStore>[] = [
@@ -794,6 +796,42 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: {
       from: '.where(and(eq(sites.origin, origin), notSuspended(db)))',
       to: '.where(and(sql`lower(${sites.origin}) = lower(${origin})`, notSuspended(db)))',
+    },
+  },
+  {
+    breaks: 'counts the deliveries that wait for each connector of one workspace, and no other (FRU-714)',
+    by: 'counts the deliveries of every workspace',
+    replace: {
+      after: 'async waitingDeliveries(workspace) {',
+      from: '.where(eq(connectors.workspace_id, workspace))',
+      to: '.where(sql`true`)',
+    },
+  },
+  {
+    breaks: 'keeps the last delivery of a connector, and never an earlier one (FRU-714)',
+    by: 'writes an earlier moment of a tracker over a later one',
+    replace: {
+      after: 'async noteDelivered(connector, at) {',
+      from: 'or(isNull(connectors.delivered_at), lt(connectors.delivered_at, at))',
+      to: 'sql`true`',
+    },
+  },
+  {
+    breaks: 'keeps the last delivery of a connector, and never an earlier one (FRU-714)',
+    by: 'writes an earlier delivery of the queue over a later one',
+    replace: {
+      after: 'async settleDelivery(id, outcome) {',
+      from: 'or(isNull(connectors.delivered_at), lt(connectors.delivered_at, outcome.at)),',
+      to: 'sql`true`,',
+    },
+  },
+  {
+    breaks: 'removes a delivery that arrived, and no other',
+    by: 'keeps no moment for a delivery that arrived',
+    replace: {
+      after: 'async settleDelivery(id, outcome) {',
+      from: '.set({ delivered_at: outcome.at })',
+      to: '.set({ delivered_at: sql`${connectors.delivered_at}` })',
     },
   },
 ];
