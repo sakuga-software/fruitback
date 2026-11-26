@@ -77,6 +77,7 @@ describe('the words people paste', () => {
       notifyDone: false,
       visitorEdit: 'never' as const,
       visitorDelete: 'never' as const,
+      visitorNotesPerHour: 0 as const,
     };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
@@ -98,6 +99,7 @@ describe('the words people paste', () => {
       notifyDone: false,
       visitorEdit: 'never' as const,
       visitorDelete: 'never' as const,
+      visitorNotesPerHour: 0 as const,
     };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
@@ -124,6 +126,7 @@ describe('the words people paste', () => {
       destinations: [],
       notifyDone: false,
       visibility: 'everyone' as const,
+      visitorNotesPerHour: 10 as const,
     };
     const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
@@ -131,6 +134,24 @@ describe('the words people paste', () => {
     const closed = clientOf({ ...site, writers: 'members', visitorEdit: 'while-open', visitorDelete: 'while-open' });
     assert.equal('visitorEdit' in closed, false);
     assert.equal('visitorDelete' in closed, false);
+  });
+
+  it('gives the routes the notes a visitor leaves in an hour, only where a visitor writes and a limit is set (FRU-704)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visibility: 'everyone' as const,
+      visitorEdit: 'while-open' as const,
+      visitorDelete: 'while-open' as const,
+    };
+    assert.equal(clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 10 }).visitorNotesPerHour, 10);
+    // « No limit » is no field: the route counts nothing.
+    assert.equal('visitorNotesPerHour' in clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 0 }), false);
+    // A site of its members only has no visitor to count.
+    assert.equal('visitorNotesPerHour' in clientOf({ ...site, writers: 'members', visitorNotesPerHour: 10 }), false);
   });
 });
 

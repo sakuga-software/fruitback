@@ -265,6 +265,11 @@ The table `done_notices` keeps one row for each note that waits:
   one-minute windows, and keeps a window for two. It is a row of the table `kv` of the database,
   so that the replicas share one limit: the address is in the database for those two
   minutes, and in a backup taken during them. Expired rows are removed as requests come.
+- The address and the key of a visitor, for two hours, on a site that limits the notes of a
+  visitor in an hour (10 by default). The worker counts the notes of each visitor with no
+  account by the digest of the key of their browser and by their address, on that site, over
+  windows of one hour, and keeps a window for two. They are rows of the same table `kv`, and the
+  digest is never the key. A site that says « No limit » keeps neither.
 - The answer to a read, for 15 seconds, in the same table. The read
   cache keeps a page's notes so a burst of visitors costs one call to the store.
 - The address a sign-in link or an invitation was sent to, for the time of its limit, in the same

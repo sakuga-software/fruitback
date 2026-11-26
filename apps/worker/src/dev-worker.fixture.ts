@@ -1,7 +1,7 @@
 import { isOneOf } from './one-of.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
-import { type Visibility, WRITERS, type Writers } from './accounts.ts';
+import { VISITOR_NOTE_LIMITS, type Visibility, WRITERS, type Writers } from './accounts.ts';
 import { createPairingCommand } from './app.ts';
 import { newAgentKey } from './agent-keys.ts';
 import { digest } from './session.ts';
@@ -46,6 +46,11 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  * - **`POST /__dev/writers`** `{ writers, notifyDone? }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
+ * - **`POST /__dev/guards`** `{ visitorNotesPerHour? }` (FRU-704): the site `guards`, made at the first
+ *   call, and the safeguards of the card « Safeguards » set on it. Its own workspace, of its own
+ *   owner, at the origin of the playground: a spec of a safeguard mounts the widget with this id, and
+ *   the other specs, which share the site `playground`, are never counted by it. The site `playground`
+ *   says « No limit »: the suite sends many notes from one address.
  * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
  *   oldest first. The worker of development has no provider: it keeps them in this process. Only
  *   these messages: the sign-in by link stays off.
@@ -58,6 +63,8 @@ import { setMemoryNoteStage } from './linear-memory.ts';
 export const DEV_SITE = 'playground';
 export const DEV_PLAYGROUND = 'http://localhost:5177';
 export const DEV_CONSOLE = 'http://localhost:5178';
+/** The site of the specs of the safeguards (FRU-704), in a workspace of its own. */
+export const DEV_GUARDS_SITE = 'guards';
 /** The person of the workspace: its owner, and whoever pairs through `/__dev/pair`. */
 export const DEV_OWNER = 'dev@fruitback.test';
 
@@ -98,18 +105,78 @@ export async function seedDevWorkspace(
   const accounts = createPostgresAccountStore(database);
   const owner = await accounts.signIn({ provider: 'email', subject: DEV_OWNER, email: DEV_OWNER, name: 'Dev' });
   const workspace = await accounts.createWorkspace('Playground', owner.id);
-  const made = await accounts.addSite(workspace.id, site);
-  // The store gives a site an id of its own. The playground and the specs name `playground`, as the
-  // client of `FRUITBACK_CLIENTS` was named: one statement, on a table that nothing references yet.
+  // FRU-704: « No limit ». Every spec of the suite sends its notes to this site, from one address.
+  const made = await accounts.addSite(workspace.id, { ...site, visitorNotesPerHour: 0 });
+  await renameSite(database, made.id, DEV_SITE);
+
+  return { workspace: workspace.id, owner: owner.id };
+}
+
+/**
+ * The store gives a site an id of its own. The playground and the specs name `playground`, as the
+ * client of `FRUITBACK_CLIENTS` was named: one statement, on a table that nothing references yet.
+ */
+async function renameSite(database: PgDatabase, from: string, to: string): Promise<void> {
   const pool = await database.pool();
   const client = await pool.connect();
   try {
-    await client.query('UPDATE sites SET id = $1 WHERE id = $2', [DEV_SITE, made.id]);
+    await client.query('UPDATE sites SET id = $1 WHERE id = $2', [to, from]);
   } finally {
     client.release();
   }
+}
 
-  return { workspace: workspace.id, owner: owner.id };
+/** The owner of the workspace of the site `guards` (FRU-704): another person than `DEV_OWNER`. */
+const DEV_GUARDS_OWNER = 'guards@fruitback.test';
+
+/**
+ * `POST /__dev/guards` (FRU-704): the site `guards`, made at the first call, with the safeguards the
+ * body names. Anybody reads it and leaves a note there. `400` for a value the console would not send.
+ */
+async function setGuards(
+  database: PgDatabase,
+  made: { workspace?: Promise<string> },
+  incoming: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const asked = await bodyOf(incoming);
+  if (asked.visitorNotesPerHour !== undefined && !isOneOf(asked.visitorNotesPerHour, VISITOR_NOTE_LIMITS)) {
+    response
+      .writeHead(400, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'invalid-visitor-notes-per-hour' }));
+
+    return;
+  }
+  const accounts = createPostgresAccountStore(database);
+  // One workspace for the life of the process, whichever call comes first.
+  made.workspace ??= (async () => {
+    const owner = await accounts.signIn({
+      provider: 'email',
+      subject: DEV_GUARDS_OWNER,
+      email: DEV_GUARDS_OWNER,
+      name: 'Guards',
+    });
+    const workspace = await accounts.createWorkspace('Guards', owner.id);
+    const site = await accounts.addSite(workspace.id, {
+      origin: DEV_PLAYGROUND,
+      visibility: 'everyone',
+      writers: 'anyone',
+    });
+    await renameSite(database, site.id, DEV_GUARDS_SITE);
+
+    return workspace.id;
+  })();
+  const site = await accounts.addSite(await made.workspace, {
+    origin: DEV_PLAYGROUND,
+    visibility: 'everyone',
+    writers: 'anyone',
+    ...(asked.visitorNotesPerHour === undefined
+      ? {}
+      : { visitorNotesPerHour: asked.visitorNotesPerHour as (typeof VISITOR_NOTE_LIMITS)[number] }),
+  });
+  response
+    .writeHead(200, { 'Content-Type': 'application/json' })
+    .end(JSON.stringify({ id: site.id, visitorNotesPerHour: site.visitorNotesPerHour }));
 }
 
 /** `POST /__dev/writers`: who may leave a note on the site of the playground (FRU-330). `400` for another value. */
@@ -279,6 +346,8 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
       ? ((await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)) ?? undefined)
       : undefined;
 
+  // FRU-704: the workspace of the site `guards`, once a spec asked for it.
+  const guards: { workspace?: Promise<string> } = {};
   // FRU-604: what a note done would send, kept here for `GET /__dev/mail`.
   const mailed: MailMessage[] = [];
   provideDevDoneMailer({
@@ -313,6 +382,13 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     }
     if (incoming.method === 'POST' && incoming.url === '/__dev/writers') {
       void setWriters(database, seeded.workspace, visibility, incoming, response);
+
+      return;
+    }
+    if (incoming.method === 'POST' && incoming.url === '/__dev/guards') {
+      void setGuards(database, guards, incoming, response).catch((error: unknown) => {
+        response.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(error) }));
+      });
 
       return;
     }

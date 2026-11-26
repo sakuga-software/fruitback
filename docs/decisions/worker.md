@@ -1861,6 +1861,28 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
   the account suite hold the rest; the guard of `manage-sites` and the change of `clientOf` were each
   taken out by hand on 2026-11-25, and the case that holds them failed.
 
+## The notes of a visitor in an hour (FRU-704)
+
+- **`visitor_notes_per_hour` of `sites`: `0`, 5, 10, 20 or 50**, the line « Notes per visitor » of
+  the card « Safeguards ». `0` is « No limit ». `0056` adds it with 10, the value of the mockup, for
+  every site, those of before included: Fruitback has no users yet, and a site open to anybody is
+  the one to protect. A row with another value counts as 10, never as « No limit ».
+- **`clientOf` gives it to the routes only where `writers` is `anyone`, and only above `0`.** Absent
+  (« No limit », a site of members, a client of `FRUITBACK_CLIENTS`) counts nothing.
+- **`POST /feedback` counts after the place is chosen and before any write** (`visitorLimit` of
+  `feedback-routes.ts`): a note that would be refused for another reason spends nothing. A batch
+  counts each of its notes. Only a caller with no token is counted.
+- **Two counts of an hour, by site, on `chargeRateLimit`** (`checkVisitorNotes` of `rate-limit.ts`,
+  `windowMs` of an hour): the digest of the key of the browser at the limit, and the address at
+  `VISITORS_PER_ADDRESS` (3) times it. It builds on `checkReplyLimit`, as the ticket asked, and keeps
+  its rules: atomic `incr` first, a refused call counted, the estimate of the sliding window.
+- **`429 visitor-limit` carries `perHour`**, and the widget says « Send it again later », not « in a
+  minute »: with the estimate of the window, a visitor who kept sending waits up to two hours, so no
+  time is promised.
+- **The site `playground` of the dev worker says « No limit »**: every spec of the suite sends to it
+  from one address. `POST /__dev/guards` makes a site `guards` in a workspace of its own, at the same
+  origin, for the specs of the safeguards.
+
 ## The notes in PostgreSQL (FRU-218)
 
 Mathieu decided on 2026-10-13 that a worker always has PostgreSQL, self-hosted too. Nothing can take

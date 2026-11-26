@@ -184,6 +184,9 @@ export const ENGLISH = {
   'composer.failed': 'Not sent. Your text is still here. Try again.',
   // Why a send failed, when trying again at once will not help (FRU-156).
   'composer.failedWait': 'Too many notes just now. Your text is still here. Send it again in a minute.',
+  // A `429 visitor-limit`: the visitor sent the notes the site takes from one visitor in an hour (FRU-704).
+  'composer.failedVisitorLimit':
+    'You sent as many notes as this site takes in an hour. Your text is still here. Send it again later.',
   'composer.failedRefused':
     'This site refused the note from this address. Your text is still here. Tell the site’s team.',
   // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).

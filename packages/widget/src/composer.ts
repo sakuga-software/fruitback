@@ -128,6 +128,8 @@ export type NotifyOffer = {
  *
  * - `retry`: no answer, or the worker failed. A second try can work.
  * - `wait`: too many notes at once (`429`). A try in a minute can work.
+ * - `visitor-limit`: a visitor sent the notes the site takes from one visitor in an hour (`429
+ *   visitor-limit`, FRU-704). A try later can work, not in a minute.
  * - `refused`: the worker does not accept this note from here (`403`). Trying again will not work;
  *   the team of the site can change it.
  * - `signed-out`: the worker wants an identity it did not get (`401`): a session that ended, a token
@@ -143,6 +145,7 @@ export type NotifyOffer = {
 export type SendFailure =
   | 'retry'
   | 'wait'
+  | 'visitor-limit'
   | 'refused'
   | 'signed-out'
   | 'members-only'
@@ -2211,6 +2214,7 @@ export function showHelp(link: HTMLAnchorElement, t: Translator, help: PlaceHelp
 const FAILURES = {
   retry: 'composer.failedRetry',
   wait: 'composer.failedWait',
+  'visitor-limit': 'composer.failedVisitorLimit',
   refused: 'composer.failedRefused',
   'signed-out': 'composer.failedSignedOut',
   'members-only': 'composer.failedMembersOnly',
