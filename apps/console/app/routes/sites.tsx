@@ -936,16 +936,23 @@ function useResend(workspace: string, site: string): Resend {
     running.current = true;
     setSending(true);
     setAnswer(undefined);
-    const asked = await call<{ sent?: unknown; left?: unknown }>(
-      'POST',
-      `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}/retry`,
-    );
-    running.current = false;
-    setSending(false);
-    if (!asked.ok) return setAnswer({ refused: writeProblemOf(asked, problemOf(asked, {}, RESEND_REFUSED)) });
-    const { sent, left } = asked.data;
-    if (typeof sent !== 'number' || typeof left !== 'number') return setAnswer({ refused: RESEND_REFUSED });
-    setAnswer({ sent, left });
+    // Whatever happens to the answer, the button comes back: a press is never lost for good (raised
+    // in review, #16115d). A row that went meanwhile is not drawn again, and React drops its state.
+    try {
+      const asked = await call<{ sent?: unknown; left?: unknown } | undefined>(
+        'POST',
+        `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}/retry`,
+      );
+      if (!asked.ok) return setAnswer({ refused: writeProblemOf(asked, problemOf(asked, {}, RESEND_REFUSED)) });
+      // An answer with no body (`204`) says no count: it is a refusal, and not a throw.
+      const sent = asked.data?.sent;
+      const left = asked.data?.left;
+      if (typeof sent !== 'number' || typeof left !== 'number') return setAnswer({ refused: RESEND_REFUSED });
+      setAnswer({ sent, left });
+    } finally {
+      running.current = false;
+      setSending(false);
+    }
   };
   let said = '';
   if (answer !== undefined && 'refused' in answer) said = t(answer.refused);

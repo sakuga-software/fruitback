@@ -728,7 +728,7 @@ test('« Send again » on a row asks the worker once, says what left, and says a
   await workerWith(page);
   const asked: string[] = [];
   let release: () => void = () => {};
-  let reply: { status: number; json: unknown } = { status: 200, json: { sent: 2, left: 0 } };
+  let reply: { status: number; json?: unknown } = { status: 200, json: { sent: 2, left: 0 } };
   // Registered after the stub of the worker, so it answers first. Each answer waits for `release`.
   await page.route('**/console/workspaces/w1/sites/*/retry', async (route) => {
     asked.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
@@ -780,7 +780,15 @@ test('« Send again » on a row asks the worker once, says what left, and says a
   await expect(under.getByRole('alert')).toHaveText(
     'The notes of this site were not sent again. Reload the page, then try again.',
   );
-  expect(asked).toHaveLength(5);
+  // An answer with no count (a `204`) is a refusal too, and the button comes back (review, #16115d).
+  reply = { status: 204, json: undefined };
+  await button.click();
+  release();
+  await expect(under.getByRole('alert')).toHaveText(
+    'The notes of this site were not sent again. Reload the page, then try again.',
+  );
+  await expect(button).toBeEnabled();
+  expect(asked).toHaveLength(6);
   await expectNoViolation(page, 'a row that says a refusal');
 });
 
