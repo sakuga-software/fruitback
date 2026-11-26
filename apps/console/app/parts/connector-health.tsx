@@ -51,7 +51,8 @@ export function Pill({ tone, children }: { tone: 'done' | 'alert' | 'neutral'; c
  * - « Healthy »: a connector that receives, whose sends were read, and none waits; or a tracker whose
  *   health the worker said (FRU-714): it takes a note in the request or refuses it, so none waits.
  * - « Connected »: a tracker of a worker that says no health.
- * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ».
+ * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ». When the
+ *   worker said how many wait (FRU-714), « N sends not delivered » instead, as the bar counts them.
  *
  * The red words are the strong accent: the accent is under 4.5:1 on the tints of a row (FRU-683).
  */
@@ -70,7 +71,20 @@ export function Health({
 }) {
   useLocale();
   if (connector.attention !== undefined || placeAttention) return <Pill tone="alert">{t('Needs attention')}</Pill>;
-  if (!read) return <Pill tone="neutral">{t('Not read')}</Pill>;
+  if (!read) {
+    // FRU-714: the list was not read, and the worker said how many wait: that count, with no « Retry »
+    // (its ids are in the list). The bar counts the same number (raised in review).
+    const failing = connector.health?.failing ?? 0;
+    if (failing > 0) {
+      return (
+        <Pill tone="alert">
+          {failing === 1 ? t('1 send not delivered') : t('{count} sends not delivered', { count: failing })}
+        </Pill>
+      );
+    }
+
+    return <Pill tone="neutral">{t('Not read')}</Pill>;
+  }
   if (late === undefined)
     return <Pill tone="done">{connector.health === undefined ? t('Connected') : t('Healthy')}</Pill>;
   const waiting = late.notes + late.calls;

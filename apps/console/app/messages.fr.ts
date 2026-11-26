@@ -2139,6 +2139,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} calls not delivered': '{count} appels non livrés',
   // FRU-714: when the last send to a connector arrived.
   'Last delivery': 'Dernière livraison',
+  '1 send not delivered': '1 envoi non livré',
+  '{count} sends not delivered': '{count} envois non livrés',
   Soon: 'Bientôt',
   'Connect another {source}': 'Connecter un autre {source}',
   'Other ways to connect {source}': 'Autres façons de connecter {source}',
