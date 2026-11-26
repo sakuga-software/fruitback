@@ -2705,9 +2705,13 @@ tracker until a member approves it. Off by default, as the mockup draws it.
   guest is refused: it reads no note of a visitor that nobody approved.
   test:`refuses a guest, and a person of another workspace reads nothing`.
 - Approved, the note goes to the first place of the site as it would have gone at once, and is the
-  visitor's own in the index. One statement claims it first, for 5 minutes, so two members who
-  approve at once send it once; the row goes only once the note is in its place. A tracker that
-  refuses it or does not answer, an error, or an approval that stops half way leaves it in the queue.
+  visitor's own in the index. One statement claims it first, for an hour, so two members who approve
+  at once send it once; the row goes only once the note is in its place, and only by the claim that
+  sent it. A tracker that refuses it or does not answer, an error, or an approval that stops half way
+  leaves it in the queue. A database that does not take the removal after the send leaves the row
+  claimed: the answer is still `200`, and the note shows again after the hour.
+  test:`lets a late approval neither release nor remove the claim of the next one (review of #987)`.
+  test:`answers 200 for a note sent to its place even when its row is not removed at once (review of #987)`.
   test:`sends an approved note to its place, as the visitor’s own, once`.
   test:`keeps the note in the queue when its tracker does not answer the approval`.
   test:`keeps the note when its send throws, and gives it back when an approval stops half way (review of #987)`.

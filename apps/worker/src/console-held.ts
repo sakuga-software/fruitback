@@ -76,8 +76,9 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   if (!readsSite(reach, site) || held === undefined) return json(404, { error: 'not-found' }, headers);
   const taken = await held.take(workspace, site, note, now);
   if (taken === undefined) return json(404, { error: 'not-found' }, headers);
+  const { claim } = taken;
   if (verb === 'reject') {
-    await held.done(site, note);
+    await held.done(site, note, claim);
 
     return new Response(null, { status: 204, headers });
   }
@@ -88,22 +89,29 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   try {
     sent = send === undefined ? { ok: false, reason: 'store-unavailable' } : await send(taken);
   } catch (error) {
-    await held.release(site, note);
+    await held.release(site, note, claim);
     throw error;
   }
   if (sent.ok) {
-    await held.done(site, note);
+    // The note is in its place: the answer says so whatever comes next. A database that does not take
+    // the removal is asked once more, then the row stays claimed for an hour (review of #987).
+    await held
+      .done(site, note, claim)
+      .catch(() => held.done(site, note, claim))
+      .catch((error: unknown) => {
+        console.error(`[fruitback] an approved note of site ${site} stays in the queue: ${String(error)}`);
+      });
     const { identifier, url } = sent.issue;
 
     return json(200, { issue: { identifier, ...(url === undefined ? {} : { url }) } }, headers);
   }
   // The site took no note any more: it goes with nobody to send it to. Else it waits again.
   if (sent.reason === 'site-gone') {
-    await held.done(site, note);
+    await held.done(site, note, claim);
 
     return json(409, { error: 'site-gone' }, headers);
   }
-  await held.release(site, note);
+  await held.release(site, note, claim);
 
   return json(502, { error: sent.reason }, headers);
 }

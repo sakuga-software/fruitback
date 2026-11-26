@@ -1,6 +1,13 @@
 import { type SQL, and, count, desc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
 import { noteSchema } from '@fruitback/shared';
-import { HELD_CLAIM_MS, HELD_NOTE_KEEP_MS, HELD_NOTE_LIST, type HeldNote, type HeldNotes } from './held-notes.ts';
+import {
+  HELD_CLAIM_MS,
+  HELD_NOTE_KEEP_MS,
+  HELD_NOTE_LIST,
+  type HeldClaim,
+  type HeldNote,
+  type HeldNotes,
+} from './held-notes.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { held_notes } from './postgres-schema.ts';
@@ -113,15 +120,22 @@ export function createPostgresHeldNotes(database: Database): HeldNotes {
           .returning(),
       );
 
-      return row === undefined ? undefined : heldOf(row);
+      const held = row === undefined ? undefined : heldOf(row);
+
+      return held === undefined ? undefined : ({ ...held, claim: now + HELD_CLAIM_MS } satisfies HeldClaim);
     },
 
-    async done(site, note) {
-      await run((db) => db.delete(held_notes).where(thisNote(site, note)));
+    async done(site, note, claim) {
+      await run((db) => db.delete(held_notes).where(and(thisNote(site, note), eq(held_notes.claimed_until, claim))));
     },
 
-    async release(site, note) {
-      await run((db) => db.update(held_notes).set({ claimed_until: null }).where(thisNote(site, note)));
+    async release(site, note, claim) {
+      await run((db) =>
+        db
+          .update(held_notes)
+          .set({ claimed_until: null })
+          .where(and(thisNote(site, note), eq(held_notes.claimed_until, claim))),
+      );
     },
 
     async sweep(now) {

@@ -20,6 +20,9 @@ export type HeldNote = {
   heldAt: number;
 };
 
+/** A note an approval took, and its claim: the token that `done` and `release` name (review of #987). */
+export type HeldClaim = HeldNote & { claim: number };
+
 /** What a member reads of the queue « To approve »: newest first, `HELD_NOTE_LIST` at most. A note being sent is not in it. */
 export type HeldNotes = {
   /** Keeps a note. `false`: the site holds a note of this id already, and nothing is written. */
@@ -34,11 +37,14 @@ export type HeldNotes = {
    * members who answer at once send it once. The row stays until `done`: a process that stops while it
    * sends loses nothing, and the claim runs out.
    */
-  take(workspace: string, site: string, note: string, now: number): Promise<HeldNote | undefined>;
-  /** The note went to its place, or was rejected: its row goes. */
-  done(site: string, note: string): Promise<void>;
-  /** The note did not go: its claim goes, and it waits in the queue again. */
-  release(site: string, note: string): Promise<void>;
+  take(workspace: string, site: string, note: string, now: number): Promise<HeldClaim | undefined>;
+  /**
+   * The note went to its place, or was rejected: its row goes, if `claim` is still the claim of the row.
+   * A claim that ran out and that another approval took is not this one: that row is the other's.
+   */
+  done(site: string, note: string, claim: number): Promise<void>;
+  /** The note did not go: this claim goes, and it waits in the queue again. Another claim stays. */
+  release(site: string, note: string, claim: number): Promise<void>;
   /** Removes the notes that waited longer than `HELD_NOTE_KEEP_MS`. Answers how many went. */
   sweep(now: number): Promise<number>;
 };
@@ -47,10 +53,11 @@ export type HeldNotes = {
 export const HELD_NOTE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * How long an approval holds the note it is sending: 5 minutes, well above the time a tracker takes to
- * answer. An approval that stopped meanwhile leaves the note to the next one.
+ * How long an approval holds the note it is sending: an hour. A read of a tracker gives up after 10
+ * seconds (`READ_TIMEOUT_MS` of `linear.ts`), so a send ends long before; an approval that stopped
+ * meanwhile leaves the note to the next one after the hour, never during a slow send (review of #987).
  */
-export const HELD_CLAIM_MS = 5 * 60 * 1000;
+export const HELD_CLAIM_MS = 60 * 60 * 1000;
 
 /** The most notes one read of the queue answers. */
 export const HELD_NOTE_LIST = 200;

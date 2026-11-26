@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mutatedModule } from './conformance.fixture.ts';
 import { type World, callOn, memberOf, signInTo } from './console-world.fixture.ts';
-import { HELD_CLAIM_MS, HELD_NOTE_KEEP_MS } from './held-notes.ts';
+import { HELD_CLAIM_MS, HELD_NOTE_KEEP_MS, type HeldNotes } from './held-notes.ts';
 import { createPostgresHeldNotes } from './held-notes-postgres.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -27,8 +27,14 @@ async function aHoldingSite(options: Parameters<typeof aVisitorSite>[0] = {}) {
   const alice = await signInTo(site.world, 'alice@acme.dev');
   const base = `/console/workspaces/${site.workspace}/held`;
   /** A call of the console, through the same store as the page: the note goes where the page sends it. */
-  const consoleCall = async (method: string, path: string, token = alice.token, store: NoteStore = site.store) => {
-    const response = await callOn(site.world, method, `${base}${path}`, { token }, { store });
+  const consoleCall = async (
+    method: string,
+    path: string,
+    token = alice.token,
+    store: NoteStore = site.store,
+    heldNotes: HeldNotes = createPostgresHeldNotes(site.world.database),
+  ) => {
+    const response = await callOn(site.world, method, `${base}${path}`, { token }, { store, heldNotes });
     const text = await response.text();
 
     return { status: response.status, body: text === '' ? {} : (JSON.parse(text) as Record<string, any>) };
@@ -140,6 +146,45 @@ describe('the notes of visitors that wait for a member (FRU-704)', () => {
     assert.equal(await held.count(workspace, undefined, now), 0);
     assert.equal(await held.count(workspace, undefined, now + HELD_CLAIM_MS + 1), 1);
     assert.equal((await held.take(workspace, site, 'hn_t', now + HELD_CLAIM_MS + 1))?.note.id, 'hn_t');
+  });
+
+  it('lets a late approval neither release nor remove the claim of the next one (review of #987)', async () => {
+    const { world, site, workspace, call, noteOf } = await aHoldingSite();
+    await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_c'));
+    const held = createPostgresHeldNotes(world.database);
+    const now = Date.now();
+    const first = await held.take(workspace, site, 'hn_c', now);
+    const later = now + HELD_CLAIM_MS + 1;
+    const second = await held.take(workspace, site, 'hn_c', later);
+    assert.ok(first !== undefined && second !== undefined);
+
+    await held.release(site, 'hn_c', first.claim);
+    await held.done(site, 'hn_c', first.claim);
+
+    assert.equal(await held.count(workspace, undefined, later + 1), 0);
+    await held.done(site, 'hn_c', second.claim);
+    assert.equal(await held.count(workspace, undefined, later + HELD_CLAIM_MS + 1), 0);
+    assert.equal((await rowsOf(world.database, 'SELECT count(*) AS n FROM held_notes'))[0]?.n, 0);
+  });
+
+  it('answers 200 for a note sent to its place even when its row is not removed at once (review of #987)', async () => {
+    const { world, site, call, noteOf, consoleCall } = await aHoldingSite();
+    await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_d'));
+    const real = createPostgresHeldNotes(world.database);
+    const failingDone: HeldNotes = {
+      ...real,
+      done: async () => {
+        throw new Error('the database blinked');
+      },
+    };
+
+    const approved = await consoleCall('POST', `/${site}/hn_d/approve`, undefined, undefined, failingDone);
+
+    assert.equal(approved.status, 200, JSON.stringify(approved.body));
+    assert.equal(await notesInStore(world), 1);
+    // The row stays claimed: no second approval sends it again while the claim runs.
+    assert.equal((await consoleCall('POST', `/${site}/hn_d/approve`)).status, 404);
+    assert.equal(await notesInStore(world), 1);
   });
 
   it('refuses a guest, and a person of another workspace reads nothing', async () => {

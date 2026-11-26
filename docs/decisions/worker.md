@@ -1888,9 +1888,11 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
   `held: true`. A note that names files goes the usual way, which refuses it (a visitor sends none).
 - **The console answers through `console-held.ts`**, and an approval sends through `sendHeldNote` of
   `feedback-routes.ts`, built in `app.ts` as `readNote` is: the site read again with no `Origin`, the
-  routed store, the first place. `take` claims the row for `HELD_CLAIM_MS` (5 minutes) in one
-  `UPDATE … RETURNING`; the row goes only once the note is in its place (`done`), and a failure or a
-  throw releases it. An approval that stops half way leaves a claim that runs out (review of #987). No e-mail of a note done is offered, and no agent starts: the visitor left.
+  routed store, the first place. `take` claims the row for `HELD_CLAIM_MS` (an hour, far above the 10 s
+  a tracker read may take) in one `UPDATE … RETURNING`, and answers the claim as a token; `done` and
+  `release` act only on the row that still holds that claim. The row goes only once the note is in its
+  place, and a failure or a throw releases it. A `done` that fails after the send is asked once more,
+  then logged: the answer stays `200` (reviews of #987). No e-mail of a note done is offered, and no agent starts: the visitor left.
 - **30 days, `HELD_NOTE_KEEP_MS`**: the reads ignore an older row at once, and `sweepHeldNotes` runs
   on the timer of `sweepDoneNotices` (`server.ts`).
 
