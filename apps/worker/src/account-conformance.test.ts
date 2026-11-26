@@ -810,8 +810,8 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     by: 'writes an earlier moment of a tracker over a later one',
     replace: {
       after: 'async noteDelivered(connector, at) {',
-      from: 'or(isNull(connectors.delivered_at), lt(connectors.delivered_at, at)),',
-      to: 'sql`true`,',
+      from: 'or(isNull(connectors.delivered_at), lt(connectors.delivered_at, at))',
+      to: 'sql`true`',
     },
   },
   {
