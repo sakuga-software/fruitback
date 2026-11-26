@@ -521,8 +521,10 @@ export type PendingDelivery = {
  * - `key-refused`: the tracker does not accept the key or the token.
  * - `key-lacks-access`: the tracker knows the key, and the key may not do what the worker asks.
  * - `connection-ended`: the tracker refused to refresh the token of an OAuth connection.
+ * - `routine-gone` (FRU-627): the `/fire` of a Claude Code routine answered `404`. The routine or its
+ *   API trigger was deleted, and no call starts it until somebody connects one again.
  */
-export const CONNECTOR_TROUBLES = ['key-refused', 'key-lacks-access', 'connection-ended'] as const;
+export const CONNECTOR_TROUBLES = ['key-refused', 'key-lacks-access', 'connection-ended', 'routine-gone'] as const;
 export type ConnectorTrouble = (typeof CONNECTOR_TROUBLES)[number];
 
 /** `since` is the first refusal of this kind, so the console says how long the notes did not leave. */

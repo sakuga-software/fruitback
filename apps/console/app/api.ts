@@ -165,8 +165,17 @@ export function placesOf(site: Site): Destination[] {
 export function samePlace(one: Destination, other: Destination): boolean {
   return one.connector === other.connector && one.teamId === other.teamId && one.projectId === other.projectId;
 }
-/** Why a source needs somebody (FRU-102): its tracker refuses it since `since`. Absent: it works. */
-type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
+/** Why a tracker refuses a connector (FRU-102). */
+export type TrackerTrouble = 'key-refused' | 'key-lacks-access' | 'connection-ended';
+/**
+ * Why a connector needs somebody (FRU-102), since `since`. Absent: it works. `routine-gone` (FRU-627):
+ * the `/fire` of a Claude Code routine answered `404`, so the routine or its API trigger is gone.
+ */
+type ConnectorAttention = { reason: TrackerTrouble | 'routine-gone'; since: string };
+/** The refusal of a tracker in an attention, or `undefined`: none, or one that only a routine says. */
+export function trackerTrouble(attention: ConnectorAttention | undefined): TrackerTrouble | undefined {
+  return attention === undefined || attention.reason === 'routine-gone' ? undefined : attention.reason;
+}
 export type Connector = {
   id: string;
   /** `claude-routine` (FRU-594): what the trigger of a site calls to start a Claude Code routine. */

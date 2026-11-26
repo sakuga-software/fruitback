@@ -151,7 +151,10 @@ with no key, nothing leaves.
   the Fire URL (`api.anthropic.com` only) and the token, sealed. A trigger can name it, and its call
   is a `POST /fire` with identifiers only in `text`; one call for a batch. The session it answers is
   kept 30 days in `agent_sessions` and shown in the panel of the routine. A `401` or `403` gives the
-  call up and puts the connector in « attention ». Tested against a local `/fire` that follows the
+  call up and puts the connector in « attention » (`key-refused`). A `404` gives it up too, and since
+  FRU-627 puts it in « attention » as `routine-gone`: the routine or its API trigger was deleted, and
+  no token starts it again. The panel of the routine and the box « Start an agent » of a site say so;
+  the next call that starts the routine ends the attention. Tested against a local `/fire` that follows the
   documentation (`routine-fire.fixture.ts`); no real routine was called.
 - The REST connector (FRU-132) posts `note.created`, signed, with the whole note, to the address of a
   workspace. A receiver of the team can start an agent with it today, with no other change.
@@ -322,7 +325,7 @@ critical, and Mathieu merges it.
 - **Only an `https` address is given**, as `noteIssueSchema` takes it: another would make the widget
   drop the note.
 - A read of the sessions that fails is said in the log, and the notes come with no line.
-- The `404` of `/fire` is FRU-627, out of this ticket.
+- The `404` of `/fire` is FRU-627: `routine-gone`, above.
 
 ## The decisions
 

@@ -82,6 +82,15 @@ export function RoutinePanel({ id, base, connector, manages, onChanged, onRemove
           )}
         </Problem>
       ) : null}
+      {/* FRU-627: `/fire` answered 404. The token is no help: the trigger itself is gone. */}
+      {connector.attention?.reason === 'routine-gone' ? (
+        <Problem>
+          {t(
+            'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, then connect the routine again.',
+            { when: moment(connector.attention.since) },
+          )}
+        </Problem>
+      ) : null}
       <p className="text-hint text-muted">
         {t(
           'The trigger of a site calls it when a note arrives. The call carries ids only: the routine reads the notes through the MCP server.',

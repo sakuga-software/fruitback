@@ -330,13 +330,15 @@ export async function deliverDue({
 
     // 401 and 403: the token is refused (deleted, or regenerated). It will be refused at each attempt
     // left, so the call is given up now and the connector needs attention, as a key a tracker refuses.
-    // 404: the routine or its API trigger is gone. 429 and the others are tried again.
+    // 404: the routine or its API trigger is gone, and the connector needs attention too (FRU-627).
+    // 429 and the others are tried again.
     const refused = status === 401 || status === 403;
     if (refused) {
       error = 'The routine refused its token: generate a new one at claude.ai/code/routines';
       await noteRoutine(delivery.connectorId, 'key-refused');
     } else if (status === 404) {
       error = 'The routine or its API trigger is gone';
+      await noteRoutine(delivery.connectorId, 'routine-gone');
     }
     const wait = refused || status === 404 || final ? undefined : RETRY_AFTER_SECONDS[delivery.attempts];
     await accounts.settleDelivery(delivery.id, {
@@ -354,7 +356,7 @@ export async function deliverDue({
   /** What `/fire` said of the token, on the connector (FRU-102). It never rejects. */
   const noteRoutine = async (
     connector: string,
-    trouble: 'key-refused' | 'key-lacks-access' | undefined,
+    trouble: 'key-refused' | 'key-lacks-access' | 'routine-gone' | undefined,
   ): Promise<void> => {
     await accounts.noteConnector(connector, trouble, now()).catch((failure: unknown) => {
       console.error('[fruitback] the state of a connector was not kept', connector, failure);
