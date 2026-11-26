@@ -13,16 +13,34 @@ import { ACME, stubWorker } from './console-workspace.ts';
 const CONSOLE = 'http://localhost:5178';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const TEXT = 'cette carte coince / c';
+/** One note, so that the screen draws its bar and its search. */
+const NOTE = {
+  id: 'n1',
+  note: 'sd_1',
+  excerpt: 'The price of the yearly plan is cut off on a phone.',
+  page: { url: 'https://staging.acme.dev/pricing', host: 'staging.acme.dev', path: '/pricing' },
+  site: { id: 's1' },
+  stage: 'todo',
+  status: 'own:todo',
+  canSetStatus: true,
+  author: { kind: 'you', name: 'Ana' },
+  place: { kind: 'fruitback' },
+  task: { labels: [] },
+  createdAt: '2026-11-24T10:00:00.000Z',
+};
 
 async function openConsole(page: Page): Promise<void> {
   await stubWorker(page, {
     workspaces: [{ ...ACME, role: 'owner' }],
     answer: (pathname, route) => {
       if (pathname === '/console/workspaces/w1/notes') {
-        return route.fulfill({ json: { notes: [], total: 0, counts: { all: 0 } } });
+        return route.fulfill({ json: { notes: [NOTE], total: 1, counts: { all: 1 } } });
       }
       // What the widget reads for the page: no note.
       if (pathname === '/feedback') return route.fulfill({ json: { issues: [] } });
+      if (pathname.endsWith('/list-members') || pathname === '/console/workspaces/w1/labels') {
+        return route.fulfill({ json: { members: [], labels: [] } });
+      }
 
       return undefined;
     },
