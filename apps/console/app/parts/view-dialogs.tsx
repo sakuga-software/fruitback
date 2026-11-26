@@ -29,12 +29,16 @@ export function ViewNameDialog({
   const [typed, setTyped] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
-  // Each opening starts from the name of the view, with no sentence of a refusal before it.
-  useEffect(() => {
-    if (!open) return;
-    setTyped(initial);
-    setProblem(undefined);
-  }, [open, initial]);
+  // Each opening starts from the name of the view, with no sentence of a refusal before it. Only an
+  // opening: a name that changes while the dialog is open never takes the place of what was typed.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setTyped(initial);
+      setProblem(undefined);
+    }
+  }
   const name = typed.trim();
 
   async function send(event: FormEvent) {
