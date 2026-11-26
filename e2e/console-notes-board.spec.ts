@@ -274,14 +274,17 @@ test('the text of a card starts each of its lines at the left, as the table does
   await page.goto(`${CONSOLE}/w/w1/notes?view=board`);
   const title = card(page, 'The headline').getByRole('button', { name: /^The headline/ });
   await expect(title).toBeVisible();
-  // Where each line of the words starts, from the left edge of the button. A button centres its
-  // words: on main, the two lines of this note started 10 and 39 px in.
+  // Where each line of the words starts, from the left edge of the content of the button (inside
+  // its border and its padding). A button centres its words: on main, the two lines of this note
+  // started 10 and 39 px in.
   const starts = await title.evaluate((button) => {
-    const box = button.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    const content =
+      button.getBoundingClientRect().left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
     const range = document.createRange();
     range.selectNodeContents(button);
 
-    return [...range.getClientRects()].map((line) => Math.round(line.left - box.left));
+    return [...range.getClientRects()].map((line) => Math.round(line.left - content));
   });
   // The control: the text wraps, so a centred line would start further in than another.
   expect(starts.length).toBeGreaterThan(1);
