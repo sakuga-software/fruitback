@@ -58,6 +58,7 @@ import {
 import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
+import { SEEN_EVERY_MS } from './site-seen.ts';
 import { account, invitation, member, organization, user } from './auth-schema.ts';
 import {
   account_emails,
@@ -2973,6 +2974,32 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
 
       return { sites: row?.sites ?? 0, waiting: row?.waiting ?? 0 };
+    },
+
+    async markSiteSeen(site, channel, now) {
+      const column = channel === 'extension' ? sites.extension_seen_at : sites.script_seen_at;
+      // The hour in the condition: two readers in the same moment write once, and a date an hour old
+      // or less is not written again.
+      await run((db) =>
+        db
+          .update(sites)
+          .set(channel === 'extension' ? { extension_seen_at: now } : { script_seen_at: now })
+          .where(and(eq(sites.id, site), or(isNull(column), lt(column, now - SEEN_EVERY_MS)))),
+      );
+    },
+
+    async siteSeen(workspace, site) {
+      const [row] = await run((db) =>
+        db
+          .select({ script: sites.script_seen_at, extension: sites.extension_seen_at })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site))),
+      );
+
+      return {
+        ...(row?.script === null || row?.script === undefined ? {} : { script: Number(row.script) }),
+        ...(row?.extension === null || row?.extension === undefined ? {} : { extension: Number(row.extension) }),
+      };
     },
 
     async waitingDeliveries(workspace) {

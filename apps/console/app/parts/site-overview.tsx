@@ -103,11 +103,31 @@ export function SiteFigures({ workspace, site, seesTracker }: { workspace: strin
         {bar}
       </Figure>
       <Figure name={t('Open')} value={fresh}>
-        {notes === undefined ? undefined : t('{count} to do or in progress', { count: notes.todo + notes.progress })}
+        {openLine(site)}
       </Figure>
       {seesTracker ? <Delivered workspace={workspace} site={site} total={total} /> : null}
     </div>
   );
+}
+
+/**
+ * Under « Open »: the age of the oldest note that is not done nor closed (FRU-721), « oldest 5 days »
+ * as the mockup says it; from a worker of before, the notes to do or in progress (FRU-689).
+ */
+function openLine(site: Site, now: number = Date.now()): string | undefined {
+  const notes = site.notes;
+  if (site.oldestOpenAt !== undefined) {
+    const days = Math.floor(Math.max(0, now - Date.parse(site.oldestOpenAt)) / 86_400_000);
+    if (Number.isNaN(days)) return undefined;
+    if (days === 0) return t('oldest today');
+
+    return days === 1 ? t('oldest 1 day') : t('oldest {count} days', { count: days });
+  }
+  if (notes === undefined) return undefined;
+  // The worker says the oldest open note when there is one: none is open.
+  if (site.recent !== undefined) return t('None open');
+
+  return t('{count} to do or in progress', { count: notes.todo + notes.progress });
 }
 
 function Delivered({ workspace, site, total }: { workspace: string; site: Site; total: number | undefined }) {
@@ -118,6 +138,36 @@ function Delivered({ workspace, site, total }: { workspace: string; site: Site; 
         {t('No tracker for this site')}
       </Figure>
     );
+  // FRU-721: the share of the notes of the last 30 days that arrived, as the mockup says it.
+  const recent = site.recent;
+  if (recent?.undelivered !== undefined) {
+    if (recent.notes === 0)
+      return (
+        <Figure name={t('Delivered')} value="·">
+          {t('No note in {days} days', { days: recent.days })}
+        </Figure>
+      );
+    const late = Math.min(recent.undelivered, recent.notes);
+    // Down, so that one note still waiting is never « 100 % ».
+    const share = Math.floor(((recent.notes - late) / recent.notes) * 100);
+
+    return (
+      <Figure name={t('Delivered')} value={t('{share} %', { share })}>
+        {late === 0 ? (
+          t('last {days} days', { days: recent.days })
+        ) : (
+          <Link
+            to={`${notesOf(workspace, site.id)}&undelivered=1`}
+            className="rounded-inner font-medium text-accent-strong underline-offset-[3px] hover:underline"
+          >
+            {late === 1
+              ? t('1 not delivered in {days} days', { days: recent.days })
+              : t('{count} not delivered in {days} days', { count: late, days: recent.days })}
+          </Link>
+        )}
+      </Figure>
+    );
+  }
   const late = site.undelivered;
   if (total === undefined || late === undefined) return <Figure name={t('Delivered')} value="·" />;
   if (total === 0)

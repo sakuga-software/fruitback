@@ -100,6 +100,14 @@ export type Site = {
   /** Notes sent to an address that did not take them yet (REST, FRU-122). */
   undelivered?: number;
   asOf?: string;
+  /**
+   * FRU-721, on the read of one site only: when the widget last read a page of the site, by the
+   * script and by the extension; when the oldest note that is not done nor closed was left; and the
+   * notes of the last `days`, with those not delivered for whoever sees the tracker.
+   */
+  seen?: { script?: string; extension?: string };
+  oldestOpenAt?: string;
+  recent?: { days: number; notes: number; undelivered?: number };
 };
 /** A site as a list to choose one names it (FRU-497): no destination and no count. */
 export type SiteChoice = Pick<Site, 'id' | 'origin' | 'visibility'>;

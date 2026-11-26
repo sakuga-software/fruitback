@@ -1599,7 +1599,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-three BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3359,7 +3359,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-three BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3956,6 +3956,39 @@ sites and the deliveries are one statement (0.2 ms). The five statements are the
 the reach, and the two counts, the last two at the same time. The cookie of better-auth adds its own
 reads, as on every route. A workspace of millions of notes would want counters kept beside them, as
 for the list.
+
+## The page of one site: seen on the site, oldest open note, 30 days (FRU-721)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/sites/<site>` adds `seen`, `oldestOpenAt` and `recent`**, on the
+  read of one site only, never on a list: `seen: { script?, extension? }`, when the widget last read
+  a page of the site by each way; `oldestOpenAt`, when the oldest note that is not done nor closed
+  was left; `recent: { days: 30, notes, undelivered? }`, the notes of the last 30 days and, for
+  `see-tracker`, those of them whose delivery did not arrive. `NoteIndex.siteFigures` reads them with
+  `filtered` and its `site`, as the list does.
+- **The worker sees the widget from the read of the pins of a page** (`GET /feedback`), which the
+  widget sends when it mounts: no call of its own, nothing more for a site to install. The read writes
+  the date before it reads the pins, so a site whose notes are « Members only » is seen too, by its
+  visitors who read nothing. `script`: no token, from the `Origin` of the site; `extension`: a session
+  of the workspace that the worker verifies; anything else writes nothing (`readBy` of
+  `app.ts`).
+- **At most one write an hour per site and per way** (`site-seen.ts`): the process remembers what it
+  wrote, and asks nothing of the database in the hour after; the store writes only a date an hour old
+  (`markSiteSeen`), so two processes write once. A read claims its way (a token: the extension; none:
+  the script) and the claim is checked only when that way is due; a session that did not verify is
+  not verified again for a minute, so a bad token costs one verification a minute. Each memory holds
+  10 000 sites and ways at most, emptied past it as in `last-seen.ts`. A write that fails is said in
+  the log, and the read goes on. Migration `0055_sites_seen`: two columns of `sites`.
+
+### What it costs
+
+Measured as the counts of the bar (FRU-711), on a site of 25 000 notes of the same workspace, three
+runs: `GET …/sites/<site>` 6.5 to 7.5 ms median and 6 statements before, 8.6 to 10.8 ms and 10
+statements after for an owner (the dates, the figures, the deliveries and the notes not delivered),
+7.1 to 8.6 ms and 7 statements for a guest. The write of a date is one `UPDATE` by the primary key
+(0.33 ms), at most once an hour per site and per way; a read of the pins in the hour after costs
+nothing more.
 
 ## The notes of a whole site, for the extension (FRU-306)
 

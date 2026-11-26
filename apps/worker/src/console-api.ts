@@ -140,6 +140,9 @@ export type ConsoleApiContext = {
   };
 };
 
+/** FRU-721: the days of « Delivered » on the page of a site, as the mockup says it: « last 30 days ». */
+export const RECENT_DAYS = 30;
+
 /** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
 export const CHECK_AGAIN_MS = 10_000;
 
@@ -910,9 +913,44 @@ export async function handleConsoleApi(
     if (reach === undefined) return json(404, { error: 'not-found' }, headers);
     const site = await readableSite(context.accounts, workspaceId as string, reach, removal[1] as string);
     if (site === undefined) return json(404, { error: 'not-found' }, headers);
-    const [one] = await sitesWithNotes([site]);
+    const seesTracker = allowed('see-tracker');
+    // FRU-721: the page of one site, and no list, also says when the widget was last seen there, the
+    // oldest open note, and the notes of the last 30 days, of which those not delivered.
+    const [[one], seen, figures] = await Promise.all([
+      sitesWithNotes([site]),
+      context.accounts.siteSeen(workspaceId as string, site.id),
+      counted(() =>
+        context.noteIndex?.siteFigures(workspaceId as string, site.id, {
+          now: context.now ?? Date.now(),
+          days: RECENT_DAYS,
+          undelivered: seesTracker,
+        }),
+      ),
+    ]);
 
-    return json(200, one, headers);
+    return json(
+      200,
+      {
+        ...one,
+        seen: {
+          ...(seen.script === undefined ? {} : { script: new Date(seen.script).toISOString() }),
+          ...(seen.extension === undefined ? {} : { extension: new Date(seen.extension).toISOString() }),
+        },
+        ...(figures === undefined
+          ? {}
+          : {
+              ...(figures.oldestOpenAt === undefined
+                ? {}
+                : { oldestOpenAt: new Date(figures.oldestOpenAt).toISOString() }),
+              recent: {
+                days: RECENT_DAYS,
+                notes: figures.recent,
+                ...(figures.recentUndelivered === undefined ? {} : { undelivered: figures.recentUndelivered }),
+              },
+            }),
+      },
+      headers,
+    );
   }
   if (removal !== null) {
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);

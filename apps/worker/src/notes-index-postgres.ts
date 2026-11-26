@@ -466,6 +466,38 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       });
     },
 
+    async siteFigures(workspace, site, { now, days, undelivered }) {
+      const since = now - days * 86_400_000;
+      // The filter of `list` with this site, and each figure the condition of its own filter.
+      const of = (query: Omit<NoteQuery, 'limit'>) => filtered(workspace, { site, ...query });
+
+      return run(async (db) => {
+        const [row] = await db
+          .select({
+            oldest: sql<number | null>`min(${note_index.created_at}) FILTER (WHERE ${of({ unresolved: true })})`,
+            recent: sql<number>`count(*) FILTER (WHERE ${of({ since })})`.mapWith(Number),
+          })
+          .from(note_index)
+          .where(of({}));
+        // As for the counts of the bar: the notes not delivered in a `WHERE`, where their keys are hashed.
+        let late: number | undefined;
+        if (undelivered) {
+          const pending = await pendingOf(db, workspace);
+          const [counted] = await db
+            .select({ notes: count() })
+            .from(note_index)
+            .where(filtered(workspace, { site, since, undelivered: true }, pending));
+          late = Number(counted?.notes ?? 0);
+        }
+
+        return {
+          ...(row?.oldest === null || row?.oldest === undefined ? {} : { oldestOpenAt: Number(row.oldest) }),
+          recent: row?.recent ?? 0,
+          ...(late === undefined ? {} : { recentUndelivered: late }),
+        };
+      });
+    },
+
     async undelivered(workspace, only) {
       // The body of a delivery is what was sent, as JSON: the site is in it, and nowhere else. A body
       // that is not JSON names no site, and does not stop the count of the others.

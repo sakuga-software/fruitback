@@ -676,9 +676,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   A site that is not in the workspace says so, and a read that failed is the alert with « Try again ».
   **« Overview »** draws, on the left, three figures, the card « Site » and where the notes go; on
   the right, from 1100 px, the card « Install » in a column of 420 px. **No figure the worker does not
-  give**: « Notes » with the bar of its statuses, « Open » (the new notes, and how many are to do or
-  in progress), and « Delivered » for whoever sees the tracker: the share of the notes that no address
-  still waits for (`undelivered`, FRU-122), of every note, since the worker counts none by day yet.
+  give**: « Notes » with the bar of its statuses, « Open » (the new notes, and the age of the oldest
+  open one, « oldest 5 days », FRU-721), and « Delivered » for whoever sees the tracker: the share of
+  the notes of the last 30 days that arrived, « last 30 days » under it, or a link to the ones that
+  did not (`?site=&undelivered=1`, FRU-722). From a worker of before FRU-721, « Open » says how many
+  are to do or in progress and « Delivered » the share of every note (`undelivered`, FRU-122).
   The card « Site » is a row of 44 px for each setting (an icon, its name, its value), with
   « Change » to the tab that changes it, for an owner or an admin: « Access » for who reads, who
   writes and the e-mail of FRU-604; « Install » for how the notes came, for every role. Where the
@@ -686,11 +688,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   menu: « Make it the default », « Remove ». « Add » leads to « Destinations ». The card « Install »
   has the script and the extension in a segment; the script is on ink (`Snippet` of the kit, tone
   `ink`: the page and the ink swapped, so a dark theme draws it light), with the address of this
-  console, which is the instance's in production, and « Copy ». **The worker records no visit of the
-  script**: the card says « Notes came » once a note came by the script or the extension, with when the
-  last note came, and « Not seen yet » before, never « Installed ». The ticket of the follow-up asks
-  the worker for the last time the script was seen, the oldest open note, and the deliveries of 30
-  days. `e2e/console-site-page.spec.ts` holds the head, the tabs in the address, the figures, the
+  console, which is the instance's in production, and « Copy ». **« Installed » once the worker saw
+  the widget on the site** (FRU-721: `seen` of the read of one site, written from the read of the pins
+  of a page, an hour apart at most), with « Seen on the site 2 h ago » under the script and « Seen
+  with the extension … » under the extension. Before the worker saw it, « Notes came » once a note
+  came by the script or the extension, with when the last note came, and « Not seen yet » before. `e2e/console-site-page.spec.ts` holds the head, the tabs in the address, the figures, the
   rows, the menu of a place, the card « Install », the roles, the hashes of before, the two failures,
   390 px in English and in French, and axe.
   **The address of the site is a link to it** (FRU-575, Mathieu), in a new tab with no referrer, so
