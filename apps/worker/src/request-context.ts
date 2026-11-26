@@ -184,6 +184,11 @@ export type CallerChecks = {
   hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
   /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
   REPLY_LENGTH: number;
+  /**
+   * FRU-721: the widget read a page of this site: when it was seen there, and by which way
+   * (`site-seen.ts`). Absent: a worker with no accounts, which keeps no site.
+   */
+  pageRead?: (request: Request, policy: ClientPolicy, site: string, origins: readonly string[]) => Promise<void>;
   /** Whether this caller may read the pins of this client: `authorizeRead` of `app.ts`. */
   authorizeRead: (request: Request, policy: ClientPolicy) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** Whether the worker would take a note of this caller on this client: `writesHere` of `app.ts`. */

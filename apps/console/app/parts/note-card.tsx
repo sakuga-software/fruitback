@@ -60,7 +60,8 @@ export function NoteCard({
       <div>
         <div className="flex items-start gap-[8px] text-body">
           <SelectTask note={note} className="-my-[4px] -ml-[6px]" />
-          <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">
+          {/* FRU-725: the text starts each line at the left, as the table does. A button centres it. */}
+          <span className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere] [&>button]:justify-start [&>button]:text-left">
             <NoteText note={note}>{excerptOf(note.excerpt)}</NoteText>
           </span>
           {/* At the right: the text of every card of a column starts at one edge, with a select or not. */}

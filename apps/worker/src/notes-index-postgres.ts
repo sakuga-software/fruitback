@@ -75,7 +75,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
     return run(async (db) => {
       // The deliveries first: a few rows, read once, then matched to the notes by their key.
       const pending = await pendingOf(db, workspace);
-      const narrowed = filtered(workspace, query);
+      const narrowed = filtered(workspace, query, pending);
       // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
       // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
       // group counts what the list shows (FRU-551).
@@ -428,6 +428,76 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
+    async frameCounts(workspace, { account, sites: only, since, undelivered }) {
+      // The filter of `list` itself: the notes of the workspace that are not archived, of the sites the
+      // caller reads. Each count is the condition `list` builds for its own filter, not a copy of it.
+      const base = only === undefined ? {} : { sites: only };
+      const counted = (query: Omit<NoteQuery, 'limit'>) =>
+        sql<number>`count(*) FILTER (WHERE ${filtered(workspace, { ...base, ...query })})`.mapWith(Number);
+
+      return run(async (db) => {
+        const [row] = await db
+          .select({
+            open: counted({ unresolved: true }),
+            assigned: counted({ assignee: account }),
+            fresh: since === undefined ? sql<null>`NULL` : counted({ since }),
+          })
+          .from(note_index)
+          .where(filtered(workspace, base));
+        // The notes whose delivery did not arrive, in a statement of their own, after the deliveries:
+        // in a `FILTER` the keys were matched again for each note (150 ms for 50 000 notes, measured);
+        // in a `WHERE` PostgreSQL hashes them once, as for `list` (FRU-722).
+        let late: number | undefined;
+        if (undelivered === true) {
+          const pending = await pendingOf(db, workspace);
+          const [counted] = await db
+            .select({ notes: count() })
+            .from(note_index)
+            .where(filtered(workspace, { ...base, undelivered: true }, pending));
+          late = Number(counted?.notes ?? 0);
+        }
+
+        return {
+          open: row?.open ?? 0,
+          assigned: row?.assigned ?? 0,
+          ...(since === undefined ? {} : { fresh: Number(row?.fresh ?? 0) }),
+          ...(late === undefined ? {} : { undelivered: late }),
+        };
+      });
+    },
+
+    async siteFigures(workspace, site, { now, days, undelivered }) {
+      const since = now - days * 86_400_000;
+      // The filter of `list` with this site, and each figure the condition of its own filter.
+      const of = (query: Omit<NoteQuery, 'limit'>) => filtered(workspace, { site, ...query });
+
+      return run(async (db) => {
+        const [row] = await db
+          .select({
+            oldest: sql<number | null>`min(${note_index.created_at}) FILTER (WHERE ${of({ unresolved: true })})`,
+            recent: sql<number>`count(*) FILTER (WHERE ${of({ since })})`.mapWith(Number),
+          })
+          .from(note_index)
+          .where(of({}));
+        // As for the counts of the bar: the notes not delivered in a `WHERE`, where their keys are hashed.
+        let late: number | undefined;
+        if (undelivered) {
+          const pending = await pendingOf(db, workspace);
+          const [counted] = await db
+            .select({ notes: count() })
+            .from(note_index)
+            .where(filtered(workspace, { site, since, undelivered: true }, pending));
+          late = Number(counted?.notes ?? 0);
+        }
+
+        return {
+          ...(row?.oldest === null || row?.oldest === undefined ? {} : { oldestOpenAt: Number(row.oldest) }),
+          recent: row?.recent ?? 0,
+          ...(late === undefined ? {} : { recentUndelivered: late }),
+        };
+      });
+    },
+
     async undelivered(workspace, only) {
       // The body of a delivery is what was sent, as JSON: the site is in it, and nowhere else. A body
       // that is not JSON names no site, and does not stop the count of the others.
@@ -717,8 +787,11 @@ function readable(sites: readonly string[] | undefined) {
   return sites.length === 0 ? sql`false` : inArray(note_index.site_id, [...sites]);
 }
 
-/** Every filter of a query but its place and its cursor. */
-function filtered(workspace: string, query: NoteQuery) {
+/**
+ * Every filter of a query but its place and its cursor. `pending`: the deliveries that did not arrive,
+ * which `undelivered` needs (FRU-722); a query that asks it without them finds no note.
+ */
+function filtered(workspace: string, query: Omit<NoteQuery, 'limit'>, pending?: Map<string, Pending>) {
   return and(
     eq(note_index.workspace_id, workspace),
     readable(query.sites),
@@ -728,6 +801,7 @@ function filtered(workspace: string, query: NoteQuery) {
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
     query.onPages === true ? ne(note_index.page_url, NO_PAGE) : undefined,
+    query.undelivered === true ? undeliveredOf(pending) : undefined,
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
     query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
     ...taskFilters(query),
@@ -745,8 +819,21 @@ function filtered(workspace: string, query: NoteQuery) {
   );
 }
 
+/**
+ * FRU-722: the notes whose key (connector, site, reference) is one of a delivery that did not arrive.
+ * The keys go as three arrays that `unnest` makes into rows: PostgreSQL then hashes them once, where a
+ * list of tuples written in the statement was planned as a loop (298 ms, measured for `list`).
+ */
+function undeliveredOf(pending: Map<string, Pending> | undefined): SQL {
+  const keys = [...(pending?.values() ?? [])].map((delivery) => delivery.key);
+  if (keys.length === 0) return sql`false`;
+  const column = (at: 0 | 1 | 2) => sql.param(keys.map((key) => key[at]));
+
+  return sql`(${note_index.connector_id}, ${note_index.site_id}, ${note_index.reference}) IN (SELECT * FROM unnest(${column(0)}::text[], ${column(1)}::text[], ${column(2)}::text[]))`;
+}
+
 /** FRU-655: the filters on the fields of a task, read in the index. */
-function taskFilters(query: NoteQuery): (SQL | undefined)[] {
+function taskFilters(query: Omit<NoteQuery, 'limit'>): (SQL | undefined)[] {
   const due = query.due;
   let byDay: SQL | undefined;
   if (due?.by === 'none') byDay = isNull(note_index.task_due_on);
