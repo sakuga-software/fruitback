@@ -148,6 +148,7 @@
   "two-copies.spec.ts": 7.9,
   "visitor.spec.ts": 3.8,
   "widget-hide.spec.ts": 10.8,
+  "widget-host-shortcuts.spec.ts": 8.5,
   "widget-radius.spec.ts": 5.4,
   "wrap-console.spec.ts": 16.5,
   "wrap-extension.spec.ts": 12.8,
