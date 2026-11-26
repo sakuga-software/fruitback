@@ -42,7 +42,7 @@ import {
   takesReplies,
   takesStatuses,
 } from './store.ts';
-import { attachmentStoreFor } from './worker-stores.ts';
+import { attachmentStoreFor, heldNotesFor } from './worker-stores.ts';
 import { OWN_SOURCE, type SiteStatus, envelopeStatuses, withoutTrackerStatus } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
 import type { StageExceptions } from './linear.ts';
@@ -541,6 +541,20 @@ export async function postFeedback(
     ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders)
     : undefined;
   if (limited !== undefined) return limited;
+  // FRU-704: « Hold new visitor notes ». The note of a visitor waits for a member, and goes nowhere yet.
+  // A visitor sends no file (`takeFiles` needs a session): a note that names one goes the way below,
+  // which refuses it.
+  if (identity.visitor && route.client?.holdVisitorNotes === true && attachmentIds.length === 0) {
+    return heldAnswer(
+      config,
+      context,
+      checks.visitorOf(request, clientId),
+      route.client,
+      clientId,
+      [attributed],
+      corsHeaders,
+    );
+  }
 
   try {
     // A note of before FRU-331, sent again, names its picture in its note: it goes with it while the
@@ -664,6 +678,43 @@ async function visitorLimit(
   return json(429, { error: 'visitor-limit', perHour }, corsHeaders);
 }
 
+/**
+ * Keeps the notes of a visitor for a member (FRU-704), and answers `202` with `held: true`: the note is
+ * kept, and is not in the tracker yet. One note answers `{ held, id }`, a batch `{ results }` with each
+ * id held. A database that does not answer is `502 store-unavailable`, so the widget keeps the text and
+ * tries again; a note held already answers `202` again.
+ */
+async function heldAnswer(
+  config: Served,
+  context: RequestContext | undefined,
+  visitor: string | undefined,
+  client: ClientConfig,
+  clientId: string | undefined,
+  notes: readonly Note[],
+  corsHeaders: Record<string, string>,
+  batch = false,
+): Promise<Response> {
+  const held = context?.heldNotes ?? heldNotesFor(config);
+  const workspace = client.workspace;
+  if (held === undefined || workspace === undefined || clientId === undefined) {
+    return json(502, { error: 'store-unavailable' }, corsHeaders);
+  }
+  const now = Date.now();
+  try {
+    for (const note of notes) {
+      await held.hold({ site: clientId, workspace, note, ...(visitor === undefined ? {} : { visitor }), heldAt: now });
+    }
+  } catch (error) {
+    console.error(`[fruitback] a note of site ${clientId} was not held: ${String(error)}`);
+
+    return json(502, { error: 'store-unavailable' }, corsHeaders);
+  }
+
+  return batch
+    ? json(202, { results: notes.map((note) => ({ id: note.id, held: true })) }, corsHeaders)
+    : json(202, { held: true, id: notes[0]?.id }, corsHeaders);
+}
+
 /** The help of a `502 destination-unavailable` for the author of this request (FRU-640). */
 async function placeGoneHelpFor(
   request: Request,
@@ -784,6 +835,20 @@ async function postBatch(
       ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, unknown, corsHeaders)
       : undefined;
   if (limited !== undefined) return limited;
+  // FRU-704: a batch of a visitor on a site that holds their notes waits whole. A note held already
+  // is not held twice: its site and its id are the key.
+  if (visitor && route.client?.holdVisitorNotes === true) {
+    return heldAnswer(
+      config,
+      context,
+      checks.visitorOf(request, clientId),
+      route.client,
+      clientId,
+      attributed,
+      corsHeaders,
+      true,
+    );
+  }
 
   // A note that is not kept yet is taken for this request. One that another request holds is not
   // sent from here: it is answered as not kept, and the next attempt reads what became of it.

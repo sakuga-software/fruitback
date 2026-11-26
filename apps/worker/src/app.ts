@@ -66,6 +66,8 @@ export {
   connectStoreFor,
   deliverPending,
   sweepDoneNotices,
+  sweepHeldNotes,
+  heldNotesFor,
   instanceAdminFor,
   kvFor,
   mailerFor,

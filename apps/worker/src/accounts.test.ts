@@ -78,6 +78,7 @@ describe('the words people paste', () => {
       visitorEdit: 'never' as const,
       visitorDelete: 'never' as const,
       visitorNotesPerHour: 0 as const,
+      holdVisitorNotes: false,
     };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
@@ -100,6 +101,7 @@ describe('the words people paste', () => {
       visitorEdit: 'never' as const,
       visitorDelete: 'never' as const,
       visitorNotesPerHour: 0 as const,
+      holdVisitorNotes: false,
     };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
@@ -127,6 +129,7 @@ describe('the words people paste', () => {
       notifyDone: false,
       visibility: 'everyone' as const,
       visitorNotesPerHour: 10 as const,
+      holdVisitorNotes: false,
     };
     const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
@@ -146,12 +149,30 @@ describe('the words people paste', () => {
       visibility: 'everyone' as const,
       visitorEdit: 'while-open' as const,
       visitorDelete: 'while-open' as const,
+      holdVisitorNotes: false,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 10 }).visitorNotesPerHour, 10);
     // « No limit » is no field: the route counts nothing.
     assert.equal('visitorNotesPerHour' in clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 0 }), false);
     // A site of its members only has no visitor to count.
     assert.equal('visitorNotesPerHour' in clientOf({ ...site, writers: 'members', visitorNotesPerHour: 10 }), false);
+  });
+
+  it('tells the routes to hold the notes of visitors only where a visitor writes and the site holds them (FRU-704)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visibility: 'everyone' as const,
+      visitorEdit: 'while-open' as const,
+      visitorDelete: 'while-open' as const,
+      visitorNotesPerHour: 10 as const,
+    };
+    assert.equal(clientOf({ ...site, writers: 'anyone', holdVisitorNotes: true }).holdVisitorNotes, true);
+    assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'anyone', holdVisitorNotes: false }), false);
+    assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'members', holdVisitorNotes: true }), false);
   });
 });
 

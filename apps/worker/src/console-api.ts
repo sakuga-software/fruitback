@@ -223,6 +223,8 @@ type SiteView = {
   visitorDelete: VisitorRight;
   /** FRU-704: the notes a visitor leaves in an hour, `0` for no limit, as it is stored. */
   visitorNotesPerHour: VisitorNoteLimit;
+  /** FRU-704: « Hold new visitor notes », as it is stored. */
+  holdVisitorNotes: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -245,6 +247,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visitorEdit: site.visitorEdit,
     visitorDelete: site.visitorDelete,
     visitorNotesPerHour: site.visitorNotesPerHour,
+    holdVisitorNotes: site.holdVisitorNotes,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -882,6 +885,11 @@ export async function handleConsoleApi(
     if (body?.visitorNotesPerHour !== undefined && visitorNotesPerHour === undefined) {
       return json(400, { error: 'invalid-visitor-notes-per-hour' }, headers);
     }
+    // FRU-704: absent, a new site holds nothing and a site that exists keeps what it had.
+    const holdVisitorNotes = body?.holdVisitorNotes;
+    if (holdVisitorNotes !== undefined && typeof holdVisitorNotes !== 'boolean') {
+      return json(400, { error: 'invalid-hold-visitor-notes' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -891,6 +899,7 @@ export async function handleConsoleApi(
       ...(visitorEdit === undefined ? {} : { visitorEdit }),
       ...(visitorDelete === undefined ? {} : { visitorDelete }),
       ...(visitorNotesPerHour === undefined ? {} : { visitorNotesPerHour }),
+      ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.
