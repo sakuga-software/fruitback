@@ -12,11 +12,16 @@ import { SiteIcon } from './site-icons';
 type Way = 'script' | 'extension';
 
 /**
- * Whether notes came by a way, and when the last note of the site came. **This is all the worker says
- * of an install** (FRU-689): it records no visit of the script, so a site with no note is « Not seen
- * yet », never « Installed ».
+ * When the widget was last seen on the site by a way (FRU-721): the worker writes it from the read of
+ * the pins of a page, an hour apart at most. Before that date exists (a site of before FRU-721), it
+ * says whether notes came by that way, and when the last note of the site came (FRU-689).
  */
 function seenLine(site: Site, way: Way): string {
+  const seen = site.seen?.[way];
+  if (seen !== undefined)
+    return way === 'script'
+      ? t('Seen on the site {when}.', { when: agoInSentence(seen) })
+      : t('Seen with the extension {when}.', { when: agoInSentence(seen) });
   const came = site.via?.includes(way) === true;
   if (!came)
     return way === 'script' ? t('No note came through the script yet.') : t('No note came through the extension yet.');
@@ -44,6 +49,11 @@ export function InstallCard({ workspace, site }: { workspace: Workspace; site: S
   const connected = useConnectedExtension();
   const host = siteName(site.origin);
   const used = site.via !== undefined && site.via.length > 0;
+  // FRU-721: « Installed » once the widget was seen on the site, by either way.
+  const installed = site.seen?.script !== undefined || site.seen?.extension !== undefined;
+  let state: 'installed' | 'used' | 'unseen' = 'unseen';
+  if (installed) state = 'installed';
+  else if (used) state = 'used';
 
   return (
     <section
@@ -52,8 +62,10 @@ export function InstallCard({ workspace, site }: { workspace: Workspace; site: S
     >
       <div className="flex min-h-[44px] items-center gap-[8px] px-[16px]">
         <h2 className="min-w-0 text-small leading-auto font-semibold">{t('Install')}</h2>
-        <span className="ms-auto" data-install-state={used ? 'used' : 'unseen'}>
-          {used ? <Chip tone="done">{t('Notes came')}</Chip> : <Chip>{t('Not seen yet')}</Chip>}
+        <span className="ms-auto" data-install-state={state}>
+          {state === 'installed' ? <Chip tone="done">{t('Installed')}</Chip> : null}
+          {state === 'used' ? <Chip tone="done">{t('Notes came')}</Chip> : null}
+          {state === 'unseen' ? <Chip>{t('Not seen yet')}</Chip> : null}
         </span>
       </div>
       <div className="flex flex-col gap-[12px] px-[16px] pb-[14px]">

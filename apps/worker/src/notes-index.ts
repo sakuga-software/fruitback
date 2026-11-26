@@ -147,6 +147,17 @@ export type NoteIndex = {
     asked: { account: string; sites?: readonly string[]; since?: number; undelivered?: boolean },
   ): Promise<FrameCounts>;
   /**
+   * FRU-721: the figures of the page of one site, from the filter of `list` with its `site`:
+   * - `oldestOpenAt`: when the oldest note that is not done nor closed was left; absent with none;
+   * - `recent`: the notes left in the `days` before `now`;
+   * - `recentUndelivered`, when asked: those of them whose delivery did not arrive (`undelivered`).
+   */
+  siteFigures(
+    workspace: string,
+    site: string,
+    asked: { now: number; days: number; undelivered: boolean },
+  ): Promise<{ oldestOpenAt?: number; recent: number; recentUndelivered?: number }>;
+  /**
    * The deliveries of each site of a workspace that are not delivered: waiting for an attempt, or
    * given up (FRU-122). A delivery that arrived is removed, so it is not counted. `sites`: only those
    * sites (FRU-497).
