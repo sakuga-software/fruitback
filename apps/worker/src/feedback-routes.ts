@@ -40,12 +40,13 @@ import {
   takesEdits,
   takesWithdrawals,
   takesReplies,
+  takesStatuses,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
 import { OWN_SOURCE, type SiteStatus, envelopeStatuses, withoutTrackerStatus } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
 import type { StageExceptions } from './linear.ts';
-import type { AccountStore } from './accounts.ts';
+import { type AccountStore, can } from './accounts.ts';
 
 /**
  * The routes of the notes of a page (FRU-374), out of `app.ts` so that a review reads them in one
@@ -149,6 +150,8 @@ export async function getFeedback(
     // visitor known by their browser too, where the site lets its visitors delete.
     const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'withdraw'));
     const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
+    // FRU-718: and change the status of a note from its thread, with the rights of the route of a status.
+    const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, checks);
     // FRU-618: the notes an agent works on, and for a member of the team the address of its session.
     const agents = await agentsOf(
       request,
@@ -172,6 +175,7 @@ export async function getFeedback(
         ...(mine ? { mine: true as const } : {}),
         ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) ? { editable: true as const } : {}),
         ...(mine && withdrawalsHere && EDITABLE_STAGES.has(issue.stage) ? { withdrawable: true as const } : {}),
+        ...(setsStatus === 'every' || (setsStatus === 'own' && mine) ? { canSetStatus: true as const } : {}),
       };
 
       return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.note.id)) : marked;
@@ -883,6 +887,49 @@ async function agentsOf(
     (await checks.seesTracker(request, config, policy));
 
   return { sessions, team };
+}
+
+/**
+ * Who may change the status of the notes of this read from their thread (FRU-718), with the rights of
+ * `POST /feedback/<id>/status` (FRU-367): `every` note for a member whose role manages the sites, the
+ * notes they left (`own`) for any other person whose session reads this site, and `none` for everybody
+ * else: a visitor, a token of a site, a guest on a site not shared with them. Only where the store of
+ * the site keeps statuses (the worker's own store, or an address), on a site with one place.
+ *
+ * Only where the thread offers the menu: the route reads the session again in the store, and decides.
+ * So this reads none: `memberOf` checks the token and the reach, and a reader with no token costs no
+ * query. A store that does not answer costs the menu, never the read.
+ *
+ * WARNING: asked at each request, after the cache, as `mine`.
+ */
+async function statusSetterOf(
+  request: Request,
+  config: Served,
+  store: NoteStore,
+  client: ClientConfig | undefined,
+  site: string | undefined,
+  checks: CallerChecks,
+): Promise<'every' | 'own' | 'none'> {
+  const workspace = client?.workspace;
+  // `reachIn` of the served configuration, as `memberOf` reads it: the transport of a server hands the
+  // read no store of the accounts (`context.accounts` is a seam of the tests).
+  const { reachIn } = config;
+  if (reachIn === undefined || workspace === undefined || site === undefined) return 'none';
+  if ((client?.destinations?.length ?? 0) > 1) return 'none';
+  try {
+    const account = await checks.memberOf(request, config, workspace, site);
+    if (account === undefined) return 'none';
+    if (!(await takesStatuses(store, client))) return 'none';
+    const reach = await reachIn(workspace, account);
+
+    return reach !== undefined && can(reach.role, 'manage-sites') ? 'every' : 'own';
+  } catch (error) {
+    console.error(
+      `[fruitback] who may change a status was not read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return 'none';
+  }
 }
 
 /** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */
