@@ -1,3 +1,6 @@
+import { isShadowRoot } from './dom.ts';
+import { isTypingCopy } from './key-guard.ts';
+
 /**
  * Focus inside the widget's dialogs (FRU-51).
  *
@@ -107,8 +110,16 @@ export function holdFocus(dialog: HTMLElement, onEscape: () => void): FocusHold 
     }
   }
 
+  // A key of a field of the widget out of the dialog (the search of the list) stops before the
+  // document (FRU-726, `key-guard.ts`): its copy comes to the root instead.
+  const onTypedKeyDown = (event: KeyboardEvent): void => {
+    if (isTypingCopy(event)) onDocumentKeyDown(event);
+  };
+  const root = dialog.getRootNode();
+  const shadow = isShadowRoot(root) ? root : null;
   dialog.addEventListener('keydown', onKeyDown);
   document.addEventListener('keydown', onDocumentKeyDown, true);
+  shadow?.addEventListener('keydown', onTypedKeyDown as EventListener, true);
 
   return {
     remember() {
@@ -129,6 +140,7 @@ export function holdFocus(dialog: HTMLElement, onEscape: () => void): FocusHold 
       forget();
       dialog.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keydown', onDocumentKeyDown, true);
+      shadow?.removeEventListener('keydown', onTypedKeyDown as EventListener, true);
     },
   };
 }

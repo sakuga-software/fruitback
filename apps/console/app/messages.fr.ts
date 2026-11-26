@@ -1267,6 +1267,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Next page': 'Page suivante',
   'Page {page}': 'Page {page}',
   'The notes did not load': 'Les notes ne se sont pas chargées',
+  // FRU-724: the end of the list of the notes, read as it scrolls.
+  'Load more': 'Charger la suite',
+  '{shown} of {total}': '{shown} sur {total}',
+  'The next notes did not load.': 'Les notes suivantes ne se sont pas chargées.',
+  '1 more note. {shown} of {total} shown.': '1 note de plus. {shown} sur {total} affichées.',
+  '{count} more notes. {shown} of {total} shown.': '{count} notes de plus. {shown} sur {total} affichées.',
+  'The first {count} notes are shown. A filter or the search finds the others.':
+    'Les {count} premières notes sont affichées. Un filtre ou la recherche trouve les autres.',
   'The members did not load': 'Les membres ne se sont pas chargés',
   'The members did not load.': 'Les membres ne se sont pas chargés.',
   'The labels did not load.': 'Les labels ne se sont pas chargés.',

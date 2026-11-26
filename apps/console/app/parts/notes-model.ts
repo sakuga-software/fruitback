@@ -1,7 +1,7 @@
 import type { Stage } from '../stages';
 import type { StatusChoice } from '../note-status';
 
-// The model of the Notes screen (FRU-614): what the index of the notes answers, and its pages.
+// The model of the Notes screen (FRU-614): what the index of the notes answers.
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -149,9 +149,3 @@ export function groupsOf<T extends { stage: Stage }>(notes: readonly T[]): { sta
     (group) => group.notes.length > 0,
   );
 }
-
-/** The notes of a page (FRU-587): the default of the worker, asked for by name. */
-export const NOTES_PER_PAGE = 25;
-
-/** The page of the note at `from`, from 1. */
-export const pageOf = (from: number) => Math.floor((from - 1) / NOTES_PER_PAGE) + 1;
