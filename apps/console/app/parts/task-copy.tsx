@@ -9,6 +9,7 @@ import {
 } from '@fruitback/shared';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { call } from '../api';
+import { composes, typedInField } from '../keys';
 import { t } from '../i18n';
 import type { StatusChoice } from '../note-status';
 import { STAGE_NAMES } from '../stages';
@@ -267,10 +268,8 @@ export function useTaskCopy({
  */
 export function copyShortcutOf(event: KeyboardEvent): 'link' | 'identifier' | undefined {
   if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey || event.repeat) return undefined;
-  const target = event.target;
-  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]') !== null) {
-    return undefined;
-  }
+  // A field of the console, or one in a Shadow root (FRU-726), keeps its keys.
+  if (composes(event) || typedInField(event)) return undefined;
   if (event.code === 'KeyC') return 'link';
   if (event.code === 'Period') return 'identifier';
 
