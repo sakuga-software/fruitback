@@ -1606,7 +1606,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-three BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1857,7 +1857,7 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 ## The notes of a visitor in an hour (FRU-704)
 
 - **`visitor_notes_per_hour` of `sites`: `0`, 5, 10, 20 or 50**, the line « Notes per visitor » of
-  the card « Safeguards ». `0` is « No limit ». `0055` adds it with 10, the value of the mockup, for
+  the card « Safeguards ». `0` is « No limit ». `0056` adds it with 10, the value of the mockup, for
   every site, those of before included: Fruitback has no users yet, and a site open to anybody is
   the one to protect. A row with another value counts as 10, never as « No limit ».
 - **`clientOf` gives it to the routes only where `writers` is `anyone`, and only above `0`.** Absent
@@ -3388,7 +3388,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-three BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3914,6 +3914,14 @@ refused by its sentence. What follows is the history.
   `\` escaped. Never the rest of a text, never a name a reporter typed: neither is kept.
 - **Filters**: `site`, `stage`, `place` (`fruitback`, a connector id, or `removed`), `mine` (the
   notes whose author is the account that asks). Anything that is not one of these values is `400`.
+- **`since` and `undelivered`, for the views of the bar (FRU-722), on the route of the console only**
+  (`queryOf` with `console`; the list of the extension and `/mcp` do not read them). `since` is an
+  instant in milliseconds, the notes left at it or after it: the console says the start of « This
+  week » on the day of the person, which the worker cannot know. `undelivered=1` is the notes whose
+  delivery did not arrive, waiting or given up: their key (connector, site, reference) is one of
+  the deliveries of the workspace that `list` reads first, sent as three arrays that `unnest` makes
+  into rows, so PostgreSQL hashes them once. It is about the tracker: `403` to a role without
+  `see-tracker`, as `place`. `total` and `counts` follow both.
 - **Pages of 8 to 50 notes (25 by default), the newest first, after an opaque cursor.** The order is
   the date the worker took the note, then the site and the note ids in their bytes (`COLLATE "C"`),
   so it is total and the same on every server. A cursor is the place of the last note shown, so a
@@ -3942,6 +3950,90 @@ refused by its sentence. What follows is the history.
   removed. No migration for that link.
 - **An index that does not answer is `503`**, said in the log; a worker with no database has no
   list (`404`).
+
+## The counts of the bar of the console (FRU-711)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/rail` answers `{ sites, notes?, views?: { assigned, new?, undelivered? }, failing? }`**
+  (`console-rail.ts`): the counts at the right of the entries of the bar. The console reads it when
+  the frame of a workspace mounts and at each change of workspace, never for a screen.
+- **Each count is a list the worker already answers, with the same filter**: `sites` the sites the
+  caller reads (the `total` of a page of `GET …/sites`), `notes` the notes that are not done nor
+  closed and not archived (`GET …/notes?unresolved=1`), `views.assigned` the tasks of the caller
+  (`GET …/notes?assignee=me`), `views.new` the notes left since `?since=` of the read (FRU-722),
+  `views.undelivered` the notes whose delivery did not arrive (`GET …/notes?undelivered=1`, for
+  `see-tracker` only), and `failing` the deliveries of the connectors that did not arrive, of
+  notes and of calls of a trigger, as the Connectors screen adds them up from
+  `GET …/connectors/<id>/deliveries`. `NoteIndex.frameCounts` reads the notes with `filtered`, the
+  condition of `list` itself, so the bar and the Notes screen cannot say two numbers for one list
+  (test:`says the total the list of the notes answers for the same filter`).
+- **Every role reads it (`read-feedback`)**; a guest counts the sites shared with them and the notes
+  of those sites, and gets no `failing`, which is about the tracker (`see-tracker`).
+- **An index of the notes that does not answer costs `notes` and `views`**, never the rest, and is
+  said in the log: an absent count is not a zero.
+
+### What it costs
+
+Measured in the process, through `handleConsoleApi` with the SQL statements counted, on PostgreSQL 17
+in a container: a workspace of 200 sites and 50 000 notes (half of them on one site, one in 40 a task
+of the caller, one in 50 archived), 300 deliveries that did not arrive, and 50 other workspaces of
+2 000 notes each. 60 calls after 10, three runs:
+
+| Read                                  | Median          | p95             | SQL statements |
+| ------------------------------------- | --------------- | --------------- | -------------- |
+| `GET …/rail`, an owner                | 12.3 to 17.2 ms | 20.9 to 24.2 ms | 5              |
+| `GET …/rail`, a guest of one site     | 8.1 to 13.7 ms  | 12.1 to 19.5 ms | 5              |
+| `GET …/notes?unresolved=1`, for scale | 26.3 to 28.1 ms | 37.6 to 53.8 ms | 9              |
+| `GET …/sites?limit=24`, for scale     | 13.1 to 18.3 ms | 20.3 to 38.3 ms | 7              |
+
+With FRU-722, on the same workspace with 300 of its notes not delivered (three runs, 60 calls):
+`GET …/rail?since=` 15.0 to 16.1 ms median, 17.0 to 19.7 ms p95, 7 statements (the deliveries, then
+the count of the notes not delivered in a statement of its own); a guest 7.6 to 7.8 ms, 5 statements;
+`GET …/notes?undelivered=1` 11.4 to 11.9 ms; `GET …/notes?since=` 7.6 to 9.6 ms; `GET …/notes`, for
+scale, 14.5 to 15.4 ms. Counted in a `FILTER` beside the others, the notes not delivered took 150 ms:
+the keys were matched again for each note; in a `WHERE` they are hashed once.
+
+The count of the notes is one pass over the rows of the workspace by `note_index_by_workspace`
+(9.1 to 11.4 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make;
+each of its counts is the condition `filtered` builds for the list, with its filter added; the
+sites and the deliveries are one statement (0.2 ms). The five statements are the account, the role,
+the reach, and the two counts, the last two at the same time. The cookie of better-auth adds its own
+reads, as on every route. A workspace of millions of notes would want counters kept beside them, as
+for the list.
+
+## The page of one site: seen on the site, oldest open note, 30 days (FRU-721)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/sites/<site>` adds `seen`, `oldestOpenAt` and `recent`**, on the
+  read of one site only, never on a list: `seen: { script?, extension? }`, when the widget last read
+  a page of the site by each way; `oldestOpenAt`, when the oldest note that is not done nor closed
+  was left; `recent: { days: 30, notes, undelivered? }`, the notes of the last 30 days and, for
+  `see-tracker`, those of them whose delivery did not arrive. `NoteIndex.siteFigures` reads them with
+  `filtered` and its `site`, as the list does.
+- **The worker sees the widget from the read of the pins of a page** (`GET /feedback`), which the
+  widget sends when it mounts: no call of its own, nothing more for a site to install. The read writes
+  the date before it reads the pins, so a site whose notes are « Members only » is seen too, by its
+  visitors who read nothing. `script`: no token, from the `Origin` of the site; `extension`: a session
+  of the workspace that the worker verifies; anything else writes nothing (`readBy` of
+  `app.ts`).
+- **At most one write an hour per site and per way** (`site-seen.ts`): the process remembers what it
+  wrote, and asks nothing of the database in the hour after; the store writes only a date an hour old
+  (`markSiteSeen`), so two processes write once. A read claims its way (a token: the extension; none:
+  the script) and the claim is checked only when that way is due; a session that did not verify is
+  not verified again for a minute, so a bad token costs one verification a minute. Each memory holds
+  10 000 sites and ways at most, emptied past it as in `last-seen.ts`. A write that fails is said in
+  the log, and the read goes on. Migration `0055_sites_seen`: two columns of `sites`.
+
+### What it costs
+
+Measured as the counts of the bar (FRU-711), on a site of 25 000 notes of the same workspace, three
+runs: `GET …/sites/<site>` 6.5 to 7.5 ms median and 6 statements before, 8.6 to 10.8 ms and 10
+statements after for an owner (the dates, the figures, the deliveries and the notes not delivered),
+7.1 to 8.6 ms and 7 statements for a guest. The write of a date is one `UPDATE` by the primary key
+(0.33 ms), at most once an hour per site and per way; a read of the pins in the hour after costs
+nothing more.
 
 ## The notes of a whole site, for the extension (FRU-306)
 

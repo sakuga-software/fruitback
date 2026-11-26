@@ -4,22 +4,32 @@ import { FILTERS, type Filter } from './parts/notes-model.ts';
  * The views of the bar (FRU-697): a filter of the Notes screen, with a name. A view is a link to the
  * address of that filter, so a reload, the Back button and a shared link keep it.
  *
- * A view exists only for a filter that the worker reads. The mockup draws three: « New this week »
- * needs a filter on the day a note was left, and « Not delivered » a filter on the deliveries. The
- * worker reads neither (FRU-722): a view that it does not filter would show a list it did not filter.
+ * A view exists only for a filter that the worker reads: a view that it does not filter would show a
+ * list it did not filter. The three of the mockup are: « New this week » (`created=week`, which the
+ * worker reads as `since`, FRU-722), « Assigned to me » (`assignee=me`) and « Not delivered »
+ * (`undelivered`, FRU-722).
  */
-export type ViewId = 'assigned';
+export type ViewId = 'new' | 'assigned' | 'undelivered';
 
 export type SavedView = {
   id: ViewId;
   /** The filters of the view, as the address of the Notes screen writes them. */
   filters: Readonly<Partial<Record<Filter, string>>>;
-  /** A guest is never given a task (FRU-673): a view of the tasks is not theirs. */
+  /**
+   * Whether a guest has it. A guest is never given a task (FRU-673), and does not see where a note
+   * went (FRU-250): the views of the tasks and of the deliveries are not theirs.
+   */
   guests: boolean;
+  /** A count of it is something that failed: drawn in red when it is more than zero. */
+  alert?: true;
 };
 
 /** The views, in the order of the mockup. */
-export const VIEWS: readonly SavedView[] = [{ id: 'assigned', filters: { assignee: 'me' }, guests: false }];
+export const VIEWS: readonly SavedView[] = [
+  { id: 'new', filters: { created: 'week' }, guests: true },
+  { id: 'assigned', filters: { assignee: 'me' }, guests: false },
+  { id: 'undelivered', filters: { undelivered: '1' }, guests: false, alert: true },
+];
 
 /** The views of a person of this role. */
 export function viewsFor(role: string): readonly SavedView[] {

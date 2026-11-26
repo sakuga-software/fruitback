@@ -108,6 +108,14 @@ export type Site = {
   /** Notes sent to an address that did not take them yet (REST, FRU-122). */
   undelivered?: number;
   asOf?: string;
+  /**
+   * FRU-721, on the read of one site only: when the widget last read a page of the site, by the
+   * script and by the extension; when the oldest note that is not done nor closed was left; and the
+   * notes of the last `days`, with those not delivered for whoever sees the tracker.
+   */
+  seen?: { script?: string; extension?: string };
+  oldestOpenAt?: string;
+  recent?: { days: number; notes: number; undelivered?: number };
 };
 /** A site as a list to choose one names it (FRU-497): no destination and no count. */
 export type SiteChoice = Pick<Site, 'id' | 'origin' | 'visibility'>;
@@ -141,6 +149,53 @@ export async function siteChoices(workspace: string): Promise<Answer<{ sites: Si
 /** One site of a workspace, for its page (FRU-497): what the list says of it, and its notes. */
 export function readSite(workspace: string, site: string): Promise<Answer<Site>> {
   return call<Site>('GET', `/console/workspaces/${workspace}/sites/${encodeURIComponent(site)}`);
+}
+
+/**
+ * What the bar of a workspace counts (FRU-711), as the worker answers it: the sites, the open notes,
+ * the sends of the connectors that did not arrive, and each view by its id. A count the worker did not
+ * give is absent: a guest has no `failing`, and an index that did not answer gives no `notes`.
+ */
+export type RailCounts = {
+  sites?: number;
+  notes?: number;
+  failing?: number;
+  views: Readonly<Record<string, number>>;
+};
+
+/** A count, or `undefined` for anything that is not one. */
+function countOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * The counts of the bar (FRU-711): one read, when the frame of a workspace mounts and at each change
+ * of workspace, never for a screen. `since`: where « New this week » starts (FRU-722). Quiet: the bar is not the screen, and a read that fails shows no
+ * count. A field that is not a count is no count.
+ */
+export async function railCounts(workspace: string, since?: number): Promise<RailCounts | undefined> {
+  // FRU-722: « New this week » starts on a day of the person, which the worker cannot know.
+  const query = since === undefined ? '' : `?since=${since}`;
+  const answer = await call<Record<string, unknown>>(
+    'GET',
+    `/console/workspaces/${workspace}/rail${query}`,
+    undefined,
+    {
+      quiet: true,
+    },
+  );
+  if (!answer.ok || typeof answer.data !== 'object' || answer.data === null) return undefined;
+  const { sites, notes, failing, views } = answer.data;
+  const counted = { sites: countOf(sites), notes: countOf(notes), failing: countOf(failing) };
+  const viewCounts =
+    typeof views === 'object' && views !== null
+      ? Object.entries(views).flatMap(([id, count]) => (countOf(count) === undefined ? [] : [[id, count as number]]))
+      : [];
+
+  return {
+    ...Object.fromEntries(Object.entries(counted).filter(([, count]) => count !== undefined)),
+    views: Object.fromEntries(viewCounts),
+  };
 }
 
 /**

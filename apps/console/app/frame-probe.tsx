@@ -3,7 +3,7 @@ import { VIEWS } from './saved-views';
 
 /**
  * The bar with every section, « Notes » as the section on screen, and the counts of the mockup of
- * FRU-684, which no read gives yet. Under them, the views of FRU-697 with the count of the mockup. It is a page of the development server only, like `/kit`:
+ * FRU-684, given here as the read of the bar gives them (FRU-711). Under them, the views of FRU-697 with the count of the mockup. It is a page of the development server only, like `/kit`:
  * `e2e/console-frame.spec.ts` measures the order of the entries, the entry on screen and the counts here.
  *
  * The names are samples: no person sees this page.
@@ -28,7 +28,7 @@ export default function FrameProbe() {
           counts={{ notes: 12, sites: 4 }}
           failing={2}
           views={VIEWS}
-          viewCounts={{ assigned: 4 }}
+          viewCounts={{ new: 7, assigned: 4, undelivered: 2 }}
         />
       }
     />

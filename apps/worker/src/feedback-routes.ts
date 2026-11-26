@@ -88,6 +88,11 @@ export async function getFeedback(
   const clientId = normalizeClientId(params.get('client'));
   const route = await routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
+  // FRU-721: the widget is on a page of this site, whether it may read its pins or not: the script is
+  // installed. At most one write an hour; a write that fails costs the date, never the read.
+  if (route.client?.workspace !== undefined && clientId !== undefined) {
+    await checks.pageRead?.(request, route.policy, clientId, route.client.origins ?? []);
+  }
 
   // **Before the cache, and that ordering is the guarantee.** The cached entry is per
   // (team, client, page) and holds the same answer for every entitled reader, so it is safe to

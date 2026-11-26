@@ -296,6 +296,11 @@ The table `done_notices` keeps one row for each note that waits:
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members, its sites and the notes that Fruitback keeps for them; the notes already in a tracker stay
   there.
+- When the widget was last seen on a site: two dates of each site, in the table `sites`
+  (`script_seen_at`, `extension_seen_at`). The worker writes one when the widget reads the pins of a
+  page of the site, by the script or by the extension, at most once an hour. No page, no address of
+  the visitor, no person, no count of visits: a date per site and per way, which the console shows
+  as « Installed » and « Seen on the site 2 h ago ». It goes with its site.
 
 - The tables of better-auth, in the same PostgreSQL database. Since 0.2.0 the
   accounts above are in four of them (`user`, `account`, `organization`, `member`): the same things,
