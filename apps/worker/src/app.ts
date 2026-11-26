@@ -616,8 +616,17 @@ async function routed(
     ...(accounts === undefined
       ? {}
       : {
-          pageRead: (each: Request, policy: ClientPolicy, site: string, origins: readonly string[]) =>
-            seeSite(accounts, site, () => channelOfRead(each, policy, origins), Date.now()),
+          pageRead: (each: Request, policy: ClientPolicy, site: string, origins: readonly string[]) => {
+            const token = readBearerToken(each.headers.get('Authorization'));
+
+            return seeSite(
+              accounts,
+              site,
+              token === undefined ? 'script' : 'extension',
+              () => readBy(each, policy, origins, token),
+              Date.now(),
+            );
+          },
         }),
   };
 
@@ -1066,24 +1075,25 @@ async function authorizeRead(
 }
 
 /**
- * FRU-721: by which way the widget read a page of a site. `extension`: a session of the workspace that
- * the worker verifies. `script`: no token, from the `Origin` of the site. `undefined`: anything else,
- * which says nothing of the site (another origin, a token that does not verify, a token of the site).
+ * FRU-721: whether a read of the pins is the widget on a page of the site, by the way it claims. With
+ * no token, the script: the `Origin` of the site. With a token, the extension: a session of the
+ * workspace that the worker verifies. Anything else says nothing of the site (another origin, a token
+ * that does not verify, a token the site signed).
  */
-async function channelOfRead(
+async function readBy(
   request: Request,
   policy: ClientPolicy,
   origins: readonly string[],
-): Promise<Channel | undefined> {
-  const token = readBearerToken(request.headers.get('Authorization'));
+  token: string | undefined,
+): Promise<boolean> {
   if (token === undefined) {
     const origin = request.headers.get('Origin');
 
-    return origin !== null && origins.includes(origin) ? 'script' : undefined;
+    return origin !== null && origins.includes(origin);
   }
   const verified = await verifyForClient(token, policy);
 
-  return verified?.ok === true && verified.session === true ? 'extension' : undefined;
+  return verified?.ok === true && verified.session === true;
 }
 
 /**

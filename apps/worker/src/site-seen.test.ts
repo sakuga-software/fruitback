@@ -6,7 +6,7 @@ import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { SEEN_EVERY_MS, forgetSeen } from './site-seen.ts';
+import { SEEN_EVERY_MS, forgetSeen, seeSite } from './site-seen.ts';
 
 const open = worlds();
 const DAY = 86_400_000;
@@ -141,6 +141,32 @@ describe('when the widget was last seen on a site (FRU-721)', () => {
     assert.equal(Number((await seenAt(world, site.id)).script), NOW);
     await world.accounts.markSiteSeen(site.id, 'script', NOW + SEEN_EVERY_MS + 1);
     assert.equal(Number((await seenAt(world, site.id)).script), NOW + SEEN_EVERY_MS + 1);
+  });
+
+  it('checks the way a read claims only when a write is due, not at every read of the hour', async () => {
+    const marked: string[] = [];
+    const accounts = { markSiteSeen: async (site: string, way: string) => void marked.push(`${site}:${way}`) };
+    let checks = 0;
+    const confirm = async () => {
+      checks += 1;
+
+      return true;
+    };
+    await seeSite(accounts, 'site_a', 'extension', confirm, NOW);
+    for (let minute = 1; minute < 60; minute += 1)
+      await seeSite(accounts, 'site_a', 'extension', confirm, NOW + minute * 60_000);
+    assert.equal(checks, 1);
+    // The other way of the same site is its own: the script is checked and written once too.
+    await seeSite(accounts, 'site_a', 'script', confirm, NOW + 1);
+    await seeSite(accounts, 'site_a', 'script', confirm, NOW + 2);
+    assert.equal(checks, 2);
+    // An hour later, the way is checked and written again.
+    await seeSite(accounts, 'site_a', 'extension', confirm, NOW + SEEN_EVERY_MS);
+    assert.equal(checks, 3);
+    assert.deepEqual(marked, ['site_a:extension', 'site_a:script', 'site_a:extension']);
+    // A claim that does not check writes nothing.
+    await seeSite(accounts, 'site_b', 'script', async () => false, NOW);
+    assert.equal(marked.length, 3);
   });
 
   it('answers the read of the pins when the write fails', async () => {

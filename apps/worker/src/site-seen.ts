@@ -31,20 +31,21 @@ export function forgetSeen(): void {
 }
 
 /**
- * Writes that the widget read a page of `site` by `channel`, when this process did not write it in
- * the last hour. `channel` is asked only then: telling an extension from a script verifies a token.
+ * Writes that the widget read a page of `site` by `way`, when this process did not write it in the
+ * last hour. `way` is what the request claims (a token: the extension; none: the script); `confirm`
+ * checks it, and is asked only when a write is due: telling a session of the extension verifies a
+ * token, and a read in the hour after a write verifies nothing more.
  */
 export async function seeSite(
   accounts: Pick<AccountStore, 'markSiteSeen'>,
   site: string,
-  channel: () => Promise<Channel | undefined>,
+  way: Channel,
+  confirm: () => Promise<boolean>,
   now: number,
 ): Promise<void> {
-  const fresh = (way: Channel) => now - (written.get(`${site}:${way}`) ?? Number.NEGATIVE_INFINITY) < SEEN_EVERY_MS;
-  if (fresh('script') && fresh('extension')) return;
+  if (now - (written.get(`${site}:${way}`) ?? Number.NEGATIVE_INFINITY) < SEEN_EVERY_MS) return;
   try {
-    const way = await channel();
-    if (way === undefined || fresh(way)) return;
+    if (!(await confirm())) return;
     await accounts.markSiteSeen(site, way, now);
     written.set(`${site}:${way}`, now);
   } catch (error) {

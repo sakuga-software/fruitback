@@ -3953,7 +3953,7 @@ for the list.
   widget sends when it mounts: no call of its own, nothing more for a site to install. The read writes
   the date before it reads the pins, so a site whose notes are « Members only » is seen too, by its
   visitors who read nothing. `script`: no token, from the `Origin` of the site; `extension`: a session
-  of the workspace that the worker verifies; anything else writes nothing (`channelOfRead` of
+  of the workspace that the worker verifies; anything else writes nothing (`readBy` of
   `app.ts`).
 - **At most one write an hour per site and per way** (`site-seen.ts`): the process remembers what it
   wrote, and asks nothing of the database in the hour after; the store writes only a date an hour old
