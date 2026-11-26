@@ -97,6 +97,10 @@ function word(data: unknown): Word | undefined {
  * busy machine the browser delivers the message late. Measured on a Mac of GitHub (3 CPUs, a load of
  * 10 to 20): the tab that waited received « signed-in » 0.43 s, 1.6 s and 2.8 s after it was said, and
  * the tab of the link had become the console at 400 ms.
+ *
+ * The cost, accepted: a tab that holds the lock and cannot answer (frozen by the browser, while its
+ * document stays) makes a link opened alone wait 5 s, not 400 ms, before it is the console. A tab
+ * that closes, or that the browser discards, frees the lock; a tab that stops waiting frees it too.
  */
 const WAITS: { heard: number; carried: number } = { heard: 400, carried: 5_000 };
 

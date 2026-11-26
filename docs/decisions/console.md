@@ -1337,7 +1337,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a call, and a link opened alone still costs 400 ms. Measured on a busy Mac of GitHub (3 CPUs, a load
   of 10 to 20): the browser delivered « signed-in » to the tab that waited 0.43 s, 1.6 s and 2.8 s
   after it was said, and with 400 ms the tab of the link had become the console. The browser frees
-  the lock of a tab that closes; a browser with no `navigator.locks` keeps the 400 ms. **A message is
+  the lock of a tab that closes; a browser with no `navigator.locks` keeps the 400 ms. The cost,
+  accepted: a tab that the browser froze still holds the lock and cannot answer, so a link opened
+  then waits 5 s before it is the console. **A message is
   a hint, never a proof**: it carries no token and no account, and a tab goes
   on only on the answer of the worker. A browser that tells a tab nothing: the tab asks the worker
   when it comes back to the front. **A link opened in the tab that asked for it changes the part
