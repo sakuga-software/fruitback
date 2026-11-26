@@ -1,6 +1,6 @@
-import { type SQL, and, count, desc, eq, gt, inArray, lte } from 'drizzle-orm';
+import { type SQL, and, count, desc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
 import { noteSchema } from '@fruitback/shared';
-import { HELD_NOTE_KEEP_MS, HELD_NOTE_LIST, type HeldNote, type HeldNotes } from './held-notes.ts';
+import { HELD_CLAIM_MS, HELD_NOTE_KEEP_MS, HELD_NOTE_LIST, type HeldNote, type HeldNotes } from './held-notes.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { held_notes } from './postgres-schema.ts';
@@ -37,13 +37,18 @@ export function createPostgresHeldNotes(database: Database): HeldNotes {
 
     return database.run(work);
   };
-  /** The notes of the queue of a workspace that did not wait too long, on these sites. */
+  /** Nobody is sending it: no claim, or one that ran out. */
+  const free = (now: number): SQL | undefined =>
+    or(isNull(held_notes.claimed_until), lte(held_notes.claimed_until, now));
+  /** The notes of the queue of a workspace that did not wait too long and nobody is sending, on these sites. */
   const waiting = (workspace: string, sites: readonly string[] | undefined, now: number): SQL | undefined =>
     and(
       eq(held_notes.workspace_id, workspace),
       gt(held_notes.held_at, now - HELD_NOTE_KEEP_MS),
+      free(now),
       ...(sites === undefined ? [] : [inArray(held_notes.site_id, [...sites])]),
     );
+  const thisNote = (site: string, note: string) => and(eq(held_notes.site_id, site), eq(held_notes.note_id, note));
 
   return {
     async hold(held) {
@@ -92,22 +97,31 @@ export function createPostgresHeldNotes(database: Database): HeldNotes {
     },
 
     async take(workspace, site, note, now) {
-      // One statement takes the row: a second member who approves at the same moment finds nothing.
+      // One statement claims the row: a second member who answers at the same moment finds nothing.
       const [row] = await run((db) =>
         db
-          .delete(held_notes)
+          .update(held_notes)
+          .set({ claimed_until: now + HELD_CLAIM_MS })
           .where(
             and(
               eq(held_notes.workspace_id, workspace),
-              eq(held_notes.site_id, site),
-              eq(held_notes.note_id, note),
+              thisNote(site, note),
               gt(held_notes.held_at, now - HELD_NOTE_KEEP_MS),
+              free(now),
             ),
           )
           .returning(),
       );
 
       return row === undefined ? undefined : heldOf(row);
+    },
+
+    async done(site, note) {
+      await run((db) => db.delete(held_notes).where(thisNote(site, note)));
+    },
+
+    async release(site, note) {
+      await run((db) => db.update(held_notes).set({ claimed_until: null }).where(thisNote(site, note)));
     },
 
     async sweep(now) {

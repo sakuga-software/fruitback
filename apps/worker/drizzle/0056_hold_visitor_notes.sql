@@ -5,6 +5,7 @@ CREATE TABLE "held_notes" (
 	"payload" text NOT NULL,
 	"author_visitor" text,
 	"held_at" bigint NOT NULL,
+	"claimed_until" bigint,
 	CONSTRAINT "held_notes_pkey" PRIMARY KEY("site_id","note_id")
 );
 --> statement-breakpoint

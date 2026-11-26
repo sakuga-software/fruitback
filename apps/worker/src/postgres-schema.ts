@@ -1039,6 +1039,9 @@ export const held_notes = pgTable(
     // The digest of the key of the browser (FRU-700), never the key. NULL: no key came.
     author_visitor: text('author_visitor'),
     held_at: instant('held_at').notNull(),
+    // Until when a member's approval is sending it: the row stays until the note is in its place, and
+    // a process that stops meanwhile leaves it to the next approval once this runs out. NULL: nobody.
+    claimed_until: instant('claimed_until'),
   },
   (table) => [
     primaryKey({ name: 'held_notes_pkey', columns: [table.site_id, table.note_id] }),

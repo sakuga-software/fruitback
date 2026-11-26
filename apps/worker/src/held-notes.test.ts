@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mutatedModule } from './conformance.fixture.ts';
 import { type World, callOn, memberOf, signInTo } from './console-world.fixture.ts';
-import { HELD_NOTE_KEEP_MS } from './held-notes.ts';
+import { HELD_CLAIM_MS, HELD_NOTE_KEEP_MS } from './held-notes.ts';
 import { createPostgresHeldNotes } from './held-notes-postgres.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -116,6 +116,30 @@ describe('the notes of visitors that wait for a member (FRU-704)', () => {
     assert.deepEqual(refused.body, { error: 'store-unavailable' });
     assert.deepEqual((await consoleCall('GET', '/count')).body, { count: 1 });
     assert.equal((await consoleCall('POST', `/${site}/hn_4/approve`)).status, 200);
+  });
+
+  it('keeps the note when its send throws, and gives it back when an approval stops half way (review of #987)', async () => {
+    const { world, site, workspace, call, noteOf, consoleCall } = await aHoldingSite();
+    await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_t'));
+    const throwing: NoteStore = {
+      ...createPostgresNoteStore(world.database),
+      create: async () => {
+        throw new Error('a bug nobody expected');
+      },
+    };
+
+    // The handler lets an error nobody expected go up, as for any route: the note waits again first.
+    await assert.rejects(consoleCall('POST', `/${site}/hn_t/approve`, undefined, throwing), /a bug nobody expected/);
+    assert.deepEqual((await consoleCall('GET', '/count')).body, { count: 1 });
+
+    // An approval that claimed the note and stopped: hidden while its claim runs, back after it.
+    const held = createPostgresHeldNotes(world.database);
+    const now = Date.now();
+    assert.equal((await held.take(workspace, site, 'hn_t', now))?.note.id, 'hn_t');
+    assert.equal(await held.take(workspace, site, 'hn_t', now), undefined);
+    assert.equal(await held.count(workspace, undefined, now), 0);
+    assert.equal(await held.count(workspace, undefined, now + HELD_CLAIM_MS + 1), 1);
+    assert.equal((await held.take(workspace, site, 'hn_t', now + HELD_CLAIM_MS + 1))?.note.id, 'hn_t');
   });
 
   it('refuses a guest, and a person of another workspace reads nothing', async () => {

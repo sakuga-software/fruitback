@@ -2683,11 +2683,12 @@ tracker until a member approves it. Off by default, as the mockup draws it.
   guest is refused: it reads no note of a visitor that nobody approved.
   test:`refuses a guest, and a person of another workspace reads nothing`.
 - Approved, the note goes to the first place of the site as it would have gone at once, and is the
-  visitor's own in the index. One statement takes it out of the queue first, so two members who
-  approve at once send it once. A tracker that refuses it or does not answer leaves it in the queue
-  (`502`).
+  visitor's own in the index. One statement claims it first, for 5 minutes, so two members who
+  approve at once send it once; the row goes only once the note is in its place. A tracker that
+  refuses it or does not answer, an error, or an approval that stops half way leaves it in the queue.
   test:`sends an approved note to its place, as the visitor’s own, once`.
   test:`keeps the note in the queue when its tracker does not answer the approval`.
+  test:`keeps the note when its send throws, and gives it back when an approval stops half way (review of #987)`.
 - Rejected, the row goes, and nothing is sent.
   test:`removes a rejected note, and sends it nowhere`.
 - How long. 30 days, then the note goes, unanswered: the queue does not show it and an approval does

@@ -76,17 +76,34 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   if (!readsSite(reach, site) || held === undefined) return json(404, { error: 'not-found' }, headers);
   const taken = await held.take(workspace, site, note, now);
   if (taken === undefined) return json(404, { error: 'not-found' }, headers);
-  if (verb === 'reject') return new Response(null, { status: 204, headers });
+  if (verb === 'reject') {
+    await held.done(site, note);
 
-  const sent = send === undefined ? ({ ok: false, reason: 'store-unavailable' } as const) : await send(taken);
+    return new Response(null, { status: 204, headers });
+  }
+
+  // The row stays, claimed, until the note is in its place: a failure, a throw or a process that stops
+  // leaves it in the queue (review of #987).
+  let sent: HeldSent;
+  try {
+    sent = send === undefined ? { ok: false, reason: 'store-unavailable' } : await send(taken);
+  } catch (error) {
+    await held.release(site, note);
+    throw error;
+  }
   if (sent.ok) {
+    await held.done(site, note);
     const { identifier, url } = sent.issue;
 
     return json(200, { issue: { identifier, ...(url === undefined ? {} : { url }) } }, headers);
   }
   // The site took no note any more: it goes with nobody to send it to. Else it waits again.
-  if (sent.reason === 'site-gone') return json(409, { error: 'site-gone' }, headers);
-  await held.hold(taken);
+  if (sent.reason === 'site-gone') {
+    await held.done(site, note);
+
+    return json(409, { error: 'site-gone' }, headers);
+  }
+  await held.release(site, note);
 
   return json(502, { error: sent.reason }, headers);
 }

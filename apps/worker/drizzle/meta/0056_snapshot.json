@@ -1,5 +1,5 @@
 {
-  "id": "ad5fd6c2-9b22-4a56-978a-43a38a950ae1",
+  "id": "20255afc-2467-4b44-8631-0569fa588156",
   "prevId": "6f1c1eff-d5f8-44f9-aad7-74aff726360d",
   "version": "7",
   "dialect": "postgresql",
@@ -1529,6 +1529,12 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

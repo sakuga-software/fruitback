@@ -295,6 +295,8 @@ export function postgresHeldNotes(url: string, schema: string): HeldNotes {
     list: true,
     count: true,
     take: true,
+    done: true,
+    release: true,
     sweep: true,
   });
 }
