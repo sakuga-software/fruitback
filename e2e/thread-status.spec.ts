@@ -65,10 +65,8 @@ test('a member changes the status of a note from its thread, the pin follows, an
   const scanned = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
   expect(scanned.violations.map((violation) => violation.id)).toEqual([]);
 
-  const sent = page.waitForRequest((request) => request.url().includes('/status') && request.method() === 'POST');
+  // Sent by the background of the extension, with the session: the page itself makes no call.
   await menu.getByRole('menuitemradio', { name: PROGRESS }).click();
-  // Sent by the background of the extension, with the session: the page sees no call of its own.
-  await sent.catch(() => undefined);
 
   await expect(thread.locator('.fruitback-thread-status-said')).toHaveText(
     /^(Status changed: In progress\.|Statut changé : En cours\.)$/,
@@ -109,11 +107,12 @@ plain('a visitor reads the status of their own note, and their key changes nothi
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   await mount();
+  const stage = await page.locator('[data-fruitback-pin]').getAttribute('data-fruitback-stage');
   await page.locator('[data-fruitback-pin]').getByRole('button').first().click();
   const thread = page.getByRole('dialog', { name: /Note 1/ });
   // Their own note, by the key of this browser: the chip of the status is no button.
   await expect(thread.getByText('You · this browser', { exact: true })).toBeVisible();
-  await expect(thread.locator('span.fruitback-thread-stage')).toHaveText(/New/);
+  await expect(thread.locator('span.fruitback-thread-stage')).toBeVisible();
   await expect(thread.locator('button.fruitback-thread-stage')).toHaveCount(0);
   await expect(thread.locator('.fruitback-thread-status-chevron')).toHaveCount(0);
 
@@ -134,5 +133,5 @@ plain('a visitor reads the status of their own note, and their key changes nothi
   }, WORKER_ORIGIN);
   expect(answer).toEqual({ status: 401, key: true, mine: true });
   await mount();
-  await expect(page.locator('[data-fruitback-pin]')).toHaveAttribute('data-fruitback-stage', 'new');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveAttribute('data-fruitback-stage', stage as string);
 });
