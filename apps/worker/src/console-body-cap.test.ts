@@ -62,11 +62,14 @@ describe('the body of a route of the console (FRU-506)', () => {
       '/console/workspaces',
       // `agent-keys.ts` reads its body with the `readBody` that `console-api.ts` hands it.
       `/console/workspaces/${acme}/agent-keys`,
+      // FRU-723: a view of the person.
+      `/console/workspaces/${acme}/views`,
       // The organization plugin answers its own `413`, in the same words (FRU-149).
       '/console/auth/organization/update-member-role',
     ]) {
       await assertTooLarge(await callOn(on, 'POST', path, { token: alice.token, body: OVER }), path);
     }
+    assert.deepEqual(await rowsOf(on.database, 'SELECT id FROM saved_views'), []);
     const workspaces = await rowsOf(on.database, 'SELECT name FROM organization');
     assert.deepEqual(
       workspaces.map((row) => row.name),
@@ -135,6 +138,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'console-api.ts',
       'console-connectors.ts',
       'console-notes.ts',
+      'console-saved-views.ts',
       'console-tasks.ts',
       'instance-admin.ts',
     ]);
@@ -146,6 +150,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'handleNotes',
       'handleConnectors',
       'handleTasks',
+      'handleSavedViews',
     ]) {
       const callers = sources.filter((name) =>
         new RegExp(`\\b${handler}\\(`).test(
@@ -158,6 +163,7 @@ describe('the body of a route of the console (FRU-506)', () => {
         handleNotes: 'console-api.ts',
         handleConnectors: 'console-api.ts',
         handleTasks: 'console-notes.ts',
+        handleSavedViews: 'console-api.ts',
       };
       assert.deepEqual(callers, [callerOf[handler] ?? 'console-routes.ts'], handler);
     }
