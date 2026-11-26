@@ -210,6 +210,23 @@ describe('the notes of visitors that wait for a member (FRU-704)', () => {
     assert.equal(await notesInStore(world), 0);
   });
 
+  it('shows a note again at once when its reject does not remove it (review of #987)', async () => {
+    const { world, site, call, noteOf, consoleCall } = await aHoldingSite();
+    await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_j'));
+    const failingDone: HeldNotes = {
+      ...createPostgresHeldNotes(world.database),
+      done: async () => {
+        throw new Error('the database blinked');
+      },
+    };
+
+    await assert.rejects(
+      consoleCall('POST', `/${site}/hn_j/reject`, undefined, undefined, failingDone),
+      /the database blinked/,
+    );
+    assert.deepEqual((await consoleCall('GET', '/count')).body, { count: 1 });
+  });
+
   it('refuses a guest, and a person of another workspace reads nothing', async () => {
     const { world, workspace, site, call, noteOf, consoleCall } = await aHoldingSite();
     await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_5'));

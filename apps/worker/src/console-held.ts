@@ -78,7 +78,13 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   if (taken === undefined) return json(404, { error: 'not-found' }, headers);
   const { claim } = taken;
   if (verb === 'reject') {
-    await held.done(site, note, claim);
+    // A row that did not go was not rejected: the error goes up, and the note shows again at once.
+    try {
+      await held.done(site, note, claim);
+    } catch (error) {
+      await quietly(held.release(site, note, claim), site);
+      throw error;
+    }
 
     return new Response(null, { status: 204, headers });
   }

@@ -2720,7 +2720,8 @@ tracker until a member approves it. Off by default, as the mockup draws it.
   test:`answers 200 for a note sent to its place even when its row is not removed at once (review of #987)`.
   A release that the database does not take after a failed send leaves the row claimed for the
   hour too, and the answer still says why the note did not go; a reject that does not remove the
-  row answers an error, as nothing was rejected.
+  row answers an error, as nothing was rejected, and frees its claim, so the note shows again at once
+  (test:`shows a note again at once when its reject does not remove it (review of #987)`).
   test:`still says why an approval failed when the database does not take the release (review of #987)`.
   test:`sends an approved note to its place, as the visitor’s own, once`.
   test:`keeps the note in the queue when its tracker does not answer the approval`.
