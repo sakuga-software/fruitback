@@ -218,7 +218,7 @@ test('without the App, the card of GitHub says so and connects nothing', async (
     'The operator of this Fruitback has not set up the GitHub App.',
   );
   // The control: Linear still connects.
-  await expect(page.getByRole('button', { name: 'Connect another Linear', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add another Linear (1 connected)', exact: true })).toBeEnabled();
 });
 
 test('a member reads the tile of GitHub, and has nothing to press there', async ({ page }) => {
