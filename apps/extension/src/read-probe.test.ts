@@ -1,6 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { probeRead } from './read-probe.ts';
+import {
+  CLOUD_NOTES_NEED_MEMBER,
+  CLOUD_READ_NEEDS_MEMBER,
+  MEMBER_TURNS_ON,
+  NOTES_NEED_SESSION,
+  NOT_A_MEMBER,
+  READ_NEEDS_SESSION,
+  memberRemedy,
+  probeRead,
+} from './read-probe.ts';
 
 const SITE = { endpoint: 'https://worker.test/fruitback', clientId: 'acme co' };
 const PAGE = 'https://staging.acme.dev/pricing?tab=annual';
@@ -96,5 +105,54 @@ describe('a 404 of the read, as the worker or a proxy writes it (review of #539)
 
   it('says nothing for a 404 that names another error', async () => {
     assert.equal(await probeRead(SITE, PAGE, answering404({ error: 'unknown-client' })), 'unknown');
+  });
+});
+
+describe('what the popup says of a read refused for want of a member (FRU-663)', () => {
+  it('keeps the sentences of a worker run by somebody else, with the guide, and no button', () => {
+    for (const signedIn of [false, true]) {
+      assert.deepEqual(memberRemedy('members-only', { onCloud: false, signedIn }), {
+        sentence: NOTES_NEED_SESSION,
+        guide: true,
+      });
+      assert.deepEqual(memberRemedy('wants-a-session', { onCloud: false, signedIn }), {
+        sentence: READ_NEEDS_SESSION,
+        guide: true,
+      });
+    }
+  });
+
+  it('offers the sign-in on the Fruitback of the build, to a person who is not signed in', () => {
+    assert.deepEqual(memberRemedy('members-only', { onCloud: true, signedIn: false }), {
+      sentence: CLOUD_NOTES_NEED_MEMBER,
+      action: 'sign-in',
+    });
+    assert.deepEqual(memberRemedy('wants-a-session', { onCloud: true, signedIn: false }), {
+      sentence: CLOUD_READ_NEEDS_MEMBER,
+      action: 'sign-in',
+    });
+  });
+
+  it('offers to turn the site on with the account of a member, and says who to ask to anybody else', () => {
+    for (const answer of ['members-only', 'wants-a-session'] as const) {
+      assert.deepEqual(memberRemedy(answer, { onCloud: true, signedIn: true, member: true }), {
+        sentence: MEMBER_TURNS_ON,
+        action: 'turn-on',
+      });
+      assert.deepEqual(memberRemedy(answer, { onCloud: true, signedIn: true, member: false }), {
+        sentence: NOT_A_MEMBER,
+      });
+    }
+  });
+
+  it('never tells somebody to ask an admin for « Anyone on the page » on the Cloud', () => {
+    for (const [signedIn, member] of [
+      [false, false],
+      [true, false],
+      [true, true],
+    ] as const) {
+      const said = memberRemedy('members-only', { onCloud: true, signedIn, member }).sentence;
+      assert.doesNotMatch(said, /Anyone on the page/);
+    }
   });
 });
