@@ -52,6 +52,21 @@ How this repository is formatted, tested and documented, and which test holds ea
     reads no file, and on a skip with no reason. The reason goes in the options:
     `{ skip: 'the reason' }`, never `it.skip(…)` nor `skip: true`. vitest takes a boolean there, so
     the worker writes `{ skip: NO_REAL_POSTGRES !== false }`, from a constant that holds the reason.
+  - **A case on a real PostgreSQL runs only in the CI job `postgres`, on the files that
+    `test:postgres` names** (FRU-720). On 2026-11-26, 11 files with 107 such cases were not named
+    there, so no job ran them. `test-discovery.test.ts` fails on a worker test file that names a
+    subject on a real server (`createRealDatabase`, `DATABASES`, `NO_REAL_POSTGRES`…) and is not in
+    `test:postgres`, on a name there that is no such file, and on a fixture other than
+    `postgres.fixture.ts` and `auth.fixture.ts` that names one.
+  - **Which job runs which case of the worker** (FRU-720). The jobs `test` run every file
+    (`tools/ci/test-parts.ts`): the cases on PGlite, and no case on a real server. The job
+    `postgres` runs the files of `test:postgres`: the cases on a real server, and the cases with no
+    subject. It skips the subjects on PGlite: `test:postgres` sets `FRUITBACK_TEST_POSTGRES=required`,
+    and a subject on PGlite takes `skip: PGLITE_ELSEWHERE` of `postgres.fixture.ts`. Those cases
+    took 29 % of the job, run a second time, on a runner whose 4 cores were busy: 6 workers of
+    vitest did no better than 3. `test-discovery.test.ts` fails on the variable set anywhere but in
+    `test:postgres`, and on `PGLITE_ELSEWHERE` in an object or a call that does not name PGlite, or
+    that names a real server.
   - `assert.equal` / `assert.deepEqual` from `node:assert/strict` are the strict variants — no need
     for `strictEqual`.
   - Partial matching is `assert.partialDeepStrictEqual`. There is no `expect.arrayContaining`; assert

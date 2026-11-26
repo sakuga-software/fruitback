@@ -11,6 +11,7 @@ import * as authSchema from './auth-schema.ts';
 import type { PgDatabase } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
@@ -271,7 +272,7 @@ it('knows the sixty-two BIGINT columns of the worker, and that better-auth has n
 });
 
 for (const { label, open, skip } of [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const) {
   describe(`a BIGINT that a store reads, on ${label} (FRU-180)`, { skip: skip !== false }, () => {

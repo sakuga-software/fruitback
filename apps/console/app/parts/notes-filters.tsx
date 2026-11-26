@@ -10,7 +10,7 @@ import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { type Filter, type NotesAnswer, type View } from './notes-model';
-import { ownsKeys } from './task-selection';
+import { isBareShortcut } from '../keys';
 import { type TaskMenuSeam } from './task-menu';
 import { SERVER_CAUSE, UNREACHABLE_CAUSE } from '../problems';
 import { isReachable } from '../transport';
@@ -410,12 +410,14 @@ function branchesOf(
   ];
 }
 
-/** « / » gives the focus to the search (FRU-686), unless a field, a menu or a dialog has the key. */
+/**
+ * « / » gives the focus to the search (FRU-686), unless a field, a menu or a dialog has the key: the
+ * widget's in its Shadow root too (FRU-726).
+ */
 export function useSlashKey(field: RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (ownsKeys(event.target)) return;
+      if (event.key !== '/' || !isBareShortcut(event)) return;
       event.preventDefault();
       field.current?.focus();
     };
