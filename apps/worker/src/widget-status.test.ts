@@ -116,7 +116,12 @@ describe('the status of a note, from its thread on the page (FRU-718)', () => {
       status: 403,
       body: { error: 'not-allowed' },
     });
-    assert.equal((await setStage(bobs, 'done', { token: tokens.gina })).status, 403);
+    // A guest reads no reference of a tracker (FRU-250): she names the note by the id the widget gave it.
+    assert.equal((await setStage(bobs, 'done', { token: tokens.gina })).status, 404);
+    assert.deepEqual(await setStage('ws_bob', 'done', { token: tokens.gina }), {
+      status: 403,
+      body: { error: 'not-allowed' },
+    });
     assert.equal((await setStage(visitors, 'done', { token: tokens.hugo })).status, 403);
 
     assert.deepEqual(await stages(), before);
@@ -172,8 +177,10 @@ describe('the guards of the status from the thread, each planted out (FRU-718)',
       after: STATUS,
       from: 'session === undefined) {\n      return json(401',
       to: 'false) {\n      return json(401',
+      // Taken out, the route reads the session it does not have, and throws: no `401` either.
       holds: async ({ visitors, setStage, stages }) =>
-        (await setStage(visitors, 'done', { key: KEY_A })).status === 401 && (await stages()).ws_visitor === 'new',
+        (await setStage(visitors, 'done', { key: KEY_A }).catch(() => ({ status: 0 }))).status === 401 &&
+        (await stages()).ws_visitor === 'new',
     },
     {
       guard: 'the read offers the menu to a member on their own notes only',
