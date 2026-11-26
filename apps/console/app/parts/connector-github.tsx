@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type Connector, type Repository, call } from '../api';
+import { type Repository, type TrackerTrouble, call, trackerTrouble } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { known } from '../listed';
@@ -16,7 +16,7 @@ import { useWorkspace } from '../routes/workspace';
 export const GITHUB_APP_PAGE = 'https://github.com/apps/fruitback-app';
 
 /** What to do about an installation that GitHub refuses (FRU-359). `{when}` is the first refusal. */
-const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> = {
+const ATTENTION: Record<TrackerTrouble, string> = {
   'key-refused': msg(
     'GitHub refuses this installation since {when}, and the notes of its sites do not reach GitHub. Disconnect it, then connect GitHub again.',
   ),
@@ -37,6 +37,7 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
   const { workspace } = useWorkspace();
   const [problem, setProblem] = useState<string | undefined>();
   const account = accountOf(connector);
+  const refusal = trackerTrouble(connector.attention);
   // The repositories, for the warning of a public one (FRU-382): read for who manages the sources,
   // once for a connector and again on « Try again ». A member reads the worker's word only.
   const [repositories, setRepositories] = useState<Repository[] | undefined>();
@@ -81,11 +82,9 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
           }
         : {})}
     >
-      {connector.attention === undefined ? null : (
+      {refusal === undefined ? null : (
         <div className="flex flex-col gap-[6px]">
-          <Problem>
-            {t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since), account })}
-          </Problem>
+          <Problem>{t(ATTENTION[refusal], { when: moment(connector.attention?.since ?? ''), account })}</Problem>
           <p className="text-hint">
             <LinkButton space="inline" href={GITHUB_APP_PAGE} newTab>
               {t('Open the App on GitHub')}

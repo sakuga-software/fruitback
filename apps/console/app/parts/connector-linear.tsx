@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { type Connector, type ConnectorSettings, UNREACHABLE, call } from '../api';
+import { type Connector, type ConnectorSettings, type TrackerTrouble, UNREACHABLE, call, trackerTrouble } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { Button, Problem, SidePanel, Toggle } from '../ui';
@@ -12,7 +12,7 @@ import { useWorkspace } from '../routes/workspace';
  * What to do about a source that its tracker refuses (FRU-102), by what the tracker said. `{when}` is
  * the first refusal: the notes written since then are not in the tracker.
  */
-const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> = {
+const ATTENTION: Record<TrackerTrouble, string> = {
   'key-refused': msg(
     'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.',
   ),
@@ -27,7 +27,7 @@ const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> =
  * What a connector made with OAuth says of a refusal (FRU-633). A new consent gives it a new pair of
  * tokens, and it keeps its id: its sites keep their places, and it keeps its settings.
  */
-const ATTENTION_OAUTH: Partial<Record<NonNullable<Connector['attention']>['reason'], string>> = {
+const ATTENTION_OAUTH: Partial<Record<TrackerTrouble, string>> = {
   'key-refused': msg('Linear refuses this connection since {when}, and the notes of its sites do not reach Linear.'),
   'connection-ended': msg('Linear ended this connection, and since {when} the notes of its sites do not reach Linear.'),
 };
@@ -114,7 +114,7 @@ function Attention({
 }: {
   base: string;
   connector: Connector;
-  reason: NonNullable<Connector['attention']>['reason'];
+  reason: TrackerTrouble;
   ended: string | undefined;
   manages: boolean;
 }) {
@@ -179,7 +179,8 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
 export function LinearPanel({ id, base, connector, sites, manages, onRemoved, back }: PanelProps) {
   useLocale();
   const oauth = OAUTH_LABEL.test(connector.label);
-  const ended = connector.attention === undefined || !oauth ? undefined : ATTENTION_OAUTH[connector.attention.reason];
+  const refusal = trackerTrouble(connector.attention);
+  const ended = refusal === undefined || !oauth ? undefined : ATTENTION_OAUTH[refusal];
   const { workspace } = useWorkspace();
   const [problem, setProblem] = useState<string | undefined>();
 
@@ -215,14 +216,8 @@ export function LinearPanel({ id, base, connector, sites, manages, onRemoved, ba
         : {})}
     >
       <WayBack word={back} />
-      {connector.attention === undefined ? null : (
-        <Attention
-          base={base}
-          connector={connector}
-          reason={connector.attention.reason}
-          ended={ended}
-          manages={manages}
-        />
+      {refusal === undefined ? null : (
+        <Attention base={base} connector={connector} reason={refusal} ended={ended} manages={manages} />
       )}
       {/* One list of the sites, each with its places and, for who sets them, its statuses (FRU-478). */}
       <SendersList
