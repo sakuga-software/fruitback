@@ -84,6 +84,8 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
   const visitorNotesPerHour: VisitorNoteLimit = isOneOf(row.visitor_notes_per_hour, VISITOR_NOTE_LIMITS)
     ? row.visitor_notes_per_hour
     : DEFAULT_VISITOR_NOTES_PER_HOUR;
+  // FRU-704: anything but `true` is off, the default, as `notify_done`.
+  const holdVisitorNotes = row.hold_visitor_notes === true;
 
   return {
     id: row.id,
@@ -95,6 +97,7 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     visitorEdit,
     visitorDelete,
     visitorNotesPerHour,
+    holdVisitorNotes,
     destinations,
   };
 }

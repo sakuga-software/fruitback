@@ -170,6 +170,11 @@ INSERT INTO done_notices (site_id, note_id, account_id, email, locale, created_a
   ('site_drill1', 'sd_drill9', 'acc_drill1', NULL, NULL, 1, 7776000001, NULL),
   ('site_drill1', 'sd_drill1', NULL, 'visitor@example.com', 'fr', 2, 7776000002, 3);
 
+-- The notes of visitors that wait for a member (FRU-704): one in the queue, one an approval claimed.
+INSERT INTO held_notes (site_id, note_id, workspace_id, payload, author_visitor, held_at, claimed_until) VALUES
+  ('site_drill2', 'sd_held1', 'ws_drill1', '{"id":"sd_held1","text":"Held for a member."}', 'digest-of-a-test-key', 1, NULL),
+  ('site_drill2', 'sd_held2', 'ws_drill1', '{"id":"sd_held2","text":"Being approved."}', NULL, 2, 3);
+
 -- The day a member was last seen in the workspace (FRU-249).
 INSERT INTO last_seen (member_id, day) VALUES
   ('mem_drill1', '2026-10-11');

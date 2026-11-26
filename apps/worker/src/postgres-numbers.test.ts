@@ -159,6 +159,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO done_notices (site_id, note_id, email, created_at, expires_at)
        VALUES ('site_acme', 'sd_1', 'ana@example.com', 1, 1)`,
   );
+  // FRU-704: one note of a visitor that waits for a member.
+  await rowsOf(
+    database,
+    `INSERT INTO held_notes (site_id, note_id, workspace_id, payload, held_at)
+       VALUES ('site_acme', 'hn_1', 'ws_acme', '{}', 1)`,
+  );
   // FRU-261: one read of an administrator of the instance.
   await rowsOf(
     database,
@@ -208,7 +214,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixty-four BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixty-six BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -239,6 +245,8 @@ it('knows the sixty-four BIGINT columns of the worker, and that better-auth has 
     'email_links.created_at',
     'email_links.expires_at',
     'email_links.spent_at',
+    'held_notes.claimed_until',
+    'held_notes.held_at',
     'kv.expires_at',
     'labels.created_at',
     'note_comments.created_at',
@@ -316,7 +324,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 23);
+      assert.equal(nullable.length, 24);
       assert.deepEqual(wrong, []);
     });
 

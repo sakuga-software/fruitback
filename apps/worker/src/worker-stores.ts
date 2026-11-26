@@ -10,6 +10,7 @@ import { type Kv, processKv } from './kv.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
+import type { HeldNotes } from './held-notes.ts';
 import { DEV_DATABASE_URL } from './postgres.ts';
 import {
   postgresAccountStore,
@@ -17,6 +18,7 @@ import {
   postgresInstanceAdmin,
   postgresKv,
   postgresDoneNotices,
+  postgresHeldNotes,
   postgresNoteIndex,
   postgresAttachmentStore,
   postgresSessionStore,
@@ -148,6 +150,22 @@ export function noteIndexFor(config: WorkerConfig): NoteIndex | undefined {
 /** Who to tell when a note is done (FRU-604), for a worker with a database: `done-notices.ts`. */
 export function doneNoticesFor(config: WorkerConfig): DoneNotices | undefined {
   return config.databaseUrl === undefined ? undefined : postgresDoneNotices(config.databaseUrl, config.databaseSchema);
+}
+
+/** The notes of visitors that wait for a member (FRU-704), for a worker with a database: `held-notes.ts`. */
+export function heldNotesFor(config: WorkerConfig): HeldNotes | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresHeldNotes(config.databaseUrl, config.databaseSchema);
+}
+
+/**
+ * Removes the notes of visitors that waited for a member longer than `HELD_NOTE_KEEP_MS` (FRU-704).
+ * `server.ts` calls it on a timer, with the sweep of `done_notices`. Answers how many went.
+ */
+export async function sweepHeldNotes(env: WorkerEnv, now: number = Date.now()): Promise<number> {
+  const config = readConfig(env);
+  if (!config.ok) return 0;
+
+  return (await heldNotesFor(config.config)?.sweep(now)) ?? 0;
 }
 
 export function attachmentStoreFor(config: WorkerConfig): AttachmentStore | undefined {

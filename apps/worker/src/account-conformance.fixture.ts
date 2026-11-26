@@ -239,6 +239,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       visitorDelete: 'while-open',
       // FRU-704: the notes of a visitor in an hour of the mockup, for a new site.
       visitorNotesPerHour: 10,
+      // FRU-704: « Hold new visitor notes » is off for a new site, as the mockup draws it.
+      holdVisitorNotes: false,
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -397,6 +399,25 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
     await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members', visitorNotesPerHour: 20 });
     assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
+  });
+
+  it('holds no note of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.holdVisitorNotes, false);
+    assert.equal((await store.client(made.id))?.holdVisitorNotes, undefined);
+    assert.equal(
+      (await store.addSite(workspace.id, { origin, visibility: 'everyone', holdVisitorNotes: true })).holdVisitorNotes,
+      true,
+    );
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).holdVisitorNotes, true);
+    assert.equal((await store.client(made.id))?.holdVisitorNotes, true);
+    // A site of its members only has no note of a visitor to hold.
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    assert.equal((await store.clientMap())[made.id]?.holdVisitorNotes, undefined);
   });
 
   it('keeps one address apart in two workspaces', async (store) => {

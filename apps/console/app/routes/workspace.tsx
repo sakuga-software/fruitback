@@ -5,6 +5,7 @@ import {
   type Me,
   type Role,
   type Workspace,
+  call,
   callUntilAnswered,
   knownMe,
   logoSource,
@@ -73,11 +74,16 @@ type WorkspaceContext = {
   personalViews: readonly PersonalView[] | undefined;
   /** FRU-723: the Notes screen kept a view of the person: the bar shows it at once, as the one on screen. */
   viewSaved: (view: PersonalView) => void;
+  /**
+   * The screen « To approve » read the notes that wait for a member (FRU-704): the count of its entry
+   * in the bar follows it.
+   */
+  approveCounted: (count: number) => void;
 };
 
 type Read = Omit<
   WorkspaceContext,
-  'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted' | 'personalViews' | 'viewSaved'
+  'renamed' | 'logoChanged' | 'failingRead' | 'viewCounted' | 'approveCounted' | 'personalViews' | 'viewSaved'
 >;
 
 export function useWorkspace(): WorkspaceContext {
@@ -157,15 +163,28 @@ export default function WorkspaceFrame() {
   // a view. Its answer does not write over them, as a screen read them at the same time or later, and
   // a count a screen dropped after a write must stay dropped.
   const told = useRef<{ workspace: string | undefined; what: Set<string> }>({ workspace: undefined, what: new Set() });
+  // FRU-704: the notes of visitors that wait for a member, read once by workspace and again by the
+  // screen « To approve ». A guest is refused the read, and the bar shows the entry to nobody else
+  // while nothing waits.
+  const [toApprove, setToApprove] = useState<{ workspace: string; count: number } | undefined>();
   useEffect(() => {
     // A change of workspace forgets the counts: back in the first one, a count read before would be
     // old (raised in review). The read of the bar, then the screens of the workspace, say them again.
     setCounts(undefined);
     setFailing(undefined);
     setViewCounts(undefined);
+    setToApprove(undefined);
     if (id === undefined) return;
     told.current = { workspace: id, what: new Set() };
     let current = true;
+    // FRU-704: the notes of visitors that wait for a member. A guest is refused it, quietly.
+    void call<{ count: number }>('GET', `/console/workspaces/${id}/held/count`, undefined, { quiet: true }).then(
+      (answer) => {
+        if (current && answer.ok && typeof answer.data?.count === 'number') {
+          setToApprove({ workspace: id, count: answer.data.count });
+        }
+      },
+    );
     void railCounts(id, weekStart()).then((read) => {
       if (!current || read === undefined) return;
       const said = told.current.what;
@@ -269,6 +288,7 @@ export default function WorkspaceFrame() {
       if (told.current.workspace === context.workspace.id) told.current.what.add('failing');
       setFailing({ workspace: context.workspace.id, count });
     },
+    approveCounted: (count) => setToApprove({ workspace: context.workspace.id, count }),
     viewCounted: (view, count) => {
       const workspace = context.workspace.id;
       if (told.current.workspace === workspace) told.current.what.add(view);
@@ -326,6 +346,8 @@ export default function WorkspaceFrame() {
           account={context.me.account}
           {...(counts?.workspace === context.workspace.id ? { counts: counts.counts } : {})}
           {...(failing?.workspace === context.workspace.id ? { failing: failing.count } : {})}
+          {...(toApprove?.workspace === context.workspace.id ? { toApprove: toApprove.count } : {})}
+          approveCurrent={pathname === `/w/${context.workspace.id}/approve`}
         />
       }
     >
@@ -464,6 +486,13 @@ type RailProps = {
   currentView?: ViewId;
   /** The count of each view, when the Notes screen read it. A view with no count shows none. */
   viewCounts?: Readonly<Partial<Record<ViewId, number>>>;
+  /**
+   * FRU-704: how many notes of visitors wait for a member. The entry « To approve » shows while some
+   * wait, or while its screen is on screen. Absent: not read, or a guest.
+   */
+  toApprove?: number;
+  /** The screen « To approve » is on screen. */
+  approveCurrent?: boolean;
   /** FRU-723: the views of the person, under the views of the mockup, each with a menu. */
   personal?: readonly PersonalView[];
   /** The view of the person on screen. */
@@ -610,11 +639,15 @@ export function Rail({
   views = [],
   currentView,
   viewCounts = {},
+  toApprove,
+  approveCurrent = false,
   personal = [],
   currentPersonal,
   onPersonal = () => undefined,
 }: RailProps) {
   useLocale();
+  // FRU-704: « To approve », while notes wait or while its screen is on screen.
+  const showsApprove = approveCurrent || (toApprove !== undefined && toApprove > 0);
   const name = (
     <>
       <WorkspaceMark workspace={workspace} size={20} />
@@ -693,7 +726,7 @@ export function Rail({
           ...(section.path === 'connectors' && failing > 0 ? { alert: failing } : {}),
         }))}
       />
-      {views.length === 0 && personal.length === 0 ? null : (
+      {views.length === 0 && !showsApprove && personal.length === 0 ? null : (
         <RailNav
           label={t('Views')}
           heading
@@ -706,6 +739,17 @@ export function Rail({
               ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
               ...(view.alert === true ? { redCount: true } : {}),
             })),
+            ...(showsApprove
+              ? [
+                  {
+                    to: `/w/${workspace.id}/approve`,
+                    label: t('To approve'),
+                    current: approveCurrent,
+                    icon: 'inbox' as const,
+                    ...(toApprove === undefined ? {} : { count: toApprove }),
+                  },
+                ]
+              : []),
             // FRU-723: the views of the person, with the name they gave, and a menu to rename or delete.
             ...personal.map((view) => ({
               key: view.id,
