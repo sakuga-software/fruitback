@@ -5,7 +5,7 @@ import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { AccountStore, ConnectorAttention } from './accounts.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { noteConnectorCall, troubleOf, watchedStore } from './connector-health.ts';
-import { type CallOptions, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
+import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
@@ -223,6 +223,122 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
 
     assert.equal(teams.status, 502);
     assert.equal((await world.attention())?.reason, 'key-refused');
+  });
+});
+
+/** What `GET …/connectors` says of the health of a connector (FRU-714). */
+type Health = { failing: number; notes?: number; lastDeliveredAt?: string };
+
+async function healthIn(env: World, base: string, token: string, connector: string): Promise<Health | undefined> {
+  const listed = await call(env, 'GET', `${base}/connectors`, { token });
+  assert.equal(listed.status, 200, await listed.clone().text());
+  const { connectors } = (await listed.json()) as { connectors: { id: string; health?: Health }[] };
+
+  return connectors.find((each) => each.id === connector)?.health;
+}
+
+describe('the health of a connector in the list (FRU-714)', () => {
+  it('says when a tracker last took a note and how many went there, and a refusal or a read moves neither', async () => {
+    const env = await envWith();
+    const linear = linearWith();
+    const world = await acme(env);
+    const health = () => healthIn(env, world.base, world.token, world.connector);
+    // A tracker takes a note in the request, or refuses it there: nothing of it ever waits.
+    assert.deepEqual(await health(), { failing: 0, notes: 0 }, 'nothing arrived yet');
+
+    const before = Date.now();
+    assert.equal((await world.write()).status, 201);
+    const after = Date.now();
+    const first = await health();
+    const at = Date.parse(first?.lastDeliveredAt ?? '');
+    assert.ok(at >= before && at <= after, `the moment the note arrived: ${first?.lastDeliveredAt}`);
+    assert.deepEqual(first, { failing: 0, notes: 1, lastDeliveredAt: first?.lastDeliveredAt });
+
+    linear.mode = 'revoked';
+    assert.equal((await world.write()).status, 502);
+    linear.mode = 'working';
+    assert.equal((await world.read()).status, 200);
+
+    assert.deepEqual(await health(), first);
+  });
+
+  it('counts the deliveries of an address that wait, and says when the last one arrived', async () => {
+    const env = await envWith();
+    const { accounts } = env;
+    const { id, token } = await signInTo(env, 'owner@acme.dev');
+    const workspace = await accounts.createWorkspace('Acme', id);
+    const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
+    const base = `/console/workspaces/${workspace.id}`;
+    const added = await call(env, 'POST', `${base}/connectors`, {
+      token,
+      body: { kind: 'rest', url: 'https://hooks.acme.dev/fruitback' },
+    });
+    assert.equal(added.status, 201, await added.clone().text());
+    const hook = ((await added.json()) as { id: string }).id;
+    await accounts.setDestination(workspace.id, site.id, { connector: hook });
+    const note = noteFixture();
+    const written = await call(env, 'POST', '/feedback', {
+      origin: SITE,
+      body: { ...note, page: { ...note.page, url: PAGE }, client: { id: site.id } },
+    });
+    assert.equal(written.status, 201, await written.clone().text());
+
+    // Kept and queued: the note is counted, and it has not arrived.
+    assert.deepEqual(await healthIn(env, base, token, hook), { failing: 1, notes: 1 });
+
+    const [due] = await accounts.dueDeliveries(Date.now() + 1_000, 10);
+    assert.ok(due !== undefined);
+    await accounts.settleDelivery(due.id, { delivered: true, at: Date.parse('2026-11-26T09:00:00.000Z') });
+
+    assert.deepEqual(await healthIn(env, base, token, hook), {
+      failing: 0,
+      notes: 1,
+      lastDeliveredAt: '2026-11-26T09:00:00.000Z',
+    });
+  });
+
+  it('gives a member the health of the workspace, and nothing of another workspace', async () => {
+    const env = await envWith();
+    linearWith();
+    const world = await acme(env);
+    assert.equal((await world.write()).status, 201);
+    const member = await signInTo(env, 'member@acme.dev');
+    await memberOf(env, world.workspace.id, member.id, 'member');
+    // Another workspace, whose address has a delivery that waits and a note.
+    const theirs = await env.accounts.createWorkspace('Globex', member.id);
+    const hook = await env.accounts.addConnector(theirs.id, { kind: 'rest', label: 'Hook', sealed: 'x' });
+    await env.accounts.enqueueDelivery(hook.id, '{}', 0);
+
+    const health = await healthIn(env, world.base, member.token, world.connector);
+
+    assert.equal(health?.failing, 0);
+    assert.equal(health?.notes, 1);
+    assert.equal(await healthIn(env, world.base, member.token, hook.id), undefined, 'not in this list');
+  });
+
+  it('answers the list without the notes when their index fails, and without the health when the deliveries fail', async () => {
+    const env = await envWith();
+    linearWith();
+    const world = await acme(env);
+    assert.equal((await world.write()).status, 201);
+    const errors = mockMethod(console, 'error', () => {});
+    const index = env.context.noteIndex;
+    assert.ok(index !== undefined);
+    const notes = mockMethod(index, 'byConnector', async () => {
+      throw new Error('the index is down');
+    });
+
+    const withoutNotes = await healthIn(env, world.base, world.token, world.connector);
+    assert.equal(withoutNotes?.failing, 0);
+    assert.equal('notes' in (withoutNotes ?? {}), false, 'no count is not zero notes');
+    notes.mockRestore();
+
+    mockMethod(env.accounts, 'waitingDeliveries', async () => {
+      throw new Error('the deliveries are down');
+    });
+    // No count of the sends that wait is not « none waits »: the console then reads them one by one.
+    assert.equal(await healthIn(env, world.base, world.token, world.connector), undefined);
+    assert.ok(errors.mock.calls.length >= 2);
   });
 });
 

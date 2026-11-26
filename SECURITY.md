@@ -2520,6 +2520,14 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   `label` that the worker writes, and is never sent to a tracker nor to a page of a site: only
   the routes of the connectors of the console answer it, to who may see the tracker.
   test:`lets only who manages the workspace name a connector, and only one of their own`.
+- The health of a connector comes with the list, `GET /console/workspaces/<id>/connectors`,
+  to a role with `see-tracker` only: an owner, an admin or a member, who read every site of the
+  workspace. A guest gets `403`, as for the list.
+  test:`lets an owner add and remove one, a member see it, and a guest see nothing of the tracker`.
+  It holds three numbers and a moment, never a note: how many deliveries of the connector did not
+  arrive, how many notes of the workspace went to it, and when its last send arrived
+  (`connectors.delivered_at`). Each count reads the rows of this workspace only.
+  test:`gives a member the health of the workspace, and nothing of another workspace`.
 
 ### A reply to a note, from the page (FRU-257)
 

@@ -44,13 +44,15 @@ export function Pill({ tone, children }: { tone: 'done' | 'alert' | 'neutral'; c
 }
 
 /**
- * The health of a connector, in its row (FRU-690), from what the worker says today:
+ * The health of a connector, in its row (FRU-690), from what the worker says:
  *
  * - « Needs attention »: its tracker refuses it (FRU-102), or refused a place of a site (FRU-640).
  * - « N not delivered »: sends that wait, for a connector that receives (an address, a routine, Slack).
- * - « Healthy »: a connector that receives, whose sends were read, and none waits.
- * - « Connected »: a tracker. The worker does not say yet whether its notes arrived (FRU-714).
- * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ».
+ * - « Healthy »: a connector that receives, whose sends were read, and none waits; or a tracker whose
+ *   health the worker said (FRU-714): it takes a note in the request or refuses it, so none waits.
+ * - « Connected »: a tracker of a worker that says no health.
+ * - « Not read »: the sends of a connector that receives were not read. Never « Healthy ». When the
+ *   worker said how many wait (FRU-714), « N sends not delivered » instead, as the bar counts them.
  *
  * The red words are the strong accent: the accent is under 4.5:1 on the tints of a row (FRU-683).
  */
@@ -60,6 +62,7 @@ export function Health({
   read,
   placeAttention = false,
 }: {
+  /** With its `health` (FRU-714), when the worker said it. */
   connector: Connector;
   late: Late | undefined;
   /** Whether the sends of a connector that receives were read. A tracker has none to read. */
@@ -68,8 +71,22 @@ export function Health({
 }) {
   useLocale();
   if (connector.attention !== undefined || placeAttention) return <Pill tone="alert">{t('Needs attention')}</Pill>;
-  if (!read) return <Pill tone="neutral">{t('Not read')}</Pill>;
-  if (late === undefined) return <Pill tone="done">{t('Connected')}</Pill>;
+  if (!read) {
+    // FRU-714: the list was not read, and the worker said how many wait: that count, with no « Retry »
+    // (its ids are in the list). The bar counts the same number (raised in review).
+    const failing = connector.health?.failing ?? 0;
+    if (failing > 0) {
+      return (
+        <Pill tone="alert">
+          {failing === 1 ? t('1 send not delivered') : t('{count} sends not delivered', { count: failing })}
+        </Pill>
+      );
+    }
+
+    return <Pill tone="neutral">{t('Not read')}</Pill>;
+  }
+  if (late === undefined)
+    return <Pill tone="done">{connector.health === undefined ? t('Connected') : t('Healthy')}</Pill>;
   const waiting = late.notes + late.calls;
   if (waiting === 0) return <Pill tone="done">{t('Healthy')}</Pill>;
 
