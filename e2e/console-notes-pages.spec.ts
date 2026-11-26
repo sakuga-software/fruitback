@@ -292,6 +292,30 @@ test('a read again after a write reads back the notes shown, and the list stays 
   await expect(row).toBeInViewport();
 });
 
+test('a read again while the next notes are on their way reads them back too (review of #973)', async ({ page }) => {
+  // The tenth note did not reach its connector: « Send again » sends it, then the list is read again.
+  const late = {
+    ...noteOf(9),
+    place: { kind: 'rest', connector: 'c2', label: 'hooks.acme.dev' },
+    delivery: { id: 'd9', state: 'waiting' },
+  };
+  const worker = await open(page, { observer: false, notes: NOTES.map((note, n) => (n === 9 ? late : note)) });
+  await expect(rows(page)).toHaveCount(25);
+  const release = worker.hold('w1/all:25');
+  await loadMore(page).click();
+  await expect.poll(() => cursors(worker).at(-1)).toBe('w1/all:25');
+  await rows(page).nth(9).getByRole('button', { name: 'Send again' }).click();
+
+  // The read again drops the answer of the next notes, so it reads them back: 50 notes, in one read.
+  await expect.poll(() => worker.asked.at(-1)).toEqual({ limit: '50' });
+  await expect(rows(page)).toHaveCount(50);
+  release();
+  await expect.poll(() => worker.asked.length).toBe(3);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(rows(page)).toHaveCount(50);
+  expect(new Set(await rows(page).evaluateAll((all) => all.map((row) => row.getAttribute('data-note')))).size).toBe(50);
+});
+
 test('the screen keeps 500 notes, and says that a filter or the search finds the others', async ({ page }) => {
   const many = Array.from({ length: 620 }, (_, n) => noteOf(n));
   const worker = await open(page, { observer: false, notes: many });

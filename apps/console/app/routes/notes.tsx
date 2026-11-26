@@ -113,9 +113,13 @@ export default function Notes() {
   const [more, setMore] = useState<More>('idle');
   const [arrived, setArrived] = useState<number | undefined>();
   // What the screen shows now, for a read that started before it: a read again reads back as many
-  // notes, and the next notes go on from its cursor.
+  // notes, and the next notes go on from its cursor. Set with the state, not at the next render: a
+  // read can start between the two (raised in review).
   const now = useRef(shown);
-  now.current = shown;
+  const draw = (next: Fetched<NotesAnswer>) => {
+    now.current = next;
+    setShown(next);
+  };
   // Whether the list is read, from the moment its read starts: a render can come after it.
   const busy = useRef(false);
   // Each read of the list takes a number; the answer of a read of before is dropped, and the read of
@@ -171,12 +175,14 @@ export default function Notes() {
     // A view read again says its new count with its answer.
     if (!fresh) for (const each of VIEWS) reportView.current(each.id, undefined);
     asNew.current = false;
-    moreFrom.current = undefined;
     setMore('idle');
     busy.current = true;
     setReading(true);
+    // The next notes on their way count too: this read drops their answer, so it reads them back.
     const was = now.current;
-    const want = fresh ? NOTES_PER_READ : wanted(typeof was === 'object' ? was.notes.length : 0);
+    const coming = moreFrom.current === undefined ? 0 : NOTES_PER_READ;
+    const want = fresh ? NOTES_PER_READ : wanted((typeof was === 'object' ? was.notes.length : 0) + coming);
+    moreFrom.current = undefined;
     let got: NotesAnswer | undefined;
     let failed = false;
     do {
@@ -207,11 +213,11 @@ export default function Notes() {
     } while (got.next !== undefined && got.notes.length < want);
     busy.current = false;
     setReading(false);
-    if (got === undefined) return setShown('failed');
+    if (got === undefined) return draw('failed');
     if (fresh) toTop.current = true;
     setArrived(undefined);
     setMore(failed ? 'failed' : 'idle');
-    setShown(got);
+    draw(got);
     // `list` is made of the workspace, the view and the filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list]);
@@ -249,7 +255,8 @@ export default function Notes() {
     const chunk = { ...answer.data, notes: answer.data.notes };
     setMore('idle');
     setArrived(chunk.notes.length);
-    setShown((before) => (typeof before === 'object' ? appended(before, chunk) : before));
+    const before = now.current;
+    if (typeof before === 'object') draw(appended(before, chunk));
     // `list` is made of the workspace, the view and the filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list]);
