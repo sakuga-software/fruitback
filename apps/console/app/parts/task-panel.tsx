@@ -1,4 +1,5 @@
 import { type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
+import { composes, elementsOf, typedInField } from '../keys';
 import { type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
 import { ago } from '../ago';
@@ -34,13 +35,14 @@ const NONE = 'none';
 const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
 
 /** A key the panel takes (FRU-687): not in a field, a list that is open, a menu, or another dialog. */
-function keyOfPanel(target: EventTarget | null, panel: HTMLElement | null): boolean {
-  if (!(target instanceof Element)) return true;
-  if (target.closest('[role="listbox"], [role="menu"], [role="alertdialog"]') !== null) return false;
-  const dialog = target.closest('[role="dialog"]');
-  if (dialog !== null && dialog !== panel) return false;
+function keyOfPanel(event: KeyboardEvent, panel: HTMLElement | null): boolean {
+  // Through every Shadow root (FRU-726): a key of the widget's fields or dialogs is the widget's.
+  const path = elementsOf(event);
+  if (path.some((each) => ['listbox', 'menu', 'alertdialog'].includes(each.getAttribute('role') ?? ''))) return false;
+  if (path.some((each) => each !== panel && each.getAttribute('role') === 'dialog')) return false;
 
-  return target.closest('input, textarea, select, [contenteditable="true"]') === null;
+  // Any input keeps its arrows, a group of radios included.
+  return !typedInField(event) && !path.some((each) => each.tagName === 'INPUT');
 }
 
 /**
@@ -120,7 +122,7 @@ export function TaskPanel({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || composes(event)) return;
       // A control that has its list or its picker open takes Escape and the arrows first (raised in review).
       if (event.target instanceof Element && event.target.closest('[aria-expanded="true"]') !== null) return;
       // Escape closes the panel from a field of it too, as it closed the drawer of before.
@@ -128,7 +130,7 @@ export function TaskPanel({
         event.target instanceof Element &&
         event.target.closest('input, textarea') !== null &&
         panel.current?.contains(event.target) === true;
-      if (!keyOfPanel(event.target, panel.current) && !(field && event.key === 'Escape')) return;
+      if (!keyOfPanel(event, panel.current) && !(field && event.key === 'Escape')) return;
       const { previous: above, next: under, onStep: step, onClose: close } = keys.current;
       if (event.key === 'Escape') {
         event.preventDefault();

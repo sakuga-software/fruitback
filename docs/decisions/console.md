@@ -1568,6 +1568,35 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   change too: the links and the IDs one per line, the Markdown grouped by page, then the tasks
   written by hand.
 
+## The shortcuts of the keyboard, and the fields (FRU-726)
+
+### The rules, in short
+
+- **One guard for every shortcut of the console, `keys.ts`**: « C » (New task), « / » (the search of
+  the notes, the sites and the members), j and k (the rows), Cmd or Ctrl and A, and Escape (the
+  selection), the copies (Cmd or Ctrl, Shift and C or the full stop), and the arrows and Escape of
+  the panel of a task. A new shortcut goes through it.
+- **A shortcut reads `composedPath()`, never `event.target` alone.** The target of a key typed in a
+  Shadow root is its host element, which is no field. The Fruitback widget on the console is one: each
+  « c » of a note opened « New task » and was missing from the note, and the button read
+  « New taskC ».
+- **A field keeps its keys**: a text input, a `textarea`, a `select`, an element you can edit, and a
+  `textbox` or `searchbox`, wherever they are in the path. A box, a radio, a button, and a button that
+  says `combobox` are no field: Cmd or Ctrl and A on the box of a row still selects every task. A
+  dialog (the panel of a task included, as since FRU-656), a menu and a list of options keep their
+  keys too, in a Shadow root as well.
+- **A shortcut of one key (« C », « / », j, k) takes no Cmd, Ctrl or Alt**, no key that a handler took
+  already, and no key while an IME composes a word (`isComposing`, or the key 229 of Safari).
+- `keys.test.ts` tests the guard on the path of a key typed in a Shadow root.
+  `e2e/console-shortcut-fields.spec.ts` types « c » and « / » in a field of a Shadow root and in the
+  widget mounted on the console, and presses them out of a field as its control.
+
+### The reasons, and the history
+
+- The widget keeps the keys of its fields from the page since FRU-726 (`docs/decisions/widget.md`),
+  for every site. The console has its own guard all the same: another component with a Shadow root,
+  or a widget older than the fix, takes the same path.
+
 ## The tab « Access » of a site (FRU-703)
 
 ### The rules, in short
