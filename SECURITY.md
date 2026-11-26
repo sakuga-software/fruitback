@@ -169,7 +169,7 @@ clear unless this list says otherwise:
   `postgres`, which is the default. A note sent to a tracker leaves its id there, and at most 64
   characters of its text in the index (below).
 - The accounts: the address of each person, the name they gave, the id each provider gives them,
-  their language; the workspaces, their members and roles, the sites and the address of each site.
+  their language, the look of the console they chose; the workspaces, their members and roles, the sites and the address of each site.
   No password, and no token of a provider.
 - The sessions, of the extension and of the console: SHA-256 digests of each code and token, never
   the token, with the name and the dates of each.
@@ -2017,6 +2017,27 @@ identity is asked for (`openid email profile`).
   of one person run one after the other, so two at the same moment cannot take both providers:
   test:`takes one of two providers, and not both, when two unlinks come at the same moment`. This
   holds for one process of the worker, as the lock of a workspace does.
+
+### The look of the console a person chose (FRU-716)
+
+- A person sets the look of their own console, and nobody else's. `POST /console/me/appearance`
+  writes the account of the cookie, from the console (its `Origin`), and no route takes an id:
+  test:`sets the appearance of the person of the cookie only, by a POST of the console`. The token
+  of an extension opens no route of the console.
+- The worker keeps eight words and numbers it knows, and nothing else: an object with the eight
+  fields of an appearance, each one a value of `APPEARANCE_CHOICES`. Anything else is `400
+  invalid-appearance`, and the account keeps what it had: test:`refuses what is not a whole
+  appearance, and keeps the one the account had`. No colour, no CSS and no text of the person is
+  kept: the console turns each word into the values of its own tokens.
+- `GET /console/me` answers it to the person alone; no other answer carries it, and no other person
+  reads it. A value kept before a console that no longer knows it is read field by field, and each
+  unknown field is the default (`readAppearance` of the console).
+- The browser keeps a copy for the first paint (`public/appearance.js`). The console writes the
+  choice of the account there at each `/console/me`, and takes it away when the account has none
+  and at a sign-out, so the choice of one account does not stay for the next person of a shared
+  browser. Until the first `/console/me` of that next person answers, the page can show the copy
+  left by an account whose session ended without a sign-out: it is a look, and no data of that
+  account.
 
 ### The other addresses of an account (FRU-450)
 

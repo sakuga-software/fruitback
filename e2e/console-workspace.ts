@@ -28,6 +28,13 @@ type Stub = {
   sites?: readonly unknown[];
   /** Answers a call before the stubs below do. `undefined`: the stubs below answer. */
   answer?: (pathname: string, route: Route) => Promise<void> | undefined;
+  /**
+   * FRU-716: an account that keeps its appearance, as the worker does. `/console/me` answers what it
+   * holds, and `POST /console/me/appearance` writes it (`null` takes it away). One object for the
+   * pages of one person: a second browser of theirs reads what the first one wrote. Absent: the
+   * account holds none, and a write of it is answered `204`.
+   */
+  account?: { id?: string; email?: string; appearance?: unknown };
 };
 
 /** A site as a stub answers it: what the reads of FRU-497 need of it. */
@@ -74,17 +81,29 @@ export function fulfillSites(route: Route, list: readonly unknown[]): Promise<vo
 
 /** A signed-in person, their workspaces, and the lists every screen of a workspace reads. */
 export async function stubWorker(page: Page, stub: Stub = {}): Promise<void> {
-  const me = {
-    account: { id: 'a1', email: 'ana@acme.dev', name: 'Ana', locale: stub.locale ?? 'en' },
+  const person = { id: stub.account?.id ?? 'a1', email: stub.account?.email ?? 'ana@acme.dev' };
+  const me = () => ({
+    account: {
+      ...person,
+      name: 'Ana',
+      locale: stub.locale ?? 'en',
+      ...(stub.account?.appearance === undefined ? {} : { appearance: stub.account.appearance }),
+    },
     workspaces: stub.workspaces ?? [ACME, LUMEN],
-  };
+  });
   const sites = stub.sites ?? [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }];
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
     const answered = stub.answer?.(pathname, route);
     if (answered !== undefined) return answered;
-    if (pathname === '/console/me') return json(me);
+    if (pathname === '/console/me') return json(me());
+    if (pathname === '/console/me/appearance' && stub.account !== undefined) {
+      const { appearance } = route.request().postDataJSON() as { appearance: unknown };
+      stub.account.appearance = appearance === null ? undefined : appearance;
+
+      return json({ appearance });
+    }
     if (/^\/console\/workspaces\/w\d\/domains$/.test(pathname)) return json({ domains: [] });
     const read = /^\/console\/workspaces\/w\d\//.test(pathname) ? fulfillSites(route, sites) : false;
     if (read !== false) return read;

@@ -563,8 +563,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   computes each pair: 4.5:1 for a text, 3:1 for the border of a control and the ring). **No flash**:
   the choice and the variables of its two themes are kept in `localStorage`, and
   `public/appearance.js`, a script of the page before the bundle, writes them on `<html>` before the
-  first paint; it knows no theme. The mockup keeps the choice with the account: the worker keeps no
-  appearance yet, so this browser keeps it until FRU-716. The density is `--spacing-row`, which the
+  first paint; it knows no theme. **The account keeps the choice** (FRU-716): each choice goes to
+  `POST /console/me/appearance` (`keepWithAccount`, one request at a time, then only the last
+  choice made meanwhile), and each answer of `/console/me` writes the choice of the account in this
+  browser (`adoptAppearance`), or takes the copy away when the account holds none, so the choice of
+  one account never stays for another one. A sign-out takes it away too (`forgetAppearance`). A
+  choice on its way wins over an answer of `/console/me` read before it. A choice the account did
+  not take shows in the tab, and the page says so. `app/appearance-account.test.ts` holds the
+  values of the worker and of the console together. The density is `--spacing-row`, which the
   table of the notes reads; a table that is drawn again reads it too.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
   with no change, and the deletion typed in its dialog.

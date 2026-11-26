@@ -325,6 +325,7 @@ for (const { label, open, skip } of DATABASES) {
 
         assert.deepEqual(options.user?.additionalFields, {
           locale: { type: 'string', required: false, input: false },
+          appearance: { type: 'json', required: false, input: false },
           ...INSTANCE_ADMIN_FIELDS,
         });
       });

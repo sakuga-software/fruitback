@@ -528,10 +528,15 @@ what it writes each time.
   address of the server. `FRUITBACK_NO_UPDATE_CHECK=1` stops it. The worker keeps the answer in its
   memory, and nowhere else. The browser of the administrator keeps the version of a banner that they
   dismissed, in `localStorage`, and nothing else of it.
-- The browser of a person keeps the appearance they chose in Settings › Appearance, in
-  `localStorage` under `fruitback.appearance`: the theme, the mode, the tint of the sidebar, the
-  accent, the density, the radius, the size of the text, and the values of the tokens they give.
-  Nothing of it leaves the browser: the worker keeps no appearance. « Reset » erases it.
+- The account of a person keeps the appearance they chose in Settings › Appearance, so
+  their other browsers show it: the theme, the mode, the tint of the sidebar, the accent, the
+  density, the radius and the size of the text, as eight words and numbers of a fixed list. It is a
+  preference of display, for their own console: no other person reads it, and it goes with the
+  account when the account is deleted. « Reset » erases it from the account.
+- Their browser keeps a copy, in `localStorage` under `fruitback.appearance`, with the values of the
+  tokens it gives, so the first paint of a page shows it. The console writes the choice of the
+  account there at each sign-in and visit, and erases it when the account holds none and at a
+  sign-out.
 
 ### What the extension declares to Firefox (FRU-333)
 

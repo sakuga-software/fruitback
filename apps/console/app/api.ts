@@ -8,6 +8,7 @@
  * FRU-150.
  */
 
+import { type Appearance, forgetAppearance } from './appearance.ts';
 import { locale } from './i18n.ts';
 import type { PluginKind } from './trackers/plugin.ts';
 import { WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
@@ -16,7 +17,8 @@ import { API, UNREACHABLE, reach } from './transport.ts';
 
 export { API, UNREACHABLE, onReachability } from './transport.ts';
 
-export type Account = { id: string; email: string; name?: string; locale?: string };
+/** `appearance`: the look of the console the person chose (FRU-716), read by `readAppearance`. */
+export type Account = { id: string; email: string; name?: string; locale?: string; appearance?: unknown };
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
 /**
  * A workspace of the person, as `/console/me` lists it. A suspended one says since when (FRU-282),
@@ -566,6 +568,11 @@ async function ask<T>(
   return result;
 }
 
+/** Keeps the look of the console with the account (FRU-716), `null` for the default. `false` when it did not take it. */
+export function saveAppearance(appearance: Appearance | null): Promise<boolean> {
+  return call('POST', '/console/me/appearance', { appearance }).then((answer) => answer.ok);
+}
+
 /** Tells the account the language its person chose (FRU-119). `false` when it did not take it. */
 export function saveLanguage(tag: string): Promise<boolean> {
   return call('POST', '/console/me/locale', { locale: tag }).then((answer) => answer.ok);
@@ -641,10 +648,12 @@ export async function signOut(): Promise<boolean> {
   // The session of the browser is of another account now: this tab does not end it (FRU-210).
   if (left !== undefined) return false;
   const out = (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
-  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is.
+  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is. The look the
+  // person chose goes with them (FRU-716): the next person of this browser starts from the default.
   if (out) {
     tabAccount = undefined;
     lastMe = undefined;
+    forgetAppearance();
   }
 
   return out;
@@ -846,6 +855,7 @@ export async function signOutEverywhere(): Promise<boolean> {
   if (out) {
     tabAccount = undefined;
     lastMe = undefined;
+    forgetAppearance();
   }
 
   return out;
