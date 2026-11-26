@@ -46,6 +46,7 @@ import {
   type Reach,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_VISITOR_RIGHT,
+  DEFAULT_VISITOR_NOTES_PER_HOUR,
   defaultWriters,
   offersDoneNotice,
   type SharedSite,
@@ -181,6 +182,7 @@ const SITE_WITH_DESTINATION = {
   notify_done: sites.notify_done,
   visitor_edit: sites.visitor_edit,
   visitor_delete: sites.visitor_delete,
+  visitor_notes_per_hour: sites.visitor_notes_per_hour,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1687,7 +1689,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
-    async addSite(workspace, { origin, visibility, writers, notifyDone, visitorEdit, visitorDelete }) {
+    async addSite(
+      workspace,
+      { origin, visibility, writers, notifyDone, visitorEdit, visitorDelete, visitorNotesPerHour },
+    ) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
       // the destinations it had, so the statement that writes it reads them too. It keeps who writes
       // there too, unless the caller says (FRU-330): a console of before closes nothing. The same for
@@ -1706,6 +1711,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               notify_done: notifyDone ?? false,
               visitor_edit: visitorEdit ?? DEFAULT_VISITOR_RIGHT,
               visitor_delete: visitorDelete ?? DEFAULT_VISITOR_RIGHT,
+              visitor_notes_per_hour: visitorNotesPerHour ?? DEFAULT_VISITOR_NOTES_PER_HOUR,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1718,6 +1724,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 ...(notifyDone === undefined ? {} : { notify_done: notifyDone }),
                 ...(visitorEdit === undefined ? {} : { visitor_edit: visitorEdit }),
                 ...(visitorDelete === undefined ? {} : { visitor_delete: visitorDelete }),
+                ...(visitorNotesPerHour === undefined ? {} : { visitor_notes_per_hour: visitorNotesPerHour }),
               },
             })
             .returning({
@@ -1729,6 +1736,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               notify_done: sites.notify_done,
               visitor_edit: sites.visitor_edit,
               visitor_delete: sites.visitor_delete,
+              visitor_notes_per_hour: sites.visitor_notes_per_hour,
             }),
         );
 
@@ -1743,6 +1751,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             notify_done: site.notify_done,
             visitor_edit: site.visitor_edit,
             visitor_delete: site.visitor_delete,
+            visitor_notes_per_hour: site.visitor_notes_per_hour,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

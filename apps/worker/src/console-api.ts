@@ -33,6 +33,8 @@ import {
   WRITERS,
   VISITOR_RIGHTS,
   type VisitorRight,
+  VISITOR_NOTE_LIMITS,
+  type VisitorNoteLimit,
   type Workspace,
   type Visibility,
   type Writers,
@@ -208,6 +210,10 @@ function visitorRightOf(value: unknown): VisitorRight | undefined {
   return isOneOf(value, VISITOR_RIGHTS) ? value : undefined;
 }
 
+function visitorNoteLimitOf(value: unknown): VisitorNoteLimit | undefined {
+  return isOneOf(value, VISITOR_NOTE_LIMITS) ? value : undefined;
+}
+
 /** The fields of a site the console shows, and the client id a script tag names. */
 type SiteView = {
   id: string;
@@ -219,6 +225,8 @@ type SiteView = {
   /** FRU-703: what a visitor may do to a note of their own, as it is stored. */
   visitorEdit: VisitorRight;
   visitorDelete: VisitorRight;
+  /** FRU-704: the notes a visitor leaves in an hour, `0` for no limit, as it is stored. */
+  visitorNotesPerHour: VisitorNoteLimit;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -240,6 +248,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     notifyDone: site.notifyDone,
     visitorEdit: site.visitorEdit,
     visitorDelete: site.visitorDelete,
+    visitorNotesPerHour: site.visitorNotesPerHour,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -883,6 +892,12 @@ export async function handleConsoleApi(
     if (body?.visitorDelete !== undefined && visitorDelete === undefined) {
       return json(400, { error: 'invalid-visitor-delete' }, headers);
     }
+    // FRU-704: the same, with the default of the mockup for a new site.
+    const visitorNotesPerHour =
+      body?.visitorNotesPerHour === undefined ? undefined : visitorNoteLimitOf(body.visitorNotesPerHour);
+    if (body?.visitorNotesPerHour !== undefined && visitorNotesPerHour === undefined) {
+      return json(400, { error: 'invalid-visitor-notes-per-hour' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -891,6 +906,7 @@ export async function handleConsoleApi(
       ...(notifyDone === undefined ? {} : { notifyDone }),
       ...(visitorEdit === undefined ? {} : { visitorEdit }),
       ...(visitorDelete === undefined ? {} : { visitorDelete }),
+      ...(visitorNotesPerHour === undefined ? {} : { visitorNotesPerHour }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

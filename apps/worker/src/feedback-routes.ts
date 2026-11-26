@@ -24,7 +24,7 @@ import {
 } from './note-helpers.ts';
 import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
 import { type DoneNoticeSeams, notifyToken, sendDoneNotices } from './done-notices.ts';
-import { chargeRateLimit, maxBatch } from './rate-limit.ts';
+import { chargeRateLimit, checkVisitorNotes, maxBatch } from './rate-limit.ts';
 import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
@@ -541,6 +541,11 @@ export async function postFeedback(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+  // FRU-704: counted once the note is one the worker would take, before anything is written.
+  const limited = identity.visitor
+    ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders)
+    : undefined;
+  if (limited !== undefined) return limited;
 
   try {
     // A note of before FRU-331, sent again, names its picture in its note: it goes with it while the
@@ -631,6 +636,39 @@ export async function postFeedback(
   }
 }
 
+/**
+ * The refusal of a visitor over the notes of the hour of their site (FRU-704), or `undefined` when
+ * the notes may go. The route calls it for a visitor only, as `attributionFor` names one: a caller
+ * with no token. A session of a member and a token that the site signed were verified and are not
+ * counted; a token that does not verify was refused with `401` before. A site that says no `visitorNotesPerHour` (« No limit », a site of
+ * members, a client of `FRUITBACK_CLIENTS`) counts nothing. `429 visitor-limit` names the limit, so
+ * the widget says how long to wait; a `Kv` that does not answer is the `503` of every limiter.
+ */
+async function visitorLimit(
+  request: Request,
+  kv: Kv,
+  clientIp: string,
+  client: ClientConfig | undefined,
+  clientId: string | undefined,
+  checks: CallerChecks,
+  amount: number,
+  corsHeaders: Record<string, string>,
+): Promise<Response | undefined> {
+  const perHour = client?.visitorNotesPerHour;
+  if (perHour === undefined || clientId === undefined) return undefined;
+  const visitor = checks.visitorOf(request, clientId);
+  try {
+    if (await checkVisitorNotes(kv, { site: clientId, visitor, clientIp, perHour, amount })) return undefined;
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+    console.error(`[fruitback] rate limit unavailable: ${error.message}`);
+
+    return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+  }
+
+  return json(429, { error: 'visitor-limit', perHour }, corsHeaders);
+}
+
 /** The help of a `502 destination-unavailable` for the author of this request (FRU-640). */
 async function placeGoneHelpFor(
   request: Request,
@@ -715,12 +753,14 @@ async function postBatch(
   const attributed: Note[] = [];
   let channel: Channel = 'script';
   let account = false;
+  let visitor = false;
   for (const note of notes) {
     const identity = await attributionFor(request, route.policy, note.reporter);
     if (!identity.ok) return json(401, { error: identity.error, reason: identity.reason }, corsHeaders);
     attributed.push({ ...note, ...optionalReporter(identity.reporter) });
     channel = identity.channel;
     account = identity.account;
+    visitor = identity.visitor;
   }
   // Once for the request, as the token is one (FRU-238).
   const ended = account ? await endedSession(stillWrites, corsHeaders) : undefined;
@@ -728,7 +768,6 @@ async function postBatch(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
-
   // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
   const known = await Promise.all(
     attributed.map(async (note) => {
@@ -748,6 +787,18 @@ async function postBatch(
     attributed.map((note, index) => (known[index] === undefined ? hold(kv, clientId, note.id) : false)),
   );
   const fresh = attributed.filter((_, index) => held[index]);
+  // FRU-704: the notes this request holds, and so may plant, count, before anything is written. A batch
+  // sent again counts only what no earlier attempt kept, and a note another request holds counts there
+  // (reviews of #984). Refused, the holds are given back at once.
+  const limited =
+    visitor && fresh.length > 0
+      ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, fresh.length, corsHeaders)
+      : undefined;
+  if (limited !== undefined) {
+    await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
+
+    return limited;
+  }
 
   let planted: BatchAnswer[] = [];
   let gone: PlaceUnavailable | undefined;
