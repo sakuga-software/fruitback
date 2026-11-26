@@ -374,6 +374,92 @@ describe('a test file is written for the runner of its package (FRU-345)', () =>
   });
 });
 
+/**
+ * Rule 5. Each test file of the worker with cases on a real PostgreSQL is in `test:postgres` (FRU-720).
+ *
+ * Such a case skips when `FRUITBACK_TEST_DATABASE_URL` is not set. Only the CI job `postgres` sets
+ * it, and that job runs the files that `test:postgres` names, not every file. So a file that is not
+ * named there runs its cases on a real server in no job, and every check stays green. On 2026-11-26,
+ * 11 files were in that state, with 107 such cases: `connect-postgres.test.ts` (FRU-238) and 10
+ * files that take `DATABASES` or `MIGRATED_DATABASES` of `auth.fixture.ts`.
+ *
+ * A file has such cases when it names a subject on a real server (`REAL_SERVER`). Only
+ * `postgres.fixture.ts` and `auth.fixture.ts` export one. Another fixture that names one would give
+ * its real server to a test file that this scan does not see, so the guard refuses it.
+ *
+ * The other way: a file that `test:postgres` names must exist and have such cases. vitest runs the
+ * files it finds and says nothing about a name that matches no file.
+ */
+const REAL_SERVER =
+  /\b(?:NO_REAL_POSTGRES|TEST_DATABASE_URL|createRealDatabase|createMigratedRealDatabase|ownDatabase|DATABASES|MIGRATED_DATABASES)\b/;
+/** The fixtures that make the subjects on a real server. */
+const REAL_SERVER_FIXTURES = ['apps/worker/src/postgres.fixture.ts', 'apps/worker/src/auth.fixture.ts'];
+const WORKER = 'apps/worker';
+
+/** The files that a `test:postgres` script names, from the root of the repository. */
+function postgresFiles(script: string): string[] {
+  return script
+    .split(/\s+/)
+    .filter((argument) => TEST_FILE.test(argument))
+    .map((file) => `${WORKER}/${file}`);
+}
+
+/** What rule 5 finds: the files with cases on a real server that `listed` leaves out, and the reverse. */
+function realServerGaps(
+  sources: Record<string, string>,
+  listed: string[],
+): { unlisted: string[]; listedWithoutCases: string[]; fixtures: string[] } {
+  const real = (file: string) => REAL_SERVER.test(sources[file] ?? '');
+  const files = Object.keys(sources).filter((file) => file.startsWith(`${WORKER}/`));
+
+  return {
+    unlisted: files.filter((file) => TEST_FILE.test(file) && real(file) && !listed.includes(file)),
+    listedWithoutCases: listed.filter((file) => !real(file)),
+    fixtures: files.filter((file) => /\.fixture\.ts$/.test(file) && !REAL_SERVER_FIXTURES.includes(file) && real(file)),
+  };
+}
+
+describe('each test file with cases on a real PostgreSQL runs in the job « postgres » (FRU-720)', () => {
+  const manifest = JSON.parse(readFileSync(`${REPOSITORY}${WORKER}/package.json`, 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const listed = postgresFiles(manifest.scripts['test:postgres'] ?? '');
+
+  it('finds every such file in test:postgres, and only such files', () => {
+    const sources = Object.fromEntries(
+      files(`${WORKER}/src/**/*.ts`)
+        .filter((file) => file !== SELF && (TEST_FILE.test(file) || /\.fixture\.ts$/.test(file)))
+        .map((file) => [file, readFileSync(`${REPOSITORY}${file}`, 'utf8')]),
+    );
+    for (const fixture of REAL_SERVER_FIXTURES) assert.ok(REAL_SERVER.test(sources[fixture] ?? ''), fixture);
+
+    assert.deepEqual(realServerGaps(sources, listed), { unlisted: [], listedWithoutCases: [], fixtures: [] });
+    // A scan that finds nothing passes the rule above.
+    assert.ok(listed.length >= 40, `test:postgres names only ${listed.length} files`);
+  });
+
+  it('fails on a file left out, a file that is not there, and a fixture that hides a real server', () => {
+    const sources = {
+      'apps/worker/src/listed.test.ts': 'onDatabase(label, f, createRealDatabase, create, NO_REAL_POSTGRES)',
+      'apps/worker/src/left-out.test.ts': "import { MIGRATED_DATABASES } from './auth.fixture.ts';",
+      'apps/worker/src/left-out-too.test.ts': "describe('x', { skip: NO_REAL_POSTGRES !== false }, () => {});",
+      'apps/worker/src/pglite-only.test.ts': "import { createMigratedPgliteDatabase } from './postgres.fixture.ts';",
+      'apps/worker/src/listed-pglite.test.ts': 'createPgliteDatabase()',
+      'apps/worker/src/postgres.fixture.ts': 'export const NO_REAL_POSTGRES = false;',
+      'apps/worker/src/hidden.fixture.ts': 'export const SERVERS = [createRealDatabase];',
+      'apps/console/app/zz.test.ts': 'DATABASES',
+    };
+    const script =
+      'FRUITBACK_TEST_POSTGRES=required vitest run src/listed.test.ts src/listed-pglite.test.ts src/gone.test.ts';
+
+    assert.deepEqual(realServerGaps(sources, postgresFiles(script)), {
+      unlisted: ['apps/worker/src/left-out.test.ts', 'apps/worker/src/left-out-too.test.ts'],
+      listedWithoutCases: ['apps/worker/src/listed-pglite.test.ts', 'apps/worker/src/gone.test.ts'],
+      fixtures: ['apps/worker/src/hidden.fixture.ts'],
+    });
+  });
+});
+
 describe('a skip carries its reason (FRU-174)', () => {
   it('finds no skip without a reason in a test, a spec or a fixture', () => {
     const sources = files('**/*').filter(
