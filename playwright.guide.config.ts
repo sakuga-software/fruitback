@@ -16,6 +16,8 @@ export default defineConfig({
   // `guide/<name>` for the captures of the guide, `video/<name>` for the frames of the video (FRU-531).
   snapshotPathTemplate: '{testDir}/../docs/assets/{arg}{ext}',
   updateSnapshots: 'changed',
+  // After the warm-up of the suite: a calm machine and a warm Chromium (FRU-732, `guide-machine.ts`).
+  globalSetup: ['./e2e/warm-up.ts', './e2e/guide-machine.ts'],
   retries: 0,
   workers: 1,
 });
