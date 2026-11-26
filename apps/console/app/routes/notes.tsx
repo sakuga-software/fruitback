@@ -37,7 +37,8 @@ import { copyShortcutOf, useTaskCopy } from '../parts/task-copy';
 import { siteOfId } from '../note-id';
 import { SelectionStatus, useSelectionKeys, useTaskSelection } from '../parts/task-selection';
 import { TaskBulkBar, TaskContexts } from '../parts/task-bulk-bar';
-import { VIEWS, viewOf } from '../saved-views';
+import { VIEWS, filtersSet, sameFilters, saveView, viewOf, viewsFor } from '../saved-views';
+import { ViewNameDialog, viewProblem } from '../parts/view-dialogs';
 
 /** FRU-655: the filters on the fields of the tasks Fruitback keeps. */
 const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
@@ -53,7 +54,7 @@ const TASK_FILTERS = ['assignee', 'priority', 'label', 'due'] as const;
  */
 export default function Notes() {
   useLocale();
-  const { workspace, me, viewCounted } = useWorkspace();
+  const { workspace, me, viewCounted, personalViews, viewSaved } = useWorkspace();
   // FRU-697: the bar counts a view from the read of its filter. A ref: a new function each render of
   // the frame must not read the list again.
   const reportView = useRef(viewCounted);
@@ -105,6 +106,15 @@ export default function Notes() {
     [params, seesTracker],
   );
   const view: View = params.get('view') === 'board' ? 'board' : 'table';
+  // FRU-723: « Save view » once a filter is on, and the filters are not a view of the bar already.
+  // A failed read of the views of the person offers none: a view saved twice would show twice.
+  const [naming, setNaming] = useState(false);
+  const fixed = viewOf(filters);
+  const savable =
+    personalViews !== undefined &&
+    Object.keys(filtersSet(filters)).length > 0 &&
+    (fixed === undefined || !viewsFor(workspace.role).includes(fixed)) &&
+    !personalViews.some((kept) => sameFilters(kept.filters, filters));
   // FRU-724: the list, as one key: the workspace, the view and the filters. A new list starts again
   // from its first notes; anything else in the address (the task opened) reads nothing.
   const list = JSON.stringify([base, view, ...FILTERS.map((name) => filters[name])]);
@@ -522,6 +532,20 @@ export default function Notes() {
           </div>
         ) : null}
 
+        <ViewNameDialog
+          open={naming}
+          title={t('Save view')}
+          saveLabel={t('Save view')}
+          onClose={() => setNaming(false)}
+          onSave={async (name) => {
+            const saved = await saveView(workspace.id, name, filters);
+            if (!saved.ok) return viewProblem(saved);
+            viewSaved(saved.data);
+
+            return undefined;
+          }}
+        />
+
         {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
           <p className="mt-[24px] max-w-[640px] text-body text-muted">
             {t('No note yet. Notes show here as soon as someone leaves one on a site of {workspace}.', {
@@ -543,6 +567,7 @@ export default function Notes() {
                 view={view}
                 onView={show}
                 seesTracker={seesTracker}
+                {...(savable ? { onSaveView: () => setNaming(true) } : {})}
                 // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
                 {...(shown.notes.some((note) => note.task !== undefined) ||
                 TASK_FILTERS.some((name) => filters[name] !== '')

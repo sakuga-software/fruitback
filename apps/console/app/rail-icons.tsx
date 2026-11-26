@@ -52,6 +52,8 @@ const PATHS = {
   // Two braces: what a connector was sent, and did not take.
   braces:
     'M9 4c-2 0-3 1-3 3v2c0 1.2-.8 2.4-2 3 1.2.6 2 1.8 2 3v2c0 2 1 3 3 3M15 4c2 0 3 1 3 3v2c0 1.2.8 2.4 2 3-1.2.6-2 1.8-2 3v2c0 2-1 3-3 3',
+  // FRU-723: a view of the person, the lines of « Filter » of the bar of the notes.
+  filter: 'M4 6h16M7 12h10M10 18h4',
 } as const;
 
 export type RailIconName = keyof typeof PATHS;

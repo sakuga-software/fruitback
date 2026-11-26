@@ -483,8 +483,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     counts the reads). A read again, after a
     write (a status, a task, « Send again »), drops the counts of the views when it starts, as the
     write can change them and its answer can be dropped: a count that may be wrong is not shown, and
-    a view read again says its new count. A view a person makes
-    from the bar of filters needs the worker to keep it (FRU-723): the console keeps none.
+    a view read again says its new count.
+  - **The views of the person are under the three of the mockup** (FRU-723). « Save view », after
+    « Clear » in the bar of filters of the notes, opens a dialog that names the filters that are on;
+    the worker keeps the view (`GET`, `POST …/views` and `POST`, `DELETE …/views/<view>`, `worker.md`),
+    and the console keeps none, not even in `localStorage`: a view follows its person to another
+    browser. The frame reads them once with the counts of the bar, and a view saved shows at once.
+    « Save view » is offered once a filter is on, the search included, and not on the filters of a
+    view already (of the mockup, or of the person), nor when the read of the views failed: a view
+    saved twice would show twice. An entry of a view of the person has the lines of « Filter » for
+    its icon, the name the person gave, and no count; its menu (three dots at its right, under the
+    pointer, with the focus, and always on a screen of touch) renames it in the same dialog and
+    deletes it, which a second dialog asks again. **The Notes screen with exactly the filters of a
+    view of the person is that view**, as for the three, after them.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
     (beta) », or « Extension » with a green dot and the browser connected), « Help and docs », a

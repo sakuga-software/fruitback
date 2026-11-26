@@ -444,6 +444,7 @@ export function NotesToolbar({
   view,
   onView,
   seesTracker = false,
+  onSaveView,
 }: {
   /** The notes of the whole list under the filters. */
   total: number;
@@ -463,6 +464,11 @@ export function NotesToolbar({
   onView: (view: View) => void;
   /** FRU-722: the filter on the deliveries is offered to whoever sees where the notes go. */
   seesTracker?: boolean;
+  /**
+   * FRU-723: « Save view », which names the filters that are on as a view of the person. Absent: no
+   * filter is on, or the filters are a view of the bar already.
+   */
+  onSaveView?: (() => void) | undefined;
 }) {
   useLocale();
   const [open, setOpen] = useState(false);
@@ -514,6 +520,11 @@ export function NotesToolbar({
             {t('Clear')}
           </LinkButton>
         </div>
+      )}
+      {onSaveView === undefined ? null : (
+        <LinkButton onClick={onSaveView} space="flush">
+          {t('Save view')}
+        </LinkButton>
       )}
       <div className="ml-auto flex min-w-0 items-center gap-[8px]">
         <span className="hidden flex-none text-hint text-muted tabular-nums min-[640px]:inline" aria-live="polite">

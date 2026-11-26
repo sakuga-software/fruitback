@@ -36,7 +36,8 @@ import { MAX_LISTED_REPOSITORIES } from './github-connector.ts';
 import { SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
 import { LOGO_TYPES, MAX_LOGO_BYTES, MAX_LOGO_SIDE } from './workspace-logo.ts';
 import { DEFAULT_KEY_DAYS, KEY_PREFIX, MAX_KEY_DAYS, MAX_KEY_SITES } from './agent-keys.ts';
-import { MAX_AGENT_KEYS } from './accounts.ts';
+import { MAX_AGENT_KEYS, MAX_SAVED_VIEWS } from './accounts.ts';
+import { VIEW_NAME_MAX } from './console-saved-views.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -202,6 +203,16 @@ describe('SECURITY.md states what the code does', () => {
       `only the sites it names, ${MAX_KEY_SITES} at most`,
       `It lives ${DEFAULT_KEY_DAYS} days unless its creator chooses from 1 to ${MAX_KEY_DAYS} days`,
       `A workspace holds ${MAX_AGENT_KEYS} keys at most`,
+    ]) {
+      assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
+    }
+  });
+
+  it('quotes the limits of the views a person keeps (FRU-723)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    for (const sentence of [
+      `A name has ${VIEW_NAME_MAX} characters at most, on one line`,
+      `A person keeps ${MAX_SAVED_VIEWS} views in a workspace at most`,
     ]) {
       assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }

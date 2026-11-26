@@ -311,6 +311,11 @@ The table `done_notices` keeps one row for each note that waits:
   page of the site, by the script or by the extension, at most once an hour. No page, no address of
   the visitor, no person, no count of visits: a date per site and per way, which the console shows
   as « Installed » and « Seen on the site 2 h ago ». It goes with its site.
+- The views a person keeps in the console: for each view, its name and the filters of the Notes
+  screen it opens, the words of a search included, in the table `saved_views`, beside the membership
+  of that person in the workspace. No note, no result, and nothing about another person: a view is
+  read, renamed and deleted by its person only, and no browser keeps a copy. It goes when they
+  delete it, when they leave the workspace or are removed from it, and with the workspace.
 
 - The tables of better-auth, in the same PostgreSQL database. Since 0.2.0 the
   accounts above are in four of them (`user`, `account`, `organization`, `member`): the same things,

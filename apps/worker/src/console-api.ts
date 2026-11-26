@@ -8,6 +8,7 @@ import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
 import type { ReplyToNote } from './console-replies.ts';
 import { handleRail } from './console-rail.ts';
+import { handleSavedViews } from './console-saved-views.ts';
 import { askLinear, handleConnectors, listRepositories } from './console-connectors.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
@@ -858,6 +859,18 @@ export async function handleConsoleApi(
     headers,
   });
   if (rail !== undefined) return rail;
+
+  // FRU-723: the views a person keeps, from the bar of filters of the notes: `console-saved-views.ts`.
+  const views = await handleSavedViews(rest, request, {
+    workspace: workspaceId as string,
+    account: account.id,
+    allowed,
+    reach: () => context.accounts.reach(workspaceId as string, account.id),
+    accounts: context.accounts,
+    now: context.now ?? Date.now(),
+    headers,
+  });
+  if (views !== undefined) return views;
 
   /**
    * Sites as the console reads them, each with its notes and, for whoever sees the tracker, what did

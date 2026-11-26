@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { VIEWS, viewAddress, viewOf, viewsFor } from './saved-views.ts';
+import { VIEWS, filtersSet, sameFilters, viewAddress, viewOf, viewsFor } from './saved-views.ts';
 
 const assigned = VIEWS.find((view) => view.id === 'assigned');
 
@@ -63,5 +63,25 @@ describe('where « This week » starts (FRU-722)', () => {
     assert.equal(weekStart(now), new Date(2026, 10, 20, 0, 0).getTime());
     // Across the start of a month, and at the first instant of a day.
     assert.equal(weekStart(new Date(2026, 11, 2, 0, 0)), new Date(2026, 10, 26, 0, 0).getTime());
+  });
+});
+
+describe('the views of the person (FRU-723)', () => {
+  it('keep the filters that are on, and no filter at the empty text', () => {
+    assert.deepEqual(filtersSet({ stage: 'new', site: '', q: 'menu', priority: '' }), { stage: 'new', q: 'menu' });
+    assert.deepEqual(filtersSet({ site: '', q: '' }), {});
+  });
+
+  it('are the list on screen when the filters on are the same, whatever is off or not a filter', () => {
+    assert.ok(sameFilters({ stage: 'new', q: 'menu' }, { q: 'menu', stage: 'new', site: '' }));
+    assert.ok(sameFilters(Object.fromEntries(new URLSearchParams('stage=new&view=board&task=n1')), { stage: 'new' }));
+    // A filter more, less or another is another list.
+    assert.ok(!sameFilters({ stage: 'new', site: 's1' }, { stage: 'new' }));
+    assert.ok(!sameFilters({ stage: 'new' }, { stage: 'todo' }));
+    assert.ok(!sameFilters({}, { stage: 'new' }));
+  });
+
+  it('open the Notes screen with their filters in the address', () => {
+    assert.equal(viewAddress('w1', { filters: { stage: 'new', q: 'menu bar' } }), '/w/w1/notes?stage=new&q=menu+bar');
   });
 });

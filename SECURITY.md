@@ -2304,6 +2304,28 @@ seen » is shown to owners and admins only.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`) the route is `403 tasks-off`, and a
   suspended workspace writes nothing: the route is a write of the console, behind its one guard.
 
+### The views a person keeps, in the console (FRU-723)
+
+- A view is a name and the filters of the Notes screen, kept in the database for one member of one
+  workspace (the table `saved_views`). Only that person reads, renames or deletes it:
+  `GET` and `POST /console/workspaces/<id>/views`, `POST` and `DELETE …/views/<view>`. A view of
+  another person of the workspace, or of another workspace, answers `404`, as a view that does not
+  exist; a person of another workspace gets `404`, and a caller with no session `401`:
+  test:`keeps the views of one person from every other, in the workspace and out of it`.
+- A person keeps only filters they can read. Each filter is checked as the list of the notes checks
+  it, and a value the list refuses is `400`: test:`refuses filters that the list does not read`.
+  `place` and `undelivered` are about the tracker, and need the right to see it; a guest names only a
+  site shared with them; anything else is `403`: test:`keeps for a guest only filters a guest reads`.
+- A view gives no right. Opening it reads the list with the rights its person has at that moment, and
+  the views are checked again each time they are read: a view that the role of its person no longer
+  reads is not answered, and comes back if the right does:
+  test:`answers no view of the tracker to a member who became a guest`.
+- A view keeps no note and no result: only its name and the words of its filters, its search
+  included. A name has 60 characters at most, on one line. A person keeps 20 views in a workspace at
+  most, also when several are saved at the same moment. The views go with the membership: a person
+  who leaves the workspace, or is removed from it, loses them, and starts with none if they come back:
+  test:`takes the views of a person away with their membership`.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

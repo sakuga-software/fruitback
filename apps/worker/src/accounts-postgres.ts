@@ -28,6 +28,7 @@ import {
   newId,
   pendingDeliveryOf,
   roleOf,
+  savedViewOf,
   siteOf,
   workspaceOf,
 } from './account-rows.ts';
@@ -44,6 +45,8 @@ import {
   MAX_OAUTH_CLIENTS,
   type OAuthClient,
   type Reach,
+  MAX_SAVED_VIEWS,
+  type SavedView,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_VISITOR_RIGHT,
   DEFAULT_VISITOR_NOTES_PER_HOUR,
@@ -81,6 +84,7 @@ import {
   notes,
   oauth_clients,
   oauth_tokens,
+  saved_views,
   site_destinations,
   site_shares,
   sites,
@@ -695,6 +699,22 @@ async function dropTask(db: Db, workspace: string, site: string, noteId: string,
   await db
     .delete(note_index)
     .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)));
+}
+
+/** FRU-723: the columns of a view, as `savedViewOf` reads them. */
+const SAVED_VIEW = {
+  id: saved_views.id,
+  name: saved_views.name,
+  filters: saved_views.filters,
+  created_at: saved_views.created_at,
+};
+
+/** FRU-723: the id of the membership of a person in a workspace, as a subquery: none, no row. */
+function membershipOf(db: Db, workspace: string, person: string) {
+  return db
+    .select({ id: member.id })
+    .from(member)
+    .where(and(eq(member.organizationId, workspace), eq(member.userId, person)));
 }
 
 export function createPostgresAccountStore(database: Database): AccountStore {
@@ -2482,6 +2502,69 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
         return removed.length > 0;
       });
+    },
+
+    async savedViews(workspace, person) {
+      const rows = await run((db) =>
+        db
+          .select(SAVED_VIEW)
+          .from(saved_views)
+          .innerJoin(member, eq(member.id, saved_views.member_id))
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person)))
+          .orderBy(asc(saved_views.created_at), asc(saved_views.id)),
+      );
+
+      return rows.flatMap((row) => savedViewOf(row) ?? []);
+    },
+
+    async addSavedView(workspace, person, { name, filters }, now) {
+      return transaction(async (db) => {
+        // The row of the membership is locked: two views saved at once count each other.
+        const [membership] = await db
+          .select({ id: member.id })
+          .from(member)
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person)))
+          .for('update');
+        if (membership === undefined) return { added: false as const, reason: 'not-member' as const };
+        const [kept] = await db
+          .select({ views: count() })
+          .from(saved_views)
+          .where(eq(saved_views.member_id, membership.id));
+        if ((kept?.views ?? 0) >= MAX_SAVED_VIEWS) return { added: false as const, reason: 'too-many' as const };
+        const view: SavedView = { id: newId('view'), name, filters, createdAt: now };
+        await db.insert(saved_views).values({
+          id: view.id,
+          member_id: membership.id,
+          name,
+          filters: JSON.stringify(filters),
+          created_at: now,
+        });
+
+        return { added: true as const, view };
+      });
+    },
+
+    async renameSavedView(workspace, person, id, name) {
+      const [row] = await run((db) =>
+        db
+          .update(saved_views)
+          .set({ name })
+          .where(and(eq(saved_views.id, id), inArray(saved_views.member_id, membershipOf(db, workspace, person))))
+          .returning(SAVED_VIEW),
+      );
+
+      return savedViewOf(row);
+    },
+
+    async removeSavedView(workspace, person, id) {
+      const removed = await run((db) =>
+        db
+          .delete(saved_views)
+          .where(and(eq(saved_views.id, id), inArray(saved_views.member_id, membershipOf(db, workspace, person))))
+          .returning({ id: saved_views.id }),
+      );
+
+      return removed.length > 0;
     },
 
     async noteRepositoryPrivacy(connector, repository, isPrivate) {

@@ -179,6 +179,17 @@ INSERT INTO held_notes (site_id, note_id, workspace_id, payload, author_visitor,
 INSERT INTO last_seen (member_id, day) VALUES
   ('mem_drill1', '2026-10-11');
 
+-- The views of a person (FRU-723): six of Alice, and one of Bob, a guest, on the site shared with
+-- him. A name and the filters of the Notes screen, as JSON text. Seven rows, a count no other table has.
+INSERT INTO saved_views (id, member_id, name, filters, created_at) VALUES
+  ('view_drill1', 'mem_drill1', 'Urgent bugs', '{"priority":"urgent","stage":"new"}', 1),
+  ('view_drill2', 'mem_drill1', 'Menus', '{"q":"menu"}', 2),
+  ('view_drill3', 'mem_drill1', 'Not delivered this week', '{"undelivered":"1","created":"week"}', 3),
+  ('view_drill4', 'mem_drill1', 'Mine', '{"mine":"1"}', 4),
+  ('view_drill5', 'mem_drill1', 'Due this week', '{"due":"week"}', 5),
+  ('view_drill6', 'mem_drill1', 'Archived', '{"archived":"1"}', 6),
+  ('view_drill7', 'mem_drill2', 'My site', '{"site":"site_drill1"}', 7);
+
 -- A read of an administrator in a workspace they are not a member of (FRU-261): its trace, which the
 -- owners of the workspace read.
 INSERT INTO admin_reads (id, workspace_id, admin_account_id, admin_email, what, at) VALUES

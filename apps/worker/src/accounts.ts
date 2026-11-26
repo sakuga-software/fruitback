@@ -121,6 +121,15 @@ export function can(role: Role, action: Action): boolean {
  */
 export type Reach = { role: Role; sites: 'every' | readonly string[] };
 
+/** FRU-723: the filters of a view, by their name in the address of the Notes screen of the console. */
+export type SavedViewFilters = Readonly<Record<string, string>>;
+
+/** FRU-723: a view a person keeps in a workspace: a name, and the filters of the Notes screen. */
+export type SavedView = { id: string; name: string; filters: SavedViewFilters; createdAt: number };
+
+/** FRU-723: the views a person keeps in one workspace. The bar of the console shows them all. */
+export const MAX_SAVED_VIEWS = 20;
+
 /**
  * How many sites one invitation of a guest names. The console names one; the model takes a few,
  * and the bound is what one request may write.
@@ -1043,6 +1052,25 @@ export type AccountStore = {
   ): Promise<{ changed: true; label: TaskLabel } | { changed: false; reason: 'not-found' | 'taken' }>;
   /** Removes a label and takes it off every task. `false`: no such label in the workspace. */
   removeLabel(workspace: string, id: string): Promise<boolean>;
+  /**
+   * The views of a person in a workspace (FRU-723), oldest first: theirs only. None for a person who
+   * is not a member.
+   */
+  savedViews(workspace: string, person: string): Promise<SavedView[]>;
+  /**
+   * Keeps a view of the person. `not-member`: the person is not a member of the workspace.
+   * `too-many`: they keep `MAX_SAVED_VIEWS` already. The filters are checked by the caller.
+   */
+  addSavedView(
+    workspace: string,
+    person: string,
+    view: { name: string; filters: SavedViewFilters },
+    now: number,
+  ): Promise<{ added: true; view: SavedView } | { added: false; reason: 'not-member' | 'too-many' }>;
+  /** Renames a view of the person. `undefined`: no such view of theirs in the workspace. */
+  renameSavedView(workspace: string, person: string, id: string, name: string): Promise<SavedView | undefined>;
+  /** Deletes a view of the person. `false`: no such view of theirs in the workspace. */
+  removeSavedView(workspace: string, person: string, id: string): Promise<boolean>;
   /**
    * What GitHub said of a repository when a note went there (FRU-382): every destination of
    * `connector` to `repository` takes it, so that a repository that turned public is said at once.
