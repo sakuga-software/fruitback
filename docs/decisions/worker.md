@@ -405,6 +405,13 @@ degradation the ticket asked to have written down rather than discovered.
 - **Absent and empty mean different things.** No `comments` field at all means the worker was not
   asked for them, and the widget says nothing; `[]` means it asked and there were none, and the
   widget says so. A client with replies switched off must not read as a team that never answered.
+- **A reply has one way to its store** (FRU-712): `writeReply` of `reply-routes.ts` reads the note in
+  its store, asks whether that store takes a reply, and writes it there. The widget
+  (`POST /feedback/<id>/replies`) and the panel of a note in the console
+  (`POST /console/workspaces/<id>/notes/<note>/replies`, `console-replies.ts`) both call it; the
+  console reaches it through the seam `replyToNote` that `app.ts` hands to `handleConsole`, as
+  `readNote`. Whoever reads the note in the console replies, named by their account; a task written
+  by hand is in no thread and takes none, as for `reply_to_note` of `/mcp`.
 - **`showComments` is on by default and is a real switch**, per client or worker-wide
   (`FRUITBACK_HIDE_COMMENTS=1`). Under `read: 'public'` it is the only thing between an issue thread
   and anyone who can load the client's page; under `read: 'authenticated'` (FRU-40) it is back to
@@ -4468,6 +4475,25 @@ client map were refused together at boot.
 - The worker decides whether a provider may go, not better-auth: its count of rows does not see the
   link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
   `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.
+
+## The look of the console, kept with the account (FRU-716)
+
+### The rules, in short
+
+- `POST /console/me/appearance {appearance}` keeps the look of the console of the person of the
+  cookie, and nobody else, as `/console/me/locale` keeps the language. `{appearance: null}` takes it
+  away: the default look. No `appearance` at all is `400`, as no `locale` is.
+- A write is a whole appearance: the eight fields, each a value of `APPEARANCE_CHOICES` of
+  `appearance.ts`, and no other field (`readAppearanceChoice`). Anything else is `400
+  invalid-appearance`. `apps/console/app/appearance-account.test.ts` holds the lists of the console
+  and of the worker together.
+- It is the column `appearance` of `user` (`jsonb`, migration `user_appearance`), an additional
+  field of better-auth with `input: false`, as `locale`: the comparison of `auth-schema.test.ts`
+  with the migration of better-auth holds it. Empty for every account of before: no row moves.
+- `GET /console/me` answers it in `account.appearance`, read by `appearanceOf` beside the
+  memberships: one query by the primary key, at that route alone. `account(id)`, which every route
+  reads, does not read it, so no other answer carries it. A read gives back what was kept; the
+  console reads each field again, and a field it no longer knows is its default.
 
 ## A provider of another address, confirmed (FRU-415, step 1)
 

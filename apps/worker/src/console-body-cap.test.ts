@@ -57,6 +57,7 @@ describe('the body of a route of the console (FRU-506)', () => {
 
     for (const path of [
       '/console/me/locale',
+      '/console/me/appearance',
       '/console/me/name',
       '/console/me/emails',
       '/console/workspaces',
@@ -138,6 +139,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'console-api.ts',
       'console-connectors.ts',
       'console-notes.ts',
+      'console-replies.ts',
       'console-saved-views.ts',
       'console-tasks.ts',
       'instance-admin.ts',
@@ -151,6 +153,7 @@ describe('the body of a route of the console (FRU-506)', () => {
       'handleConnectors',
       'handleTasks',
       'handleSavedViews',
+      'postConsoleReply',
     ]) {
       const callers = sources.filter((name) =>
         new RegExp(`\\b${handler}\\(`).test(
@@ -164,6 +167,8 @@ describe('the body of a route of the console (FRU-506)', () => {
         handleConnectors: 'console-api.ts',
         handleTasks: 'console-notes.ts',
         handleSavedViews: 'console-api.ts',
+        // FRU-712: the reply from the panel of a note.
+        postConsoleReply: 'console-notes.ts',
       };
       assert.deepEqual(callers, [callerOf[handler] ?? 'console-routes.ts'], handler);
     }

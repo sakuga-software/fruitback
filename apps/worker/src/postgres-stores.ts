@@ -77,6 +77,8 @@ export function accountStoreOn(database: Database): AccountStore {
     makePrimary: true,
     isInstanceAdmin: true,
     setLocale: true,
+    appearanceOf: true,
+    setAppearance: true,
     setName: true,
     localeOf: true,
     createWorkspace: true,

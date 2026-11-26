@@ -899,6 +899,15 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       to: 'if ((kept?.views ?? 0) > MAX_SAVED_VIEWS)',
     },
   },
+  {
+    breaks: 'keeps the appearance a person chose with their account alone, and a sign-in keeps it (FRU-716)',
+    by: 'writes the appearance of one person on every account',
+    replace: {
+      after: 'async setAppearance(person, appearance) {',
+      from: '.where(eq(user.id, person))',
+      to: '.where(sql`true`)',
+    },
+  },
 ];
 
 describeControls('AccountStore', accountCases, VIOLATIONS, PGLITE, async (change) => {

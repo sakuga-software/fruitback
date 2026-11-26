@@ -1,6 +1,6 @@
-import { type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
+import { type NoteComment, type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
 import { composes, elementsOf, typedInField } from '../keys';
-import { type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
 import { ago } from '../ago';
 import { ConnectorMark } from '../connector-marks';
@@ -89,6 +89,8 @@ export function TaskPanel({
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
   const [attempt, setAttempt] = useState(0);
+  // FRU-712: what the person typed in the reply of each note, kept while they go to another note.
+  const drafts = useRef(new Map<string, string>());
 
   useEffect(() => {
     if (id === undefined) return;
@@ -131,6 +133,15 @@ export function TaskPanel({
         event.target.closest('input, textarea') !== null &&
         panel.current?.contains(event.target) === true;
       if (!keyOfPanel(event, panel.current) && !(field && event.key === 'Escape')) return;
+      // FRU-712: Escape in a reply that holds a text closes nothing: the text would be lost.
+      if (
+        event.key === 'Escape' &&
+        event.target instanceof HTMLInputElement &&
+        event.target.closest('[data-task-reply]') !== null &&
+        event.target.value.trim() !== ''
+      ) {
+        return;
+      }
       const { previous: above, next: under, onStep: step, onClose: close } = keys.current;
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -324,7 +335,116 @@ export function TaskPanel({
           </>
         )}
       </div>
+      {/* FRU-712: a note of a page whose read has its replies. A task written by hand has no thread. */}
+      {issue?.comments === undefined ? null : (
+        <ReplyField
+          key={id}
+          to={`${base}/notes/${encodeURIComponent(id)}/replies`}
+          place={placeName}
+          draft={drafts.current.get(id) ?? ''}
+          onDraft={(text) => {
+            if (text === '') drafts.current.delete(id);
+            else drafts.current.set(id, text);
+          }}
+          onWritten={(comment) =>
+            setAnswer((now) =>
+              now?.of === id && typeof now.value === 'object' && 'note' in now.value
+                ? { of: id, value: { ...now.value, comments: [...(now.value.comments ?? []), comment] } }
+                : now,
+            )
+          }
+        />
+      )}
     </section>
+  );
+}
+
+/** The longest reply, as the worker takes it (`REPLY_LENGTH`): a longer one is refused, never cut. */
+const REPLY_LENGTH = 2000;
+
+/** What a refusal of a reply says (FRU-712). The text stays in the field, whatever the refusal. */
+function replyProblem(status: number, error: string): string {
+  if (error === 'invalid-reply') return t('The reply is too long: {max} characters at most.', { max: REPLY_LENGTH });
+  if (error === 'replies-not-taken') return t('This note takes no reply.');
+  if (status === 404) return t('This note is no longer here.');
+
+  return t('The reply did not leave. Your text is kept: try again in a moment.');
+}
+
+/**
+ * The reply at the foot of the panel (FRU-712), on one line, with « Send »: it is written under the
+ * note in the name of the person, and goes to the tracker of the note as a reply of the widget does.
+ * The placeholder names the tracker for whoever sees it. A refusal keeps the text, and so does a
+ * move to another note: the panel keeps the draft of each note.
+ */
+function ReplyField({
+  to,
+  place,
+  draft,
+  onDraft,
+  onWritten,
+}: {
+  to: string;
+  place: string | undefined;
+  draft: string;
+  onDraft: (text: string) => void;
+  onWritten: (comment: NoteComment) => void;
+}) {
+  useLocale();
+  const [text, setText] = useState(draft);
+  // The text now, for the end of a send: a word typed while it was sent is not cleared.
+  const now = useRef(draft);
+  const [sending, setSending] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  const typed = (value: string) => {
+    now.current = value;
+    setText(value);
+    onDraft(value);
+  };
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    if (sending || text.trim() === '') return;
+    if ([...text].length > REPLY_LENGTH) {
+      setProblem(replyProblem(400, 'invalid-reply'));
+      return;
+    }
+    const sent = text;
+    setSending(true);
+    setProblem(undefined);
+    const answer = await call<{ comment: NoteComment }>('POST', to, { body: sent });
+    setSending(false);
+    if (!answer.ok) {
+      setProblem(replyProblem(answer.status, answer.error));
+      return;
+    }
+    onWritten(answer.data.comment);
+    // Cleared only when it holds what left: a word typed while it was sent stays.
+    if (now.current === sent) typed('');
+  };
+
+  return (
+    <form
+      onSubmit={(event) => void send(event)}
+      className="flex flex-none flex-col gap-[8px] border-t border-line px-[20px] pt-[12px] pb-[16px]"
+      data-task-reply=""
+    >
+      <span className="flex items-center gap-[8px]">
+        <span className="min-w-0 flex-1">
+          <Field
+            label={t('Reply to this note')}
+            labelHidden
+            compact
+            value={text}
+            onChange={(event) => typed(event.target.value)}
+            placeholder={place === undefined ? t('Reply') : t('Reply, it posts to {place} too', { place })}
+          />
+        </span>
+        <Button type="submit" size="panel" disabled={sending || text.trim() === ''}>
+          {t('Send')}
+        </Button>
+      </span>
+      {problem === undefined ? null : <Problem>{problem}</Problem>}
+    </form>
   );
 }
 
