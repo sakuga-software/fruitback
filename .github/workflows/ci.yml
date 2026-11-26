@@ -392,7 +392,22 @@ jobs:
       - name: Run the account and session stores on a real PostgreSQL
         env:
           FRUITBACK_TEST_DATABASE_URL: postgres://postgres:ci-not-a-real-password@127.0.0.1:5432/fruitback
-        run: pnpm --filter @fruitback/worker test:postgres
+        # FRU-720, TEMPORARY EXPERIMENT, reverted in the next commit: where the CPU of the job goes.
+        run: |
+          pg=$(docker ps --format '{{.Names}}' | grep -m1 postgres)
+          cpu() { docker exec "$pg" cat /sys/fs/cgroup/cpu.stat | awk '/usage_usec/{print $2}'; }
+          busy() { awk '/^cpu /{print $2+$3+$4+$7+$8, $5+$6}' /proc/stat; }
+          ( while sleep 15; do echo "--- $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)"; ps -eo pcpu,rss,comm --sort=-pcpu | head -8; done ) > "$RUNNER_TEMP/top.log" &
+          sampler=$!
+          pg0=$(cpu); read -r b0 i0 < <(busy)
+          /usr/bin/time -v pnpm --filter @fruitback/worker exec env FRUITBACK_TEST_POSTGRES=required vitest run --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/pg.json" $(jq -r '.scripts["test:postgres"]' apps/worker/package.json | tr ' ' '\n' | grep '^src/') 2> "$RUNNER_TEMP/time.log" | tail -6
+          pg1=$(cpu); read -r b1 i1 < <(busy)
+          kill "$sampler"
+          grep -E 'User time|System time|Elapsed|Maximum resident' "$RUNNER_TEMP/time.log"
+          echo "postgres server cpu s: $(( (pg1 - pg0) / 1000000 ))"
+          echo "machine busy jiffies: $((b1 - b0)) idle+iowait jiffies: $((i1 - i0))"
+          jq -r '[.testResults[].assertionResults[]] | {pglite: (map(select(.fullName|test("pglite";"i")))|{n:length,s:(map(.duration//0)|add/1000)}), real: (map(select(.fullName|test("real server";"i")))|{n:length,s:(map(.duration//0)|add/1000)}), other: (map(select(.fullName|test("pglite|real server";"i")|not))|{n:length,s:(map(.duration//0)|add/1000)})}' "$RUNNER_TEMP/pg.json"
+          tail -n 60 "$RUNNER_TEMP/top.log"
 
       # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
       - name: Write the durations
