@@ -335,7 +335,9 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **`POST /feedback/<id>/status?client=<site>` with `{ url, status: 'own:<key>' }`**, for a note that
   the worker keeps (a site with no destination, or one that sends to an address). The rights of a
   verdict (FRU-294): the person who left the note, or a role with `manage-sites`, with a session of
-  the extension. The console's selector has a route of its own (FRU-384, below).
+  the extension. The console's selector has a route of its own (FRU-384, below). The thread of the
+  widget calls this one (FRU-718), relayed by the extension in team mode, where the read says
+  `canSetStatus`.
 - **The status is a key of the read's `statuses`**: `own:<stage>`, a built-in status, which writes no
   `status_key`; or `own:<key>`, a status the team added and did not hide. The note takes its stage,
   in one statement (`setStatus` of the store), then in the index of the notes, and its page is read
