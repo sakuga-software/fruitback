@@ -89,7 +89,7 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   try {
     sent = send === undefined ? { ok: false, reason: 'store-unavailable' } : await send(taken);
   } catch (error) {
-    await held.release(site, note, claim);
+    await quietly(held.release(site, note, claim), site);
     throw error;
   }
   if (sent.ok) {
@@ -107,11 +107,22 @@ export async function handleHeld(rest: string, request: Request, context: HeldCo
   }
   // The site took no note any more: it goes with nobody to send it to. Else it waits again.
   if (sent.reason === 'site-gone') {
-    await held.done(site, note, claim);
+    await quietly(held.done(site, note, claim), site);
 
     return json(409, { error: 'site-gone' }, headers);
   }
-  await held.release(site, note, claim);
+  await quietly(held.release(site, note, claim), site);
 
   return json(502, { error: sent.reason }, headers);
+}
+
+/**
+ * A step of the queue after the answer is known (review of #987): a database that does not take it
+ * leaves the row claimed for an hour, and the answer stays what happened to the note. A reject is not
+ * one: a row that did not go was not rejected, and its error goes up.
+ */
+async function quietly(step: Promise<void>, site: string): Promise<void> {
+  await step.catch((error: unknown) => {
+    console.error(`[fruitback] a note of site ${site} stays claimed in the queue: ${String(error)}`);
+  });
 }

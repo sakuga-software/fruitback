@@ -187,6 +187,29 @@ describe('the notes of visitors that wait for a member (FRU-704)', () => {
     assert.equal(await notesInStore(world), 1);
   });
 
+  it('still says why an approval failed when the database does not take the release (review of #987)', async () => {
+    const { world, site, call, noteOf, consoleCall } = await aHoldingSite();
+    await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_r'));
+    const failing: NoteStore = {
+      ...createPostgresNoteStore(world.database),
+      create: async () => {
+        throw new StoreError('the tracker is down');
+      },
+    };
+    const failingRelease: HeldNotes = {
+      ...createPostgresHeldNotes(world.database),
+      release: async () => {
+        throw new Error('the database blinked');
+      },
+    };
+
+    const refused = await consoleCall('POST', `/${site}/hn_r/approve`, undefined, failing, failingRelease);
+
+    assert.equal(refused.status, 502, JSON.stringify(refused.body));
+    assert.deepEqual(refused.body, { error: 'store-unavailable' });
+    assert.equal(await notesInStore(world), 0);
+  });
+
   it('refuses a guest, and a person of another workspace reads nothing', async () => {
     const { world, workspace, site, call, noteOf, consoleCall } = await aHoldingSite();
     await call('POST', '/feedback', { key: KEY_A }, noteOf('hn_5'));
