@@ -1569,9 +1569,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   « c » of a note opened « New task » and was missing from the note, and the button read
   « New taskC ».
 - **A field keeps its keys**: a text input, a `textarea`, a `select`, an element you can edit, and a
-  `textbox`, `searchbox` or `combobox`, wherever they are in the path. A box, a radio and a button are
-  no field: Cmd or Ctrl and A on the box of a row still selects every task. A dialog, a menu and a
-  list of options keep their keys too, in a Shadow root as well.
+  `textbox` or `searchbox`, wherever they are in the path. A box, a radio, a button, and a button that
+  says `combobox` are no field: Cmd or Ctrl and A on the box of a row still selects every task. A
+  dialog (the panel of a task included, as since FRU-656), a menu and a list of options keep their
+  keys too, in a Shadow root as well.
 - **A shortcut of one key (« C », « / », j, k) takes no Cmd, Ctrl or Alt**, no key that a handler took
   already, and no key while an IME composes a word (`isComposing`, or the key 229 of Safari).
 - `keys.test.ts` tests the guard on the path of a key typed in a Shadow root.

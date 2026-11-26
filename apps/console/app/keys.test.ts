@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isBareShortcut, ownsKeys, takesText, typedInField } from './keys.ts';
+import { elementsOf, isBareShortcut, ownsKeys, takesText, typedInField } from './keys.ts';
 
 /**
  * The guard of the shortcuts of the console (FRU-726). Node has no DOM, so an element here is its
@@ -89,6 +89,17 @@ describe('the guard of the shortcuts (FRU-726)', () => {
     ]) {
       assert.equal(isBareShortcut(key({ path: [body], ...init })), false, JSON.stringify(init));
     }
+  });
+
+  it('reads the parents of the target for the panel too, when the key has no path', () => {
+    const panel = element('aside', { role: 'dialog' }, body);
+    const button = element('button', {}, panel);
+    assert.deepEqual(elementsOf(key({ path: [], target: button })), [button, panel, body]);
+  });
+
+  it('leaves Cmd or Ctrl and A to the page on a button that says combobox, as before', () => {
+    const select = element('button', { role: 'combobox' }, body);
+    assert.equal(ownsKeys(key({ path: [select, body], metaKey: true, key: 'a' })), false);
   });
 
   it('counts a box, a radio and a button as no field', () => {

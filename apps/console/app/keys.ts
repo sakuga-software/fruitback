@@ -34,7 +34,7 @@ function isElement(value: unknown): value is Element {
   );
 }
 
-/** Whether an element takes typed text: a field, a list, an element you can edit, or a text box. */
+/** Whether an element takes typed text: a field, a list, an element you can edit, a text or search box. */
 export function takesText(element: Element): boolean {
   const tag = element.tagName.toLowerCase();
   if (tag === 'textarea' || tag === 'select') return true;
@@ -42,11 +42,12 @@ export function takesText(element: Element): boolean {
   if ((element as HTMLElement).isContentEditable === true) return true;
   const role = element.getAttribute('role');
 
-  return role === 'textbox' || role === 'searchbox' || role === 'combobox';
+  // Not `combobox`: a button can carry it, and its keys are no text. A combobox you type in is an input.
+  return role === 'textbox' || role === 'searchbox';
 }
 
 /** The elements the key went through, from its own target up, through every Shadow root. */
-function elementsOf(event: Pick<Event, 'composedPath' | 'target'>): Element[] {
+export function elementsOf(event: Pick<Event, 'composedPath' | 'target'>): Element[] {
   const path = typeof event.composedPath === 'function' ? event.composedPath().filter(isElement) : [];
   if (path.length > 0) return path;
   const up: Element[] = [];

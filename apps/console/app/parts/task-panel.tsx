@@ -1,5 +1,5 @@
 import { type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
-import { composes, typedInField } from '../keys';
+import { composes, elementsOf, typedInField } from '../keys';
 import { type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
 import { ago } from '../ago';
@@ -37,7 +37,7 @@ const stageName = (stage: Stage) => t(STAGE_NAMES[stage]);
 /** A key the panel takes (FRU-687): not in a field, a list that is open, a menu, or another dialog. */
 function keyOfPanel(event: KeyboardEvent, panel: HTMLElement | null): boolean {
   // Through every Shadow root (FRU-726): a key of the widget's fields or dialogs is the widget's.
-  const path = event.composedPath().filter((each): each is Element => each instanceof Element);
+  const path = elementsOf(event);
   if (path.some((each) => ['listbox', 'menu', 'alertdialog'].includes(each.getAttribute('role') ?? ''))) return false;
   if (path.some((each) => each !== panel && each.getAttribute('role') === 'dialog')) return false;
 
