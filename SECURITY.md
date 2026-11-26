@@ -2644,7 +2644,8 @@ the widget says « Send it again later » with the text kept.
   test:`takes 10 notes of one browser on a new site, refuses the 11th with nothing written, and takes another browser`.
   test:`counts 3 browsers on one address, so a visitor who clears their key meets it`.
 - A batch counts the notes this request may plant: not one an earlier attempt kept, nor one another
-  request holds. One that would pass the limit is refused whole, and gives its notes back at once.
+  request holds. One that would pass the limit is refused whole: its notes are free at once for a
+  later attempt, but its count is spent, as every refused request of a limiter is (below).
   test:`counts only the notes of a batch sent again that no earlier attempt kept (review of #984)`.
   test:`gives back the notes of a refused batch, so a later attempt plants them (review of #984)`.
   test:`counts every note of a batch, and refuses one that would pass the limit with none written`.

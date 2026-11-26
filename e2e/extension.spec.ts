@@ -14,6 +14,7 @@ import {
   readNoteIssues,
   readableByThePage,
   recordPageMessages,
+  SITE_SWITCH,
   notesOn,
   storedTokens,
   test,
@@ -347,8 +348,12 @@ test('extension mode on a worker that wants a session: the popup says why the pa
 
     const popup = await openPopup(extension, page);
 
-    await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
-    await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
+    // The worker on 8789 is the Fruitback of this build: the popup offers the sign-in (FRU-663).
+    await expect(
+      popup.getByText(/^Only the members of this site see its notes here\. Sign in to Fruitback/),
+    ).toBeVisible();
+    await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+    await expect(popup.getByText(/leave one here/)).toHaveCount(0);
     // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
     // pairs through the same field, which is the control for this absence.
     await expect(popup.getByLabel('Connection code')).toHaveCount(0);
@@ -356,10 +361,8 @@ test('extension mode on a worker that wants a session: the popup says why the pa
     const shot = test.info().outputPath('popup.png');
     await popup.screenshot({ path: shot });
     await test.info().attach('popup', { path: shot, contentType: 'image/png' });
-    await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveAttribute(
-      'href',
-      'https://sakuga-software.github.io/fruitback/modes.html',
-    );
+    // The guide is for a worker run by somebody else: on the Cloud, the button is the fix.
+    await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveCount(0);
   } finally {
     await noteWriters('members');
   }
@@ -380,11 +383,57 @@ test('extension mode on a site whose notes are « Members only »: the widget of
 
   const popup = await openPopup(extension, page);
 
+  // FRU-663: on the Fruitback of this build, said in plain words, with the sign-in rather than an
+  // admin's setting.
   await expect(
-    popup.getByText(/takes notes from its members only, and in extension mode the extension holds no session/),
+    popup.getByText(/^Only the members of this site see its notes and leave one here\. Sign in to Fruitback/),
   ).toBeVisible();
-  await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
-  await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await expect(popup.getByText(/Anyone on the page/)).toHaveCount(0);
+  await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveCount(0);
+
+  // The button starts the sign-in of the popup: its first request goes to the Fruitback of the build.
+  // Refused here: the spec below holds the session that a finished sign-in gives.
+  await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/connect`, (route) => route.abort());
+  const asked = extension.context.waitForEvent(
+    'request',
+    (request) => request.url() === `${AUTHENTICATED_WORKER_ORIGIN}/session/connect`,
+  );
+  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  expect((await asked).method()).toBe('POST');
+});
+
+test('extension mode on a site of the Cloud that its members read: a member turns it on with the account (FRU-663)', async ({
+  extension,
+}) => {
+  await noteWriters('members');
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  // A session of the workspace of the second worker, which lists the playground: what a sign-in gives.
+  const { link } = await mintPairing('Camille Durand');
+  const pairing = await extension.context.newPage();
+  await pairing.goto(link);
+  const connect = await openPopup(extension, pairing, AUTHENTICATED_WORKER_ORIGIN);
+  await connect.getByRole('button', { name: /^(Connect to this server|Se connecter à ce serveur)$/ }).click();
+  await expect(connect.getByText('Camille Durand', { exact: false })).toBeVisible();
+  await connect.close();
+  await pairing.close();
+
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-members-turn-on');
+  // Signed in, the rule of extension mode still carries no session: the page is as before.
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
+
+  const popup = await openPopup(extension, page);
+  await expect(
+    popup.getByText('You are a member of this site. Turn it on with your account to see its notes and leave one.'),
+  ).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toHaveCount(0);
+
+  await popup.getByRole('button', { name: 'Turn on with my account' }).click();
+  // The site of the workspace takes the place of the rule: the widget reads with the session.
+  await expect(page.getByRole('button', { name: 'Leave a note' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toHaveCount(0);
+  await expect(popup.getByRole('switch', { name: SITE_SWITCH })).toHaveAttribute('aria-checked', 'true');
 });
 
 test('extension mode on a worker that answers anyone: the popup says nothing about a session', async ({
@@ -405,6 +454,8 @@ test('extension mode on a worker that answers anyone: the popup says nothing abo
 
   await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
   await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
+  await expect(popup.getByText(/Only the members of this site/)).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
   // The control of the closed button above: a site that everyone reads offers a note.
   await expect(page.getByRole('button', { name: /Leave a note/ })).toBeVisible();
