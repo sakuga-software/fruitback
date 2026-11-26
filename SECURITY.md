@@ -1078,6 +1078,18 @@ whole.
   (test:`counts for a guest the sites shared with them and their notes, and no delivery`). A person
   of another workspace gets `404`, as for a workspace that does not exist, and a caller with no
   session `401` (test:`answers 404 to a person who is not a member, 401 to nobody, 405 to a write`).
+- The page of one site in the console (`GET /console/workspaces/<id>/sites/<site>`) also says when
+  the widget was last seen on it, the oldest open note, and the notes of the last 30 days, to the
+  same roles as the counts above; how many of those 30 days did not arrive is about the tracker,
+  and only a role with `see-tracker` gets it
+  (test:`says the oldest open note, the notes of 30 days, and those not delivered to whoever sees the tracker`).
+- **When the widget was last seen on a site proves nothing, and gives no right.** A read of the pins
+  of a page writes it, at most once an hour: by the script when the read has no token and the
+  `Origin` of the site, by the extension when its token is a session of the workspace that the worker
+  verifies. Any program can send the `Origin` of a site, so a person who knows the id of a site can
+  make the console say « Seen on the site » now; nothing else reads the date
+  (test:`writes nothing for a read with no Origin, or another one`). A write that fails costs the
+  date, never the read (test:`answers the read of the pins when the write fails`).
 - An anonymous reader of a public page writes to the index: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.

@@ -24,6 +24,7 @@ import { PAIR_PATH } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { KvError } from './kv.ts';
 import { type Channel, type NoteIndex } from './notes-index.ts';
+import { seeSite } from './site-seen.ts';
 import { sessionStillValid } from './session-check.ts';
 import { ATTACHMENTS_PATH } from './attachments.ts';
 import { handleAttachment } from './attachment-routes.ts';
@@ -611,6 +612,13 @@ async function routed(
     visitorOf: visitorDigestOf,
     visitorMay,
     done,
+    // FRU-721: when the widget was last seen on a site, by which way.
+    ...(accounts === undefined
+      ? {}
+      : {
+          pageRead: (each: Request, policy: ClientPolicy, site: string, origins: readonly string[]) =>
+            seeSite(accounts, site, () => channelOfRead(each, policy, origins), Date.now()),
+        }),
   };
 
   // FRU-604: the address a visitor with no account gives for the note they just sent.
@@ -1055,6 +1063,27 @@ async function authorizeRead(
   if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
 
   return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
+}
+
+/**
+ * FRU-721: by which way the widget read a page of a site. `extension`: a session of the workspace that
+ * the worker verifies. `script`: no token, from the `Origin` of the site. `undefined`: anything else,
+ * which says nothing of the site (another origin, a token that does not verify, a token of the site).
+ */
+async function channelOfRead(
+  request: Request,
+  policy: ClientPolicy,
+  origins: readonly string[],
+): Promise<Channel | undefined> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) {
+    const origin = request.headers.get('Origin');
+
+    return origin !== null && origins.includes(origin) ? 'script' : undefined;
+  }
+  const verified = await verifyForClient(token, policy);
+
+  return verified?.ok === true && verified.session === true ? 'extension' : undefined;
 }
 
 /**

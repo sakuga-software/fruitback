@@ -118,6 +118,10 @@ export const sites = pgTable(
     // the next one, as the mockup does. `addSite` writes the value in any case.
     visitor_edit: text('visitor_edit').notNull().default('while-open'),
     visitor_delete: text('visitor_delete').notNull().default('while-open'),
+    // FRU-721: the last time the widget read a page of the site, by the script or by the extension,
+    // written at most once an hour (`site-seen.ts`). A date and nothing else: no page, no address.
+    script_seen_at: instant('script_seen_at'),
+    extension_seen_at: instant('extension_seen_at'),
   },
   (table) => [
     foreignKey({

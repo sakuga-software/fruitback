@@ -1130,6 +1130,14 @@ export type AccountStore = {
    */
   frameCounts(workspace: string, only?: readonly string[]): Promise<{ sites: number; waiting: number }>;
   /**
+   * FRU-721: the widget read a page of this site, by this way, at `now`. Written only when the date it
+   * holds is an hour old or more, so a site seen at every page view costs one write an hour at most.
+   * A site that is gone writes nothing.
+   */
+  markSiteSeen(site: string, channel: 'script' | 'extension', now: number): Promise<void>;
+  /** FRU-721: the last time the widget read a page of a site of this workspace, by each way. */
+  siteSeen(workspace: string, site: string): Promise<{ script?: number; extension?: number }>;
+  /**
    * Makes a delivery due now, with its whole series of attempts again. `false` when it is not of this
    * workspace and connector.
    */

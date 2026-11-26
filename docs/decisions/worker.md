@@ -3939,6 +3939,36 @@ the reach, and the two counts, the last two at the same time. The cookie of bett
 reads, as on every route. A workspace of millions of notes would want counters kept beside them, as
 for the list.
 
+## The page of one site: seen on the site, oldest open note, 30 days (FRU-721)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/sites/<site>` adds `seen`, `oldestOpenAt` and `recent`**, on the
+  read of one site only, never on a list: `seen: { script?, extension? }`, when the widget last read
+  a page of the site by each way; `oldestOpenAt`, when the oldest note that is not done nor closed
+  was left; `recent: { days: 30, notes, undelivered? }`, the notes of the last 30 days and, for
+  `see-tracker`, those of them whose delivery did not arrive. `NoteIndex.siteFigures` reads them with
+  `filtered` and its `site`, as the list does.
+- **The worker sees the widget from the read of the pins of a page** (`GET /feedback`), which the
+  widget sends when it mounts: no call of its own, nothing more for a site to install. The read writes
+  the date before it reads the pins, so a site whose notes are « Members only » is seen too, by its
+  visitors who read nothing. `script`: no token, from the `Origin` of the site; `extension`: a session
+  of the workspace that the worker verifies; anything else writes nothing (`channelOfRead` of
+  `app.ts`).
+- **At most one write an hour per site and per way** (`site-seen.ts`): the process remembers what it
+  wrote, and asks nothing of the database in the hour after; the store writes only a date an hour old
+  (`markSiteSeen`), so two processes write once. A write that fails is said in the log, and the read
+  goes on. Migration `0054_sites_seen`: two columns of `sites`.
+
+### What it costs
+
+Measured as the counts of the bar (FRU-711), on a site of 25 000 notes of the same workspace, three
+runs: `GET …/sites/<site>` 6.5 to 7.5 ms median and 6 statements before, 8.6 to 10.8 ms and 10
+statements after for an owner (the dates, the figures, the deliveries and the notes not delivered),
+7.1 to 8.6 ms and 7 statements for a guest. The write of a date is one `UPDATE` by the primary key
+(0.33 ms), at most once an hour per site and per way; a read of the pins in the hour after costs
+nothing more.
+
 ## The notes of a whole site, for the extension (FRU-306)
 
 ### The rules, in short
