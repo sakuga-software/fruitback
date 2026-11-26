@@ -22,7 +22,7 @@ runs the same thing for you.
 
 It comes in three modes, and which one you want is the first thing to settle. They differ on what
 the site has to ship: public, where the site embeds the widget and every visitor can leave a
-note; private, where the site embeds nothing and a browser extension puts the widget on it for
+note; extension, where the site embeds nothing and a browser extension puts the widget on it for
 one reviewer; and team, where the site embeds a dormant widget that wakes up for a reviewer the
 extension has signed in. One page each way: [docs/modes.md](docs/modes.md).
 
@@ -105,7 +105,7 @@ The full walk-through (the site, the widget, a Linear team, several sites) is in
 The first question a reader has is whether their reviewers need the site to ship anything. All three
 answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between them.
 
-|                                       | **Public**                  | « Private »                           | « Team »                         |
+|                                       | **Public**                  | « Extension »                         | « Team »                         |
 | ------------------------------------- | --------------------------- | ------------------------------------- | -------------------------------- |
 | The site embeds                       | the widget                  | nothing                               | the widget, dormant              |
 | Delivered as                          | `<script>` tag or npm       | a browser extension                   | `<script>` tag or npm            |
@@ -119,7 +119,7 @@ answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between
 Who may read is the visibility of the site (« Members of … » or « Everyone who visits », chosen
 in the console) and the mode decides who can satisfy it. Team mode is the only one where the
 reviewer supplies a credential and the page never holds it, attached in the extension's background.
-Private mode can supply nothing at all: the widget it mounts has no token and no relay, so on a
+Extension mode can supply nothing at all: the widget it mounts has no token and no relay, so on a
 site that members read its reads answer `401`, and on a site that everyone reads its pins are readable
 by anyone who can build the URL: it changes who is _shown_ the feedback, never who may _fetch_ it.
 [docs/modes.md](docs/modes.md) is the page that lays this out. The four lines a team-mode site adds are in

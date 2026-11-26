@@ -359,7 +359,7 @@ function draw(): void {
 
 /**
  * The worker and the site whose whole list a session of this browser reads (FRU-307): a site of a
- * workspace the extension mounts, with a session held for its worker. A private site has none.
+ * workspace the extension mounts, with a session held for its worker. An extension-mode site has none.
  */
 async function sourceOf(
   site: Awaited<ReturnType<typeof readSite>>,

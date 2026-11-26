@@ -4,7 +4,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 
 /**
  * A rule whose worker is not at its address (FRU-395). Measured in production on 2026-10-23: a rule
- * of private mode kept `https://api.fruitback.com/pair` as its worker, a pairing link pasted in the
+ * of extension mode kept `https://api.fruitback.com/pair` as its worker, a pairing link pasted in the
  * wrong field, and each page read `/pair/feedback`, which answered `404`, with nothing on screen.
  *
  * The form refuses that address now (`site-form.test.ts`), so the rule is written as an older

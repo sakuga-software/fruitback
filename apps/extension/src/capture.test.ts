@@ -75,7 +75,7 @@ describe('a capture of the page or of an area (FRU-332)', () => {
       ['no site', { readSite: async () => undefined }, 'https://acme.dev'],
       ['a site switched off', { readSite: async () => ({ ...TEAM, enabled: false }) }, 'https://acme.dev'],
       [
-        'a site in private mode',
+        'a site in extension mode',
         {
           readSite: async () => ({ mode: 'private', endpoint: 'https://worker.test', enabled: true, clientId: 'acme' }),
         },

@@ -53,7 +53,7 @@ export function workerOrigin(endpoint: string): string {
  * secure context: `http://localhost:8788` is the dev loop, and it is not on a wire.
  *
  * Deliberately **not** folded into `isWorkerEndpoint`. That one answers "could a worker be there",
- * and it gates the private mode's mount, which carries no credential at all — tightening it would
+ * and it gates the extension mode's mount, which carries no credential at all — tightening it would
  * turn off an http staging worker that works today and has nothing to leak. Raised in review.
  */
 export function isSecureWorkerEndpoint(value: string): boolean {

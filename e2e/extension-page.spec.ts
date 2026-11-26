@@ -72,7 +72,7 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
 
   // Two rules, sorted, each with its mode, worker and access.
   await expect(page.locator('tr.rule-row')).toHaveCount(2);
-  await expect(rowOf(page, PLAYGROUND_ORIGIN)).toContainText('Private');
+  await expect(rowOf(page, PLAYGROUND_ORIGIN)).toContainText('Extension');
   await expect(rowOf(page, PLAYGROUND_ORIGIN)).toContainText('localhost:8788');
   await expect(rowOf(page, PLAYGROUND_ORIGIN)).toContainText('Granted');
   await expect(rowOf(page, FAR)).toContainText('Team');
@@ -356,7 +356,7 @@ test('each page at 1440 and 390 px, in both schemes: axe, nothing wider than the
   }
 });
 
-/** A rules file, as « Download » writes it: one private rule nobody in this browser granted. */
+/** A rules file, as « Download » writes it: one extension-mode rule nobody in this browser granted. */
 function rulesFile(pattern: string): string {
   return JSON.stringify({
     format: 'fruitback-sites',
@@ -509,7 +509,7 @@ test('« Servers and sessions » pairs with a code, says who, logs out, and take
   await openPage(page, extension.id, 'workers');
   const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
   await expect(card).toContainText(
-    'Not connected. Private-mode sites read without a session; a team site would show nothing.',
+    'Not connected. Extension-mode sites read without a session; a team site would show nothing.',
   );
   await expect(card).toContainText('Plain http on localhost. Connecting works here');
   await expect(card).toContainText('1 site');
@@ -614,7 +614,7 @@ test('a card is not drawn again while its pairing is in progress: « Pair » sta
   expect(pairs).toBe(1);
 });
 
-test('« Preferences »: the name fills the composer in private mode, and the icon opens the panel on a site that is on (FRU-302)', async ({
+test('« Preferences »: the name fills the composer in extension mode, and the icon opens the panel on a site that is on (FRU-302)', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
@@ -631,7 +631,7 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
     'Keep my rules in the account of this browser',
   ]);
 
-  // The name, kept by the extension, fills the composer of a widget it mounts in private mode.
+  // The name, kept by the extension, fills the composer of a widget it mounts in extension mode.
   await prefs.getByLabel('Name on my notes').fill('Camille Durand');
   await prefs.getByLabel('Name on my notes').press('Tab');
   await expect

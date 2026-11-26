@@ -113,18 +113,18 @@ test('an origin with no rule mounts nothing, until a rule covers it', async ({ e
   await expect(page.getByRole('button', { name: /Leave a note/ })).toBeVisible();
 });
 
-test('private mode: the mounted widget reads the component, and the pin comes back', async ({ extension }) => {
+test('extension mode: the mounted widget reads the component, and the pin comes back', async ({ extension }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private');
 
-  await plantOnTheLatteCard(page, /Leave a note/, 'Planté par le mode privé');
+  await plantOnTheLatteCard(page, /Leave a note/, 'Planté par le mode extension');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   // The component name comes from the React fiber, which only the page's own world can see. A widget
   // mounted from the isolated world would store the note with no source.
   const [note] = await notesOn(page);
-  expect(note?.text).toBe('Planté par le mode privé');
+  expect(note?.text).toBe('Planté par le mode extension');
   expect(note?.source).toMatchObject({ component: 'Button', file: expect.stringContaining('site.tsx') });
 
   await page.reload();
@@ -137,7 +137,7 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
  * was built again under the composer (FRU-186). Here the page posts `ready` itself, which makes the
  * isolated world post the same mount again, at the moment the test picks.
  */
-test('private mode: the same decision posted again keeps the open composer and its note', async ({ extension }) => {
+test('extension mode: the same decision posted again keeps the open composer and its note', async ({ extension }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private-again');
@@ -235,11 +235,11 @@ test('the rules go to the account of the browser only when the reviewer asks, an
 });
 
 /**
- * The files of a note (FRU-332). In private mode the reviewer has no session, so the worker takes no
+ * The files of a note (FRU-332). In extension mode the reviewer has no session, so the worker takes no
  * file of theirs: the composer shows nothing of files, and the picture of the element of FRU-44,
  * which went to `POST /screenshot`, is no longer offered. A note still goes.
  */
-test('private mode: no file and no picture of the element are offered without a session, and the note goes', async ({
+test('extension mode: no file and no picture of the element are offered without a session, and the note goes', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
@@ -332,7 +332,7 @@ test.afterEach(async () => {
   await noteWriters('members');
 });
 
-test('private mode on a worker that wants a session: the popup says why the page shows no note (FRU-66)', async ({
+test('extension mode on a worker that wants a session: the popup says why the page shows no note (FRU-66)', async ({
   extension,
 }) => {
   // A site read by its members that takes a note from anybody: said here, not read from the default
@@ -365,7 +365,7 @@ test('private mode on a worker that wants a session: the popup says why the page
   }
 });
 
-test('private mode on a site whose notes are « Members only »: the widget offers no note, and the popup says why (FRU-330)', async ({
+test('extension mode on a site whose notes are « Members only »: the widget offers no note, and the popup says why (FRU-330)', async ({
   extension,
 }) => {
   // Said, not read from the default: the spec above is its control, on the same worker and site.
@@ -381,13 +381,15 @@ test('private mode on a site whose notes are « Members only »: the widget offe
   const popup = await openPopup(extension, page);
 
   await expect(
-    popup.getByText(/takes notes from its members only, and in private mode the extension holds no session/),
+    popup.getByText(/takes notes from its members only, and in extension mode the extension holds no session/),
   ).toBeVisible();
   await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
   await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toBeVisible();
 });
 
-test('private mode on a worker that answers anyone: the popup says nothing about a session', async ({ extension }) => {
+test('extension mode on a worker that answers anyone: the popup says nothing about a session', async ({
+  extension,
+}) => {
   // The control for the spec above: the same rule, on the worker that reads `public`.
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
@@ -466,7 +468,7 @@ test('team mode: paired from the popup, the site reads and writes through the re
   expect(note?.reporter).toMatchObject({ name: REVIEWER, verified: true });
 });
 
-test('a session held with the worker of a private-mode site stays on the popup, with its log out (FRU-88)', async ({
+test('a session held with the worker of an extension-mode site stays on the popup, with its log out (FRU-88)', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
@@ -474,7 +476,7 @@ test('a session held with the worker of a private-mode site stays on the popup, 
   await openBareSite(page, 'ext-private-held-session');
   await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
 
-  // The same rule, moved to private mode from the popup. The session stays in storage.
+  // The same rule, moved to extension mode from the popup. The session stays in storage.
   const popup = await openPopup(extension, page);
   await popup.getByRole('button', { name: 'Change' }).click();
   await popup.getByLabel(/^Mode/).selectOption('private');
@@ -586,7 +588,7 @@ test('a pairing link pairs with one click, and the site then works through that 
 test('the popup, the options page and the mounted widget speak the language of the account (FRU-131)', async ({
   extension,
 }) => {
-  // Private mode on this site offers a note when anybody may leave one (FRU-330): said here.
+  // Extension mode on this site offers a note when anybody may leave one (FRU-330): said here.
   await noteWriters('anyone');
   await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();

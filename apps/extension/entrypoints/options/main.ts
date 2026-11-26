@@ -573,7 +573,7 @@ async function importFile(file: File, result: HTMLElement): Promise<void> {
 function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   const modes: [SiteMode, string][] = [
-    ['private', 'Private · the extension shows the widget'],
+    ['private', 'Extension · the extension shows the widget'],
     ['team', 'Team · the site embeds it, the extension adds your session'],
   ];
   for (const [value, text] of modes) {

@@ -123,7 +123,7 @@ export function matches(row: RuleRow, filter: string): boolean {
 }
 
 function modeWord(mode: SiteMode): string {
-  return mode === 'team' ? t('Team') : t('Private');
+  return mode === 'team' ? t('Team') : t('Extension');
 }
 
 /**
@@ -257,7 +257,7 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
       label: t('Mode'),
       size: 'page',
       tabs: [
-        { id: 'private', label: t('Private') },
+        { id: 'private', label: t('Extension') },
         { id: 'team', label: t('Team') },
       ],
       selected: mode,

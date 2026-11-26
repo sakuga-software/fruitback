@@ -6,8 +6,8 @@ import { CHANNEL, LEGACY_CHANNEL, type ReadyMessage } from './protocol.ts';
  * Two copies can be installed in one browser: the one of the store and an unpacked one, or an old
  * one and a new one. Both put their two scripts in the same page, and both speak on
  * `window.postMessage`. Before this, the messages did not say which copy sent them: the page script
- * of a 0.1.0 obeyed the bridge of a 0.3.0, took its site of a workspace for a private one, and read
- * it with no session.
+ * of a 0.1.0 obeyed the bridge of a 0.3.0, took its site of a workspace for an extension-mode one,
+ * and read it with no session.
  *
  * - **The channel carries the version of the protocol.** A copy of before speaks on
  *   `LEGACY_CHANNEL`, and hears nothing on `CHANNEL`.
