@@ -405,7 +405,7 @@ jobs:
           }
           timed() {
             local start=$SECONDS
-            FRUITBACK_TEST_CONCURRENCY=$2 pnpm --filter @fruitback/worker test:postgres > "$RUNNER_TEMP/run-$1.log" 2>&1 || echo "run $1 FAILED"
+            VITEST_MAX_WORKERS=$2 pnpm --filter @fruitback/worker test:postgres > "$RUNNER_TEMP/run-$1.log" 2>&1 || echo "run $1 FAILED"
             grep -E 'Test Files|Tests  |Duration' "$RUNNER_TEMP/run-$1.log"
             echo "::notice title=FRU-720 $1::workers=$2 durability=$3 wall=$((SECONDS - start)) s"
           }
