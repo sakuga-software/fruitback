@@ -1092,8 +1092,10 @@ async function readBy(
     return origin !== null && origins.includes(origin);
   }
   const verified = await verifyForClient(token, policy);
+  // Written apart from the guard of FRU-330 above, which `visitor.test.ts` finds by its text.
+  const session = verified?.ok === true ? verified.session : undefined;
 
-  return verified?.ok === true && verified.session === true;
+  return session === true;
 }
 
 /**
