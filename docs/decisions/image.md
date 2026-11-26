@@ -488,3 +488,7 @@ no `production` branch.
   the same job, so running the job again sends Firefox a version it already has, and fails.
   Before the tag, look in the dashboard that no version is in review. If one is, wait, or cancel
   its review. After a refusal, upload the Chrome archive of the release by hand in the dashboard.
+- **v0.7.0 and v0.8.0**: `captures of the guide` failed again, at `first-note.spec.ts:83` (« You are
+  signed in ») and at `extension.ts:112` (the welcome page in 10 s). The cause is the Mac of GitHub,
+  busy for minutes after it boots, and not the build of the tag: the build of the tag passes on a
+  calm Mac. [onboarding.md](onboarding.md) « The guide » has the measures and the fix (FRU-732).
