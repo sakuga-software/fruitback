@@ -915,6 +915,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     delivered » instead when the worker said that N wait, as the bar counts them, with no « Retry ». **Never «
     Healthy » for what was not read.** A red word is `accent-strong`, on a tint of the accent; a green
     one is `done`, on a tint of `done`.
+  - **A routine whose `/fire` answered `404` is « Needs attention »** (`routine-gone`, FRU-627): its
+    panel says that claude.ai says the routine or its API trigger is gone, since when, and to connect
+    a new trigger and disconnect this one; the box « Start an agent » of a site that calls it says the same in place of « Fruitback
+    tries again », which a call given up makes false. The panels of a tracker read only the refusals of
+    a tracker (`trackerTrouble` of `api.ts`).
   - **« Retry »** is on a row whose sends wait, for an owner or an admin: it asks each of them again
     (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
     again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this

@@ -41,6 +41,7 @@ import {
   createOverlay,
 } from './overlay.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
+import type { StatusAnswer, StatusFailure } from './thread-status.ts';
 import {
   globalNavigatorSpeaks,
   keyboardEventCtor,
@@ -323,6 +324,8 @@ describe('every word the widget shows', () => {
     const checkAnswers: ((answer: CheckAnswer | CheckFailure) => void)[] = [];
     // And each withdrawal of a note by its author (FRU-605).
     const withdrawAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];
+    // And each status chosen in a thread (FRU-718).
+    const statusAnswers: ((answer: StatusAnswer | StatusFailure) => void)[] = [];
     // And each move of a note (FRU-605).
     const moveAnswers: ((moved: boolean | 'busy' | undefined) => void)[] = [];
     const overlay = createOverlay({
@@ -336,6 +339,7 @@ describe('every word the widget shows', () => {
       check: { send: () => new Promise((resolve) => checkAnswers.push(resolve)) },
       withdraw: { send: () => new Promise((resolve) => withdrawAnswers.push(resolve)) },
       move: () => new Promise((resolve) => moveAnswers.push(resolve)),
+      status: { send: () => new Promise((resolve) => statusAnswers.push(resolve)) },
     });
     cleanup.push(() => overlay.destroy());
 
@@ -350,6 +354,8 @@ describe('every word the widget shows', () => {
       editable: true,
       // FRU-605: and may withdraw it.
       withdrawable: true,
+      // FRU-718: and may change its status from its thread.
+      canSetStatus: true,
       // FRU-618: an agent works on it, and its reader is of the team.
       agent: { url: 'https://claude.ai/code/session_1' },
       note: noteFixture({
@@ -669,6 +675,17 @@ describe('every word the widget shows', () => {
         ];
       }
       moveAnswers.shift()?.(moved);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    // The status of a note from its thread (FRU-718): the menu, in flight, each failure, then kept.
+    overlay.select(found.note.id);
+    for (const answer of ['wait', 'signed-out', 'retry', 'refused', { stage: 'todo', status: 'own:todo' }] as const) {
+      (host.root.querySelector('button.fruitback-thread-stage') as HTMLButtonElement).click();
+      snapshots.push(...shown(host.root));
+      host.root.querySelector<HTMLButtonElement>('.fruitback-thread-status-item[data-fruitback-stage="todo"]')?.click();
+      snapshots.push(...shown(host.root));
+      statusAnswers.shift()?.(answer);
       await settleReply();
       snapshots.push(...shown(host.root));
     }

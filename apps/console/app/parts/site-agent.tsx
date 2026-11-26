@@ -118,6 +118,8 @@ export function SiteAgent({
   const waitingAt = receivers.find(
     (each) => each.id === (typeof read === 'object' && read !== null ? read.connector : ''),
   );
+  // FRU-627: the routine it calls is gone, and its calls are given up.
+  const gone = waitingAt?.attention?.reason === 'routine-gone';
 
   async function save() {
     if (busy || chosen === '') return;
@@ -168,7 +170,21 @@ export function SiteAgent({
           </Button>
         </div>
       ) : null}
-      {typeof read === 'object' && read !== null && read.waiting > 0 && waitingAt !== undefined ? (
+      {/* FRU-627: the routine is gone. Its calls are given up, so « Fruitback tries again » would be false. */}
+      {gone && waitingAt !== undefined ? (
+        <Callout>
+          <p className="text-small">
+            {t(
+              '{place} is gone, and the calls of this site do not start it. Connect the routine again from the connectors.',
+              { place: placeOf(waitingAt) },
+            )}{' '}
+            <LinkButton space="inline" to={`/w/${workspace.id}/connectors?connector=${waitingAt.id}`}>
+              {t('See the calls')}
+            </LinkButton>
+          </p>
+        </Callout>
+      ) : null}
+      {!gone && typeof read === 'object' && read !== null && read.waiting > 0 && waitingAt !== undefined ? (
         <Callout>
           <p className="text-small">
             {read.waiting === 1
