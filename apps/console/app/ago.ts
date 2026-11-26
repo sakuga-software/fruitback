@@ -4,6 +4,25 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/**
+ * The formats of the days, by language and options (FRU-724). `toLocaleDateString` makes a new
+ * `Intl.DateTimeFormat` at each call: on the list of the notes, which says the day of each row, that
+ * was a quarter of the script of a render at 450 rows (measured). The format is made once and kept.
+ */
+const FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+/** `date.toLocaleDateString(language, options)`, with a format made once. */
+function formatted(date: Date, language: string, options: Intl.DateTimeFormatOptions): string {
+  const key = `${language} ${JSON.stringify(options)}`;
+  let format = FORMATS.get(key);
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat(language, options);
+    FORMATS.set(key, format);
+  }
+
+  return format.format(date);
+}
+
 /** The calendar day of a moment, in the time zone of the browser: « Yesterday » is a day, not 24 h. */
 function calendarDayOf(at: Date): number {
   return Date.UTC(at.getFullYear(), at.getMonth(), at.getDate());
@@ -69,7 +88,7 @@ function said(iso: string, now: number, inSentence: boolean): string {
   const today = new Date(now);
   const week = inTheWeek(Math.round((calendarDayOf(today) - calendarDayOf(at)) / DAY), inSentence);
   if (week !== undefined) return week;
-  const day = at.toLocaleDateString(locale(), {
+  const day = formatted(at, locale(), {
     day: 'numeric',
     month: 'short',
     ...(at.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
@@ -93,7 +112,7 @@ export function dayIn(iso: string | undefined, year: YearShown = 'auto'): string
   if (Number.isNaN(date.getTime())) return undefined;
   const shown = year === 'always' || (year === 'auto' && date.getFullYear() !== new Date().getFullYear());
 
-  return date.toLocaleDateString(DAYS[locale()], {
+  return formatted(date, DAYS[locale()], {
     day: 'numeric',
     month: 'short',
     ...(shown ? { year: 'numeric' as const } : {}),
@@ -131,6 +150,6 @@ export function seenOn(day: string | undefined, now: number = Date.now()): strin
 
   return (
     inTheWeek(days, false) ??
-    new Date(at).toLocaleDateString(DAYS[locale()], { day: 'numeric', month: 'short', timeZone: 'UTC' })
+    formatted(new Date(at), DAYS[locale()], { day: 'numeric', month: 'short', timeZone: 'UTC' })
   );
 }
