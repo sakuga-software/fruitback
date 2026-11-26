@@ -191,6 +191,27 @@ test('an address whose sends wait is read for « Retry », and the bar counts wh
   expect(reads).toEqual(['/console/workspaces/w1/connectors/r1/deliveries']);
 });
 
+test('any connector whose sends the worker says wait is read, and the bar counts it (FRU-714, review)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // A kind this console does not take for one that receives, whose sends the worker says wait.
+  worker.connectors = [
+    { ...LINEAR, health: { failing: 1, notes: 3 } },
+    { ...ADDRESS, health: { failing: 0, notes: 1 } },
+  ];
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors/c1/deliveries`, (route) =>
+    route.fulfill({ json: { deliveries: LATE.slice(0, 1) } }),
+  );
+  await open(page);
+
+  const linear = rows(page).first();
+  await expect(linear.getByText('1 note not delivered', { exact: true })).toBeVisible();
+  await expect(linear.getByRole('button', { name: 'Retry Linear', exact: true })).toBeVisible();
+  await expect(rows(page).nth(1).locator('td').nth(3)).toHaveText('Healthy');
+  await expect(failing(page)).toHaveText('failed sends:1');
+});
+
 test('an address says how many sends wait, « Retry » sends them again, and the bar counts them', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);

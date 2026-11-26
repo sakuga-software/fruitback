@@ -893,7 +893,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not delivered »
     and « N calls not delivered » for a connector that receives (an address, a routine, a plugin with
     `receives`, Slack), from `GET …/connectors/<id>/deliveries`, which is read **only for a connector
-    whose `failing` is above 0** (the ids of « Retry », and notes apart from calls); « Healthy » for
+    whose `failing` is above 0**, of any kind (the ids of « Retry », and notes apart from calls); « Healthy » for
     one whose `failing` is 0, and for a tracker whose health the worker said: a tracker takes a note
     in the request or refuses it there, so nothing of it waits. « Last delivery » is `ago` of
     `lastDeliveredAt`, « None yet » without it. A worker that says no `health` (one of before, or
