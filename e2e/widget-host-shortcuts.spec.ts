@@ -17,7 +17,7 @@ const NOTE = 'Cette carte cache le prix, ce qui coince';
 type Shortcuts = { heard: string[] };
 
 /** The shortcuts of the page, on « c » and « / », that stay out of the fields of the page. */
-function listen(where: 'early' | 'late'): void {
+function listen(where: string): void {
   const box = globalThis as unknown as { shortcuts?: Shortcuts };
   box.shortcuts ??= { heard: [] };
   const shortcuts = box.shortcuts;
