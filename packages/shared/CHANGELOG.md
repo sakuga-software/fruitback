@@ -1,5 +1,22 @@
 # @fruitback/shared
 
+## 0.8.0
+
+### Minor Changes
+
+- 57bb8e5: The thread of a note says « An agent is working on this note » when a call of the site's trigger started a Claude Code routine session for it. A member of the team who can see the tracker also gets « Open the session », a link to that session. Guests, reviewers and visitors see the line without the link. The read gives `agent: {}`, or `agent: { url }` to a member of the team. Only `https` addresses are given.
+- 3d4f2eb: On a phone, « Send » takes the whole width of the sheet, every target of the composer is 44 px, and the element stays in sight: the page scrolls it above the sheet, or the sheet stands on the top when the page cannot scroll that far. The lists say « 99+ » above 99 in a tab, a chip and a scope, and « To check » always exactly (`shortCount` of `@fruitback/shared`). A long host is cut at its start, in the list of the widget, the popup and the side panel, with the whole host in its tooltip. The widget reads a page ground on one canvas per document.
+- c7d700b: The list of the notes has three tabs that follow the loop, in the widget and in the side panel of the extension: « To check », « Open » and « Done ». « To check » holds the notes of the reader that the team marked done and nobody confirmed; it replaces the block « Ready to check » above the tabs. The list opens on « To check » while a note waits there. In the widget, the search, the scope and the chips move behind « Search and options », the magnifier of the head, as in the side panel. `noteTab` and `firstTab` of `@fruitback/shared` sort a note into its tab.
+- 2dd49ea: A note in the list says the stage of Fruitback first and the tracker second, « In progress · Linear: In Review », after a round that fills as the note moves on: a dashed ring for New, an empty one for To do, half full for In progress, full with a tick for Done, with a cross for Closed (`createStageRing`). The filter of the list keeps its shape: All and the five stages, Closed too, in the widget and the side panel; the list of statuses that took the place of the chips beyond five statuses is gone, and the search finds the name of a status or the word of a tracker. `trackerOf`, `stageFirstLabel` and `TRACKER_NAMES` of `@fruitback/shared` name the tracker of an issue by its address.
+- 687ed1f: A task is copied as its link, its ID or Markdown for an agent, from its menu, its panel, Cmd/Ctrl+Shift+C and Cmd/Ctrl+Shift+. The tool `notes_as_text` of a whole site ends with its tasks written by hand.
+- 01b7b9b: A task is written by hand in the console, with a title and, if you like, a text, a status and its fields. It has no page and no pin.
+- 04b7b96: `@fruitback/shared` exports `RESOLVED_STAGES`, the stages done and closed. The widget's `RESOLVED_STAGES` is now that same list, re-exported, and stays a public export. The console reads it for its « Unresolved » filter of the status.
+- d96c822: The author of an open note can withdraw it from « ⋯ » in its thread. The thread asks first, then closes the note, and nothing is deleted. A reply under the note says who withdrew it. On Linear, the issue gets the same reply as a comment and moves to the team's first canceled state. An address receives a new `note.withdrawn` event, which carries identifiers only, and the console lists it with the other deliveries. The read gives `withdrawable: true` for the note the reader may withdraw. Notes sent to GitHub cannot be withdrawn.
+
+### Patch Changes
+
+- 73281a2: The script of the widget is 66 kB lighter gzipped (198 kB to 132 kB). The note contract imported zod as one named value, so the bundle kept all of zod: about 50 locales of error messages and the JSON Schema converters, which the widget never uses. It now imports zod as a namespace, which the bundler can trim. The schemas, and the English messages of zod, are the same.
+
 ## 0.7.0
 
 ### Minor Changes
