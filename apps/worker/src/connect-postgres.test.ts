@@ -22,12 +22,15 @@ import { type ConnectSubject, connectCases } from './connect-conformance.fixture
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
+  createMigratedPgliteDatabase,
+  createMigratedRealDatabase,
   createPgliteDatabase,
   createRealDatabase,
   holdRows,
   migrationsThrough,
   outcomeOnChangedStore,
-  ownDatabase,
+  ownMigratedDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
 
@@ -60,11 +63,11 @@ function on(label: string, open: () => Promise<Database>, skip: string | false =
   };
 }
 
-const PGLITE = on('the PostgreSQL connect store, on PGlite', createPgliteDatabase);
+const PGLITE = on('the PostgreSQL connect store, on PGlite', createMigratedPgliteDatabase, PGLITE_ELSEWHERE);
 const SUBJECTS = [
   PGLITE,
   // The same store on a server, where two answers and two claims are two connections.
-  on('the PostgreSQL connect store, on a real server', createRealDatabase, NO_REAL_POSTGRES),
+  on('the PostgreSQL connect store, on a real server', createMigratedRealDatabase, NO_REAL_POSTGRES),
 ];
 
 for (const subject of SUBJECTS) describeConformance('ConnectStore', connectCases, subject);
@@ -356,7 +359,7 @@ describe('two claims of one request at the same moment, on two connections (FRU-
  * its workspace, and none becomes a session of an account.
  */
 for (const { label, open, skip } of [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const) {
   describe(`the migration of the requests, on ${label} (FRU-238)`, { skip: skip !== false }, () => {
@@ -405,7 +408,7 @@ for (const { label, open, skip } of [
  */
 describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES !== false }, () => {
   it('makes a request on one replica, answers it on the other, and gives one session to claims on both', async () => {
-    const own = await ownDatabase();
+    const own = await ownMigratedDatabase();
     const pools = [createPgDatabase(own.url, 'public'), createPgDatabase(own.url, 'public')];
     try {
       const accounts = { account: async (id: string) => ({ id, email: 'alice@acme.dev' }) } as unknown as AccountStore;
@@ -455,7 +458,7 @@ describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES !== 
   });
 
   it('gives one session to two claims on two replicas when nothing paces them', async () => {
-    const own = await ownDatabase();
+    const own = await ownMigratedDatabase();
     const pools = [createPgDatabase(own.url, 'public'), createPgDatabase(own.url, 'public')];
     try {
       const [a, b] = pools.map((database) => createPostgresConnectStore(database)) as [ConnectStore, ConnectStore];

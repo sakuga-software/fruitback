@@ -19,7 +19,14 @@ import { createMemoryKv } from './kv.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NOTES_FILE_VERSION, copyNotesFile } from './postgres-copy.ts';
 import { closeFrozenFiles, frozenFile, issuesOfFile, writeNote } from './postgres-copy.fixture.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
+  createPgliteDatabase,
+  createRealDatabase,
+  ownDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -132,7 +139,7 @@ const counts = async (database: PgDatabase) =>
 
 const NO_RENAME = new Map<string | null, string>();
 const SUBJECTS: { label: string; open: () => Promise<PgDatabase>; skip: string | false }[] = [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },
   { label: 'a real server', open: () => createRealDatabase(), skip: NO_REAL_POSTGRES },
   // FRU-219: the notes go to the schema of the worker, and their numbers go on there.
   {

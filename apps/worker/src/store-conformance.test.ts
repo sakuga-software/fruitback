@@ -10,7 +10,13 @@ import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './git
 import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
 import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
+  createMigratedPgliteDatabase,
+  createMigratedRealDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './note-rows.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import type { CreatedIssue, NoteStore } from './store.ts';
@@ -507,8 +513,8 @@ const SUBJECTS: ConformanceSubject[] = [
       return createGithubStore(GITHUB_CONFIG);
     },
   },
-  postgresSubject('PGlite', createMigratedPgliteDatabase, false),
-  postgresSubject('a real server', createRealDatabase, NO_REAL_POSTGRES),
+  postgresSubject('PGlite', createMigratedPgliteDatabase, PGLITE_ELSEWHERE),
+  postgresSubject('a real server', createMigratedRealDatabase, NO_REAL_POSTGRES),
   {
     provider: 'memory',
     replyCap: 'the dev store writes two canned replies and no more',

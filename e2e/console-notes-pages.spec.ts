@@ -117,7 +117,8 @@ async function open(
   };
 }
 
-const rows = (page: Page) => page.getByRole('region', { name: 'Notes' }).locator('tbody tr:not(.kit-table-group)');
+// The rows of the notes, by CSS: a locator by role walks the whole page at each poll, 500 rows deep.
+const rows = (page: Page) => page.locator('[data-notes-list] tbody tr[data-note]');
 const end = (page: Page) => page.locator('[data-notes-end]');
 const loadMore = (page: Page) => end(page).getByRole('button', { name: 'Load more' });
 const said = (page: Page) => end(page).getByRole('status');
@@ -126,11 +127,22 @@ const cursors = (worker: Worker) => worker.asked.map((each) => each.cursor ?? ''
 /** Scrolls the window to the end of the document, as a person who reads down the list. */
 const toTheEnd = (page: Page) => page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 
-/** FRU-686: a filter is chosen from « Filter »: its field, then its value. */
+/**
+ * FRU-686: a filter is chosen from « Filter »: its field, then its value, by the keyboard. Each key
+ * waits for what it opens. A pointer on the nested menu lost its press on a slow CI runner: the submenu
+ * closed between the press and its release (traced, FRU-724), as a mouse can, not a key.
+ */
 async function choose(page: Page, field: string, value: string): Promise<void> {
-  await page.getByRole('button', { name: 'Filter', exact: true }).click();
-  await page.getByRole('menuitem', { name: field, exact: true }).click();
-  await page.getByRole('menuitemradio', { name: value, exact: true }).click();
+  await page.getByRole('button', { name: 'Filter', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const item = page.getByRole('menuitem', { name: field, exact: true });
+  await expect(item).toBeVisible();
+  await item.focus();
+  await page.keyboard.press('ArrowRight');
+  const choice = page.getByRole('menuitemradio', { name: value, exact: true });
+  await expect(choice).toBeVisible();
+  await choice.focus();
+  await page.keyboard.press('Enter');
 }
 
 test('the next notes are read as the end of the list comes near, by the cursor of the last answer', async ({
@@ -204,6 +216,9 @@ test('a filter starts again from the first notes, at the top, and the next notes
   const release = worker.hold('w1/all:50');
   await loadMore(page).click();
   await expect.poll(() => cursors(worker).at(-1)).toBe('w1/all:50');
+  // The read of the next notes is drawn before the filter is chosen: a menu pressed while the list draws
+  // moves under the pointer on a slow machine, and the press is lost (FRU-724, CI of #974).
+  await expect(end(page)).toContainText('Loading…');
   await choose(page, 'Status', 'New');
   await expect.poll(() => worker.asked.at(-1)).toEqual({ stage: 'new', limit: '25' });
   await expect(rows(page)).toHaveCount(25);
