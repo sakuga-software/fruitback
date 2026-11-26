@@ -15,13 +15,13 @@ which part of the widget.
 ### The rules, in short
 
 **It is three products sharing one core, and they differ on what the site ships** (FRU-46):
-**public**, where the site embeds the widget and every visitor can leave a note; **private**, where
+**public**, where the site embeds the widget and every visitor can leave a note; **extension**, where
 the site embeds nothing and the extension mounts the widget for one reviewer; **team**, where the
 site embeds a dormant widget the extension wakes and relays for. [docs/modes.md](../modes.md) is
 the page that names them for a reader, and the one thing to carry from it here: **who may read is
 `read`, and the mode decides who can satisfy it.** Public mode can run `authenticated` when the host
 mints its own tokens (`init({ identityToken })`, sent on reads since FRU-40); team mode is the only
-one where the **reviewer** supplies the credential and the page never holds it; **private mode can
+one where the **reviewer** supplies the credential and the page never holds it; **extension mode can
 supply neither**, so it changes who is _shown_ the feedback and never who may _fetch_ it. Writing
 "only team mode protects a read" is the overclaim in the other direction, and it shipped in
 `CLAUDE.md` for one review round. The three-mode split is a

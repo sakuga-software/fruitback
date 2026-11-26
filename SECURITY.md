@@ -102,11 +102,11 @@ closing that is the visibility `members`, not CORS.
 
 The extension's site rules are the same claim, made by the reviewer's browser. A rule
 maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a mode, and it can
-be imported from a file somebody sent. In private mode the rule holds the client id the widget
+be imported from a file somebody sent. In extension mode the rule holds the client id the widget
 asserts; in team mode it holds none, and the site's own widget asserts its client id. Either way the
 client id is still a claim. What the worker checks differs by mode:
 
-- Private mode: the widget calls from the page, so the worker compares the page's exact origin
+- Extension mode: the widget calls from the page, so the worker compares the page's exact origin
   with that client's `origins`. A wildcard in a browser does not widen that list.
 - Team mode: the relay calls from the extension's origin, which the worker exempts from `origins`
   (see [What the extension relays](#what-the-extension-relays-and-what-it-refuses-to)). The binding
@@ -115,7 +115,7 @@ client id is still a claim. What the worker checks differs by mode:
   nothing. A wildcard needs only a base of two labels, so `https://*.vercel.app` is a valid pattern,
   and it would let the sites of other people spend the reviewer's session. The form and the import
   refuse such a rule, and for one already stored the bridge does not announce and the relay answers
-  `site-not-configured`. A wildcard stays valid in private mode, which carries no credential.
+  `site-not-configured`. A wildcard stays valid in extension mode, which carries no credential.
   One exception: a wildcard that the worker of the session lists as the previews of a
   site, because its workspace proved the domain. See
   [A domain a workspace proves it owns](#a-domain-a-workspace-proves-it-owns-to-cover-its-previews-fru-103).
@@ -403,11 +403,11 @@ test:`is refused over the cap on the routes of the sign-in, which need no sessio
 test:`is read by bounded-body.ts and by nothing else`, which fails on a route that reads its body
 another way.
 
-### Private mode hides the pins from a visitor, and from nobody else
+### Extension mode hides the pins from a visitor, and from nobody else
 
-**The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
+**The widget the extension mounts in extension mode carries no credential.** `page.content.ts` mounts
 it with no transport, so it calls the worker exactly as a public-mode site does, and the notes on
-that page stay readable by anyone who can build `GET /feedback?url=…&client=…`. What private mode
+that page stay readable by anyone who can build `GET /feedback?url=…&client=…`. What extension mode
 changes is who is shown the feedback (the site embeds nothing, so a visitor sees nothing) never
 who may fetch it. Its reporters are self-declared for the same reason: verification comes from
 the session, and only the relay carries one.
@@ -416,7 +416,7 @@ What changes a read is `read`, not the mode, and the mode decides who can satisf
 public-mode site can run `read: 'authenticated'` by minting identity tokens itself: `identityToken`
 is a seam on `init`, and the widget sends what it returns on reads as well as writes; the credential
 then lives in that site's own page. Team mode is the one where the reviewer supplies it and the
-page never holds it, attached in the extension's background. Private mode can supply neither, so
+page never holds it, attached in the extension's background. Extension mode can supply neither, so
 worker-wide `authenticated` locks its widget out of its own reads.
 
 A worker that serves team mode can hold several clients. A session belongs to one
@@ -431,7 +431,7 @@ site's own and skip the check. See [docs/modes.md](docs/modes.md).
 
 ### The extension's page bridge can be forged by the page
 
-In private mode the widget runs in the page's own JavaScript realm, and the bridge is
+In extension mode the widget runs in the page's own JavaScript realm, and the bridge is
 `window.postMessage`. The parser refuses a malformed message; it **cannot** refuse a well-formed one
 the page wrote, because the two are identical. A page on an origin the reviewer enabled can point the
 widget at its own worker, or take it away.
@@ -859,7 +859,7 @@ Pairing, refreshing and revoking are refused on an insecure endpoint too, and th
 of the two: a pairing code is spent for a refresh token worth thirty days, and every renewal spends
 that token again. The rule lives in the session layer rather than in the screen that warns about it,
 so a session stored before the rule existed cannot keep leaking one either. `http://localhost` is
-excepted, because it is the development loop and is not on a wire. The private mode's mount is
+excepted, because it is the development loop and is not on a wire. The extension mode's mount is
 deliberately not held to this rule: it carries no credential at all, and an http staging worker
 that works today has nothing to leak.
 
@@ -2728,7 +2728,7 @@ visitor. It is public: no session, no cookie.
   that its team marks done, 10 addresses a minute for that site at most. The message names the host
   of the site and holds nothing else that they wrote.
 - The extension does not carry this route, and a widget it mounts never asks for an address
-  (`askForAddress: false`), in team mode and in private mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
+  (`askForAddress: false`), in team mode and in extension mode alike. test:`refuses the path of the address of a visitor (FRU-604)`.
 
 The badge on the icon of the extension shows `toCheck` of `GET /session/sites?origin=` for the
 site of the tab, as the popup reads it: no new data, and no new route.

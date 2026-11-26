@@ -147,9 +147,10 @@ export async function replaceAll(sites: Record<string, SiteConfig>): Promise<voi
 /**
  * Tolerant field by field, like the widget's own config store: a bad entry costs its own site.
  *
- * **An absent mode reads as private.** Every entry written before FRU-57 has no `mode` and a real
- * client id, and it has to keep mounting the widget exactly as it did — a stored shape is the one
- * thing a release cannot re-run.
+ * **An absent mode reads as `private`, extension mode.** Every entry written before FRU-57 has no
+ * `mode` and a real client id, and it has to keep mounting the widget exactly as it did — a stored
+ * shape is the one thing a release cannot re-run. FRU-662 renamed the mode in the words only: the
+ * stored value stays `private`.
  */
 export function parseSite(value: unknown): SiteConfig | undefined {
   if (!isRecord(value)) return undefined;

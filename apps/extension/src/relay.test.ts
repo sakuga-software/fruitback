@@ -97,8 +97,8 @@ describe('the relay refuses before it sends', () => {
     assert.deepEqual(sent, []);
   });
 
-  /** Private mode mounts our own widget, which calls the worker itself. Nothing relays for it. */
-  it('refuses a site in private mode', async () => {
+  /** Extension mode mounts our own widget, which calls the worker itself. Nothing relays for it. */
+  it('refuses a site in extension mode', async () => {
     const site: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
     const { relay, sent } = harness({ readSite: async () => site });
 

@@ -9,7 +9,7 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
  *
  * Measured on 2026-10-23 on the Chrome of Mathieu: the 0.3.0 of the store, and a 0.1.0 unpacked
  * beside it. The page script of the 0.1.0 held the page, obeyed the bridge of the 0.3.0, took its site
- * of a workspace for a private one, and read it from the page with no session: `401`.
+ * of a workspace for an extension-mode one, and read it from the page with no session: `401`.
  *
  * The old copy is `e2e/fixtures/old-copy`: the guard and the channel of 0.1.0, built for this spec.
  * It starts before the current copy, or after it (`?old-late`). Both orders: no request of the page

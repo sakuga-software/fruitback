@@ -93,7 +93,7 @@ describe('exportSites and importSites', () => {
   });
 
   /** A file must not store the rule that the form refuses: a wildcard that lends a session (FRU-75). */
-  it('skips a wildcard in team mode, and keeps the same wildcard in private mode', () => {
+  it('skips a wildcard in team mode, and keeps the same wildcard in extension mode', () => {
     const result = importSites(
       file({
         sites: {
@@ -126,7 +126,7 @@ describe('exportSites and importSites', () => {
     });
   });
 
-  /** A file written by hand from an old popup entry: no mode, a client id. It reads as private mode. */
+  /** A file written by hand from an old popup entry: no mode, a client id. It reads as extension mode. */
   it('reads an entry with no mode as private, like the store does', () => {
     const result = importSites(
       file({ sites: { 'https://acme.dev': { endpoint: 'https://w.test', clientId: 'acme' } } }),

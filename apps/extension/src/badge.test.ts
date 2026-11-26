@@ -59,7 +59,7 @@ describe('the badge of a tab', () => {
     assert.deepEqual(calls, ['text 7 3', `color 7 ${BADGE_COLOR}`, 'text-color 7 #ffffff']);
   });
 
-  it('is empty on a site that is not on, in private mode, or not a page', async () => {
+  it('is empty on a site that is not on, in extension mode, or not a page', async () => {
     const off = browserOf({ readSite: async () => ({ ...TEAM, enabled: false }) as SiteConfig });
     await off.badge({ id: 1, url: 'https://staging.acme.dev/' });
     const priv = browserOf({

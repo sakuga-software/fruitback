@@ -1981,9 +1981,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **The thread asks for a verdict when the read says so**: `done`, `mine` and no `checked`
   (`checkOffered`). The worker decides who may (FRU-294): the author it can name, by a session of
   the workspace, or a role that manages the sites. **Nothing on the page decides it.** So in public
-  mode and in private mode, where no session reaches the worker, the read says no `mine`, and the
+  mode and in extension mode, where no session reaches the worker, the read says no `mine`, and the
   thread asks nobody; in team mode it asks the author. A host that sets `replies: false` gets none:
-  the verdict is a reply of the store. The extension sets it in private mode (`page.content.ts`), so
+  the verdict is a reply of the store. The extension sets it in extension mode (`page.content.ts`), so
   there the thread would not ask even a read that said `mine` (measured on 2026-11-06, with a read changed in the browser).
 - **« Looks fixed » sends the verdict alone; « Still wrong » opens a field** (« What is still
   wrong? »), and « Send » sends the verdict and the text in one `POST /feedback/<id>/check`, as
@@ -2198,7 +2198,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   404, 409) says the note takes no address now, and closes.
 - **A widget the extension mounts never asks** (`askForAddress: false` of `init`, set in
   `page.content.ts`), in either mode (decision of 2026-11-06): whoever installed the extension is a
-  reviewer, and the badge on its icon tells them. In private mode the worker still gives the
+  reviewer, and the badge on its icon tells them. In extension mode the worker still gives the
   visitor's token, which the widget leaves unused (`e2e/extension-badge.spec.ts`). The relay does
   not carry the route either (`relay.test.ts`).
 - The field is `type="email"`, `autocomplete="email"`, labelled « Email », described by the sentence
