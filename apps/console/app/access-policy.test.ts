@@ -14,7 +14,7 @@ import {
 } from './access-policy.ts';
 
 const SITE: Site = { id: 's1', origin: 'https://acme.dev', visibility: 'everyone' };
-const CONTRIBUTE: Access = { ...LEVEL_ACCESS.contribute, notifyDone: false };
+const CONTRIBUTE: Access = { ...LEVEL_ACCESS.contribute, notifyDone: false, visitorNotesPerHour: 10 };
 
 describe('the access of a site, in the tab « Access » (FRU-703)', () => {
   it('reads a worker of before as it behaved: a site everyone read was open to anybody, and a visitor did nothing', () => {
@@ -24,6 +24,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       visitorEdit: 'never',
       visitorDelete: 'never',
       notifyDone: false,
+      // A worker of before counted nothing (FRU-704).
+      visitorNotesPerHour: 0,
     });
     assert.equal(accessOf({ ...SITE, visibility: 'members' }).writers, 'members');
     assert.deepEqual(
@@ -34,8 +36,10 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
         visitorEdit: 'while-open',
         visitorDelete: 'never',
         notifyDone: true,
+        visitorNotesPerHour: 0,
       },
     );
+    assert.equal(accessOf({ ...SITE, visitorNotesPerHour: 20 }).visitorNotesPerHour, 20);
   });
 
   it('names the level of each row of the table, and « custom » for a cell that differs', () => {
@@ -58,6 +62,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       visitorEdit: 'never',
       visitorDelete: 'never',
       notifyDone: true,
+      visitorNotesPerHour: 10,
     });
   });
 
@@ -69,6 +74,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       visitorEdit: 'never',
       visitorDelete: 'while-open',
       notifyDone: false,
+      visitorNotesPerHour: 10,
     });
     // Where only members write, the table says « Never », and that is what is stored (#ca9e30): a
     // site opened again later brings back no right that nobody saw.
@@ -91,6 +97,9 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
     assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, visitorDelete: 'never' }), false);
     assert.equal(sameAccess(CONTRIBUTE, closed), false);
     assert.equal(sameAccess(CONTRIBUTE, CONTRIBUTE), true);
+    // FRU-704: the notes of a visitor in an hour count where anybody writes, and nowhere else.
+    assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, visitorNotesPerHour: 0 }), false);
+    assert.equal(sameAccess({ ...closed, visitorNotesPerHour: 50 }, closed), true);
   });
 
   it('lets a visitor reply where everyone reads and anybody writes, as the worker does', () => {

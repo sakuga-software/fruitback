@@ -379,6 +379,13 @@
       "when": 1795636939654,
       "tag": "0053_sites_visitor_rights_default",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795696103842,
+      "tag": "0054_sites_visitor_notes_per_hour",
+      "breakpoints": true
     }
   ]
 }

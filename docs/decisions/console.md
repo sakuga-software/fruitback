@@ -1579,8 +1579,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   kept.
 - **The tab follows the mockup « Onglet Access »** of FRU-699: « Public access » (four levels),
   « What a visitor can do » (a table of seven actions in two columns), « How a visitor is
-  recognised », and « What a visitor sees » on the right from 1100 px. **Left out**: the card
-  « Safeguards » (FRU-704). **Drawn and not chosen**: the level « Collaborate » (FRU-707), and the
+  recognised », and « What a visitor sees » on the right from 1100 px, with « Safeguards » under it
+  (FRU-704). **Drawn and not chosen**: the level « Collaborate » (FRU-707), and the
   e-mail and the signed token among the ways to recognise a visitor (FRU-705, FRU-706).
 - **A list is a setting of the worker, and only that.** `access-policy.ts` holds the four values the
   worker stores: who reads (`visibility`, the list « See notes » of others), who writes (`writers`,
@@ -1596,6 +1596,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« Save » sends the whole access in one `POST …/sites`** of the address of the site, as the form
   of the page did (FRU-504): who reads, who writes and the rights of a visitor always (« Never »
   where only members write, as the table shows), and the e-mail only where anybody writes. Nothing changed: nothing is asked. A refusal says its cause and keeps what was chosen.
+- **« Safeguards » grows one line by safeguard, each with its pull request (FRU-704).** « Notes per
+  visitor » first: a list of « No limit », 5, 10, 20 and 50 « / hour », the values `POST …/sites`
+  takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
+  members write. A level does not change it. A worker that answers without it did not keep it: « Save »
+  says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».

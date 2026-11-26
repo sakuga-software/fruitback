@@ -2375,7 +2375,8 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
  * read that follows brings the list of now, and the composer says which place is gone (FRU-123).
  */
 export function failureOf(response: { status: number; body: string }): SendFailure {
-  if (response.status === 429) return 'wait';
+  // FRU-704: the notes of the hour of a visitor, which a minute does not give back.
+  if (response.status === 429) return errorOf(response.body) === 'visitor-limit' ? 'visitor-limit' : 'wait';
   if (response.status === 413) return 'too-large';
   // FRU-332: a file of the note is no longer on its way, or the place takes no file.
   if (response.status === 410) return 'attachment-gone';

@@ -24,7 +24,8 @@ import {
 } from './note-helpers.ts';
 import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
 import { type DoneNoticeSeams, notifyToken, sendDoneNotices } from './done-notices.ts';
-import { chargeRateLimit, maxBatch } from './rate-limit.ts';
+import { chargeRateLimit, checkVisitorNotes, maxBatch } from './rate-limit.ts';
+import { readBearerToken } from './identity.ts';
 import { checkedOf, markedAgent } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
 import {
@@ -532,6 +533,9 @@ export async function postFeedback(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+  // FRU-704: counted once the note is one the worker would take, before anything is written.
+  const limited = await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders);
+  if (limited !== undefined) return limited;
 
   try {
     // A note of before FRU-331, sent again, names its picture in its note: it goes with it while the
@@ -620,6 +624,39 @@ export async function postFeedback(
     }
     throw error;
   }
+}
+
+/**
+ * The refusal of a visitor over the notes of the hour of their site (FRU-704), or `undefined` when
+ * the notes may go. A visitor is a caller with no token: a session of a member and a token that the
+ * site signed are not counted. A site that says no `visitorNotesPerHour` (« No limit », a site of
+ * members, a client of `FRUITBACK_CLIENTS`) counts nothing. `429 visitor-limit` names the limit, so
+ * the widget says how long to wait; a `Kv` that does not answer is the `503` of every limiter.
+ */
+async function visitorLimit(
+  request: Request,
+  kv: Kv,
+  clientIp: string,
+  client: ClientConfig | undefined,
+  clientId: string | undefined,
+  checks: CallerChecks,
+  amount: number,
+  corsHeaders: Record<string, string>,
+): Promise<Response | undefined> {
+  const perHour = client?.visitorNotesPerHour;
+  if (perHour === undefined || clientId === undefined) return undefined;
+  if (readBearerToken(request.headers.get('Authorization')) !== undefined) return undefined;
+  const visitor = checks.visitorOf(request, clientId);
+  try {
+    if (await checkVisitorNotes(kv, { site: clientId, visitor, clientIp, perHour, amount })) return undefined;
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+    console.error(`[fruitback] rate limit unavailable: ${error.message}`);
+
+    return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+  }
+
+  return json(429, { error: 'visitor-limit', perHour }, corsHeaders);
 }
 
 /** The help of a `502 destination-unavailable` for the author of this request (FRU-640). */
@@ -719,6 +756,9 @@ async function postBatch(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+  // FRU-704: every note of the batch counts, before anything is written.
+  const limited = await visitorLimit(request, kv, clientIp, route.client, clientId, checks, notes.length, corsHeaders);
+  if (limited !== undefined) return limited;
 
   // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
   const known = await Promise.all(
