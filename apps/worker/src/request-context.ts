@@ -232,7 +232,14 @@ export type CallerChecks = {
     policy: ClientPolicy,
     claimed: NoteReporter | undefined,
   ) => Promise<
-    | { ok: true; reporter: NoteReporter | undefined; channel: Channel; account: boolean }
+    | {
+        ok: true;
+        reporter: NoteReporter | undefined;
+        channel: Channel;
+        account: boolean;
+        /** FRU-704: no token came, so nothing vouches for the caller: a visitor, counted by the hour. */
+        visitor: boolean;
+      }
     | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
   >;
   /** Where a member chose to send the note, or `null` for a place refused: `chosenPlace` of `app.ts`. */

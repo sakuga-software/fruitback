@@ -2633,6 +2633,9 @@ the widget says « Send it again later » with the text kept.
   member, a token that the site signs, a site of its members only and a client of
   `FRUITBACK_CLIENTS` are not counted.
   test:`never counts a member of the workspace, after a visitor spent the hour`.
+  A visitor is what `attributionFor` names one, after the token was read: a token that does not
+  verify is refused with `401` before the count, never taken for a member.
+  test:`lets no token that does not verify pass the count: it is refused, and writes nothing (review of #984)`.
 - Two counts, by site. The key of the browser (its digest, `visitorDigestOf`) at the limit, and the
   address at three times it, as the people of one office share an address. Over either one refuses;
   with no key the address counts alone, so a visitor who clears their key meets it.

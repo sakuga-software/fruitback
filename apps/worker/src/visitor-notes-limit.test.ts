@@ -47,6 +47,24 @@ describe('the notes of a visitor in an hour (FRU-704)', () => {
     }
   });
 
+  it('lets no token that does not verify pass the count: it is refused, and writes nothing (review of #984)', async () => {
+    const { world, site, call, noteOf } = await aVisitorSite();
+    await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 5 WHERE id = '${site}'`);
+    for (let index = 0; index < 5; index += 1) await call('POST', '/feedback', { key: KEY_A }, noteOf(`vt_${index}`));
+    assert.equal((await call('POST', '/feedback', { key: KEY_A }, noteOf('vt_refused'))).status, 429);
+
+    for (const token of ['junk', 'not.a.session', 'eyJhbGciOiJIUzI1NiJ9.e30.c2lnbmF0dXJl']) {
+      const forged = await call('POST', '/feedback', { key: KEY_A, token }, noteOf(`vt_${token}`));
+      assert.equal(forged.status, 401, `${token}: ${JSON.stringify(forged.body)}`);
+      const batch = await call('POST', '/feedback', { key: KEY_A, token }, [
+        noteOf(`vtb_${token}_1`),
+        noteOf(`vtb_${token}_2`),
+      ]);
+      assert.equal(batch.status, 401, `${token}: ${JSON.stringify(batch.body)}`);
+    }
+    assert.equal(await notesInStore(world), 5);
+  });
+
   it('counts every note of a batch, and refuses one that would pass the limit with none written', async () => {
     const { world, site, call, noteOf } = await aVisitorSite();
     await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 5 WHERE id = '${site}'`);
@@ -86,6 +104,22 @@ describe('the notes of a visitor in an hour (FRU-704)', () => {
       const sent = await call('POST', '/feedback', { key: KEY_A }, noteOf(`vn_${index}`));
       assert.equal(sent.status, 201, `note ${index}: ${JSON.stringify(sent.body)}`);
     }
+  });
+
+  it('fails when the worker names no caller a visitor (planted violation)', async () => {
+    const mutant = await mutatedModule('app.ts', {
+      from: "channel: 'script', account: false, visitor: true };",
+      to: "channel: 'script', account: false, visitor: false };",
+    });
+    const handle = mutant.module.handleRequest as Handle;
+    const { call, noteOf } = await aVisitorSite({ handle });
+
+    const answers: number[] = [];
+    for (let index = 0; index < 11; index += 1) {
+      answers.push((await call('POST', '/feedback', { key: KEY_A }, noteOf(`vv_${index}`))).status);
+    }
+    mutant.remove();
+    assert.equal(answers.at(-1), 201);
   });
 
   it('fails without the count of the route (planted violation)', async () => {
