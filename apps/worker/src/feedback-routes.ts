@@ -763,12 +763,6 @@ async function postBatch(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
-  // FRU-704: every note of the batch counts, before anything is written.
-  const limited = visitor
-    ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, notes.length, corsHeaders)
-    : undefined;
-  if (limited !== undefined) return limited;
-
   // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
   const known = await Promise.all(
     attributed.map(async (note) => {
@@ -782,6 +776,15 @@ async function postBatch(
       }
     }),
   );
+  // FRU-704: each note of the batch that no earlier attempt kept counts, before anything is written. A
+  // batch sent again after a partial failure counts only what it may plant (review of #984).
+  const unknown = known.filter((issue) => issue === undefined).length;
+  const limited =
+    visitor && unknown > 0
+      ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, unknown, corsHeaders)
+      : undefined;
+  if (limited !== undefined) return limited;
+
   // A note that is not kept yet is taken for this request. One that another request holds is not
   // sent from here: it is answered as not kept, and the next attempt reads what became of it.
   const held = await Promise.all(

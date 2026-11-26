@@ -2641,7 +2641,8 @@ the widget says « Send it again later » with the text kept.
   with no key the address counts alone, so a visitor who clears their key meets it.
   test:`takes 10 notes of one browser on a new site, refuses the 11th with nothing written, and takes another browser`.
   test:`counts 3 browsers on one address, so a visitor who clears their key meets it`.
-- A batch counts each of its notes, and one that would pass the limit is refused whole.
+- A batch counts each of its notes that no earlier attempt kept, and one that would pass the limit is
+  refused whole: a batch sent again after a partial failure counts only what it may plant.
   test:`counts every note of a batch, and refuses one that would pass the limit with none written`.
 - How. `chargeRateLimit` with a window of an hour, in the table `kv`, as every count of the worker: a
   refused note is counted too, so a visitor who keeps sending stays refused, for two hours at most.

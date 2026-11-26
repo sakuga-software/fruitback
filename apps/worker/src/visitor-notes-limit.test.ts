@@ -79,6 +79,20 @@ describe('the notes of a visitor in an hour (FRU-704)', () => {
     assert.equal(await notesInStore(world), 3);
   });
 
+  it('counts only the notes of a batch sent again that no earlier attempt kept (review of #984)', async () => {
+    const { world, site, call, noteOf } = await aVisitorSite();
+    await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 5 WHERE id = '${site}'`);
+    const batch = [noteOf('vr_1'), noteOf('vr_2'), noteOf('vr_3')];
+    assert.equal((await call('POST', '/feedback', { key: KEY_A }, batch)).status, 201);
+
+    // The same three, and two new ones: 3 + 2 is the limit, where 3 + 5 would pass it.
+    const again = await call('POST', '/feedback', { key: KEY_A }, [...batch, noteOf('vr_4'), noteOf('vr_5')]);
+
+    assert.equal(again.status, 201, JSON.stringify(again.body));
+    assert.equal(await notesInStore(world), 5);
+    assert.equal((await call('POST', '/feedback', { key: KEY_A }, noteOf('vr_6'))).status, 429);
+  });
+
   it('counts 3 browsers on one address, so a visitor who clears their key meets it', async () => {
     assert.equal(VISITORS_PER_ADDRESS, 3);
     const { world, site, call, noteOf } = await aVisitorSite();
