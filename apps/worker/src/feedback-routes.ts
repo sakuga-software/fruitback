@@ -827,35 +827,41 @@ async function postBatch(
       }
     }),
   );
-  // FRU-704: each note of the batch that no earlier attempt kept counts, before anything is written. A
-  // batch sent again after a partial failure counts only what it may plant (review of #984).
-  const unknown = known.filter((issue) => issue === undefined).length;
-  const limited =
-    visitor && unknown > 0
-      ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, unknown, corsHeaders)
-      : undefined;
-  if (limited !== undefined) return limited;
-  // FRU-704: a batch of a visitor on a site that holds their notes waits whole. A note held already
-  // is not held twice: its site and its id are the key.
-  if (visitor && route.client?.holdVisitorNotes === true) {
-    return heldAnswer(
-      config,
-      context,
-      checks.visitorOf(request, clientId),
-      route.client,
-      clientId,
-      attributed,
-      corsHeaders,
-      true,
-    );
-  }
-
   // A note that is not kept yet is taken for this request. One that another request holds is not
   // sent from here: it is answered as not kept, and the next attempt reads what became of it.
   const held = await Promise.all(
     attributed.map((note, index) => (known[index] === undefined ? hold(kv, clientId, note.id) : false)),
   );
   const fresh = attributed.filter((_, index) => held[index]);
+  // FRU-704: the notes this request holds, and so may plant, count, before anything is written. A batch
+  // sent again counts only what no earlier attempt kept, and a note another request holds counts there
+  // (reviews of #984). Refused, the holds are given back at once.
+  const limited =
+    visitor && fresh.length > 0
+      ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, fresh.length, corsHeaders)
+      : undefined;
+  if (limited !== undefined) {
+    await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
+
+    return limited;
+  }
+  // FRU-704: a batch of a visitor on a site that holds their notes waits for a member, whole. A note
+  // held already is not held twice: its site and its id are the key. The locks of the Kv go at once.
+  if (visitor && route.client?.holdVisitorNotes === true) {
+    const answer = await heldAnswer(
+      config,
+      context,
+      checks.visitorOf(request, clientId),
+      route.client,
+      clientId,
+      fresh,
+      corsHeaders,
+      true,
+    );
+    await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
+
+    return answer;
+  }
 
   let planted: BatchAnswer[] = [];
   let gone: PlaceUnavailable | undefined;

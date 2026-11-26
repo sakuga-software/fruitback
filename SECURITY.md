@@ -2641,11 +2641,16 @@ the widget says « Send it again later » with the text kept.
   with no key the address counts alone, so a visitor who clears their key meets it.
   test:`takes 10 notes of one browser on a new site, refuses the 11th with nothing written, and takes another browser`.
   test:`counts 3 browsers on one address, so a visitor who clears their key meets it`.
-- A batch counts each of its notes that no earlier attempt kept, and one that would pass the limit is
-  refused whole: a batch sent again after a partial failure counts only what it may plant.
+- A batch counts the notes this request may plant: not one an earlier attempt kept, nor one another
+  request holds. One that would pass the limit is refused whole, and gives its notes back at once.
+  test:`counts only the notes of a batch sent again that no earlier attempt kept (review of #984)`.
+  test:`gives back the notes of a refused batch, so a later attempt plants them (review of #984)`.
   test:`counts every note of a batch, and refuses one that would pass the limit with none written`.
 - How. `chargeRateLimit` with a window of an hour, in the table `kv`, as every count of the worker: a
   refused note is counted too, so a visitor who keeps sending stays refused, for two hours at most.
+  A note that the tracker then fails to keep (`502`) is counted too: a count is never taken back, as
+  `incr` takes no amount below one. A visitor whose tracker fails spends a note of the hour at each
+  try; the widget keeps the text for the try after.
   A database that does not answer refuses the note with `503 limiter-unavailable`.
 - The default. 10, the value of the mockup, for a new site and, by `0055`, for every site of before:
   Fruitback has no users yet. A value out of the list is refused by the console API

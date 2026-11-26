@@ -93,6 +93,24 @@ describe('the notes of a visitor in an hour (FRU-704)', () => {
     assert.equal((await call('POST', '/feedback', { key: KEY_A }, noteOf('vr_6'))).status, 429);
   });
 
+  it('gives back the notes of a refused batch, so a later attempt plants them (review of #984)', async () => {
+    const { world, site, call, noteOf } = await aVisitorSite();
+    await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 5 WHERE id = '${site}'`);
+    assert.equal(
+      (await call('POST', '/feedback', { key: KEY_A }, [noteOf('vg_1'), noteOf('vg_2'), noteOf('vg_3')])).status,
+      201,
+    );
+    const batch = [noteOf('vg_4'), noteOf('vg_5'), noteOf('vg_6')];
+    assert.equal((await call('POST', '/feedback', { key: KEY_A }, batch)).status, 429);
+
+    // « No limit » now: the same batch goes at once, with no note held by the refused request.
+    await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 0 WHERE id = '${site}'`);
+    const again = await call('POST', '/feedback', { key: KEY_A }, batch);
+
+    assert.equal(again.status, 201, JSON.stringify(again.body));
+    assert.equal(await notesInStore(world), 6);
+  });
+
   it('counts 3 browsers on one address, so a visitor who clears their key meets it', async () => {
     assert.equal(VISITORS_PER_ADDRESS, 3);
     const { world, site, call, noteOf } = await aVisitorSite();
