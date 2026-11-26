@@ -38,7 +38,7 @@ const NO_TEXT = new Set([
 
 const COPIES = new WeakSet<Event>();
 
-/** Whether an element takes typed text: a field, a list, an element you can edit, or a text box. */
+/** Whether an element takes typed text: a field, a list, an element you can edit, a text or search box. */
 export function takesText(element: Element): boolean {
   const tag = element.tagName.toLowerCase();
   if (tag === 'textarea' || tag === 'select') return true;
@@ -46,7 +46,8 @@ export function takesText(element: Element): boolean {
   if ((element as HTMLElement).isContentEditable === true) return true;
   const role = element.getAttribute('role');
 
-  return role === 'textbox' || role === 'searchbox' || role === 'combobox';
+  // Not `combobox`: a button can carry it, and its keys are no text. A combobox you type in is an input.
+  return role === 'textbox' || role === 'searchbox';
 }
 
 /** Whether this event is the copy of a key that `keepTyping` gave to a field of the widget. */

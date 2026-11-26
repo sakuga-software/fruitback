@@ -105,9 +105,11 @@ describe('keepTyping', () => {
 describe('takesText', () => {
   it('answers for fields, lists, text boxes and editable elements only', () => {
     const page = mountPage(
-      '<input id="a"><input id="b" type="search"><input id="c" type="checkbox"><input id="d" type="submit"><select id="e"></select><textarea id="f"></textarea><div id="g" role="textbox"></div><div id="h" contenteditable="true"></div><div id="i" contenteditable="false"></div><button id="j"></button>',
+      '<input id="a"><input id="b" type="search"><input id="c" type="checkbox"><input id="d" type="submit"><select id="e"></select><textarea id="f"></textarea><div id="g" role="textbox"></div><div id="h" contenteditable="true"></div><div id="i" contenteditable="false"></div><button id="j"></button><button id="k" role="combobox"></button>',
     );
-    const takes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].filter((id) => takesText(page.query(`#${id}`)));
+    const takes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'].filter((id) =>
+      takesText(page.query(`#${id}`)),
+    );
     assert.deepEqual(takes, ['a', 'b', 'e', 'f', 'g', 'h']);
   });
 });

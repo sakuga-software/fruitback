@@ -144,8 +144,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 ### The rules, in short
 
 - **A key typed in a field of the widget never reaches a shortcut of the page.** A field is a text
-  input, a `textarea`, a `select`, an element you can edit, or a `textbox`, `searchbox` or
-  `combobox`; a box, a radio and a button are not. `keepTyping` (`key-guard.ts`), set by
+  input, a `textarea`, a `select`, an element you can edit, or a `textbox` or `searchbox`; a box, a
+  radio, a button, and a button that says `combobox` are not. `keepTyping` (`key-guard.ts`), set by
   `createCaptureHost`, listens on the `window` in the capture phase for `keydown`, `keypress`,
   `keyup`, `beforeinput` and `input`. For an event whose own target (`composedPath()[0]`) is a field
   of the root, it calls `stopImmediatePropagation()`, then gives the field a copy of the event.
