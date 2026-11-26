@@ -169,7 +169,7 @@ clear unless this list says otherwise:
   `postgres`, which is the default. A note sent to a tracker leaves its id there, and at most 64
   characters of its text in the index (below).
 - The accounts: the address of each person, the name they gave, the id each provider gives them,
-  their language; the workspaces, their members and roles, the sites and the address of each site.
+  their language, the look of the console they chose; the workspaces, their members and roles, the sites and the address of each site.
   No password, and no token of a provider.
 - The sessions, of the extension and of the console: SHA-256 digests of each code and token, never
   the token, with the name and the dates of each.
@@ -181,6 +181,8 @@ clear unless this list says otherwise:
   the address of the session only to a session of a member of the workspace whose role sees the
   tracker. It is added to each answer after the cache, so a reader never gets it from the answer
   of another; and only an `https` address is given.
+- The notes of visitors that wait for a member, on a site that holds them: the note and the digest
+  of the key of the browser, in `held_notes`, until a member answers it, and 30 days at most.
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit. For the notes of
   a visitor in an hour, the address and the digest of the key of the browser, with the
   site, for two hours.
@@ -2030,6 +2032,27 @@ identity is asked for (`openid email profile`).
   test:`takes one of two providers, and not both, when two unlinks come at the same moment`. This
   holds for one process of the worker, as the lock of a workspace does.
 
+### The look of the console a person chose (FRU-716)
+
+- A person sets the look of their own console, and nobody else's. `POST /console/me/appearance`
+  writes the account of the cookie, from the console (its `Origin`), and no route takes an id:
+  test:`sets the appearance of the person of the cookie only, by a POST of the console`. The token
+  of an extension opens no route of the console.
+- The worker keeps eight words and numbers it knows, and nothing else: an object with the eight
+  fields of an appearance, each one a value of `APPEARANCE_CHOICES`. Anything else is `400
+  invalid-appearance`, and the account keeps what it had: test:`refuses what is not a whole
+  appearance, and keeps the one the account had`. No colour, no CSS and no text of the person is
+  kept: the console turns each word into the values of its own tokens.
+- `GET /console/me` answers it to the person alone; no other answer carries it, and no other person
+  reads it. A value kept before a console that no longer knows it is read field by field, and each
+  unknown field is the default (`readAppearance` of the console).
+- The browser keeps a copy for the first paint (`public/appearance.js`). The console writes the
+  choice of the account there at each `/console/me`, and takes it away when the account has none
+  and at a sign-out, so the choice of one account does not stay for the next person of a shared
+  browser. Until the first `/console/me` of that next person answers, the page can show the copy
+  left by an account whose session ended without a sign-out: it is a look, and no data of that
+  account.
+
 ### The other addresses of an account (FRU-450)
 
 Decisions of Mathieu, 2026-10-25. An account has one primary address (`user.email` of better-auth)
@@ -2600,6 +2623,37 @@ the database for a site with no destination.
   session from one address, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
 
+### A reply to a note, from the console (FRU-712)
+
+`POST /console/workspaces/<id>/notes/<note>/replies` with `{ body }` writes a reply under a note,
+from its panel in the console.
+
+- Who. Whoever reads the note in the console: a member of the workspace, of any role, on any site,
+  and a guest only on a site shared with them. A note of another site, a note that is not one and a
+  person of another workspace are `404`, with nothing written, as the read of the note.
+  test:`takes the reply of a guest on a site shared with them, and answers 404 on any other site`.
+- Not a visitor. The route is a route of the console: the cookie of a person, read again in the
+  database at each call, with the `Origin` of the console, as every write of the console. No cookie
+  is `401`, and so is a session of the extension; a cookie sent by another page of the same site, or
+  with no `Origin`, is `403`. A member who left the workspace is `404` with the cookie they held. A
+  suspended workspace writes nothing: the route is behind the one guard of the writes.
+  test:`refuses whoever is not a person of the console of this workspace, and writes nothing`,
+  test:`refuses a member who left the workspace, with the cookie they held`.
+- In whose name. The account of the cookie, as a session of the workspace is named on the page:
+  the name of the account, or its address, and « member of » the workspace. A name in the body is
+  not read. test:`writes the reply of a member in the tracker of the note, named by their account`.
+- Where. The way of a reply from the page (`writeReply` of `reply-routes.ts`): the note is read in
+  its store first, and the reply goes to the place that holds it, its tracker or the database of the
+  worker. There is no second way to send a reply. Where the page takes no reply, the console takes
+  none: a worker or a connector that hides the replies, Slack, GitHub, and a task written by hand,
+  which is in no thread, are `403 replies-not-taken`.
+  test:`answers 403 replies-not-taken when the worker shows no reply, and on a task written by hand`.
+- How much. 1 to 2 000 characters, refused beyond and never cut, as on the page. The reply of a
+  person of the console is not counted apart, as a member's on the page is not: the limit of all the
+  requests applies. test:`takes 1 to 2000 characters, and refuses an empty reply or a longer one, never cut`.
+- Nothing new is kept. The reply is in the tracker or in the database, where a reply from the page
+  is; a store that does not answer is `502`, and the console keeps the text.
+
 ### A visitor known by the key of their browser (FRU-700)
 
 A visitor with no account is told which notes are theirs: « You · this browser ». The worker knows
@@ -2704,6 +2758,48 @@ the widget says « Send it again later » with the text kept.
   limit of the requests of an address (`RATE_LIMIT_PER_MINUTE`) still holds under it.
 - The guard is taken out of a copy of `feedback-routes.ts`, and the 11th note goes:
   test:`fails without the count of the route (planted violation)`.
+
+### The notes of visitors that wait for a member (FRU-704)
+
+The line « Hold new visitor notes » of the card « Safeguards » keeps a note of a visitor out of the
+tracker until a member approves it. Off by default, as the mockup draws it.
+
+- Which notes. A note or a batch sent with no token, on a site that takes the notes of anybody and
+  holds them. `POST /feedback` answers `202` with `held: true`, after the count of the hour, and
+  writes nothing to the tracker. A member, and a page that signs its reporter, send at once.
+  test:`keeps a note of a visitor out of the tracker, answers 202, and shows it in the queue « To approve »`.
+  test:`sends a note of a member at once, and holds nothing of it`.
+- What is kept, and where. The note as the route would have sent it (its text, its page, its anchor,
+  the name the visitor typed) and the digest of the key of the browser, never the key, in the table
+  `held_notes` of the database of the worker. A visitor sends no file.
+- Who reads and answers it. `GET /console/workspaces/<id>/held` and `POST …/held/<site>/<note>/approve`
+  or `reject`, for a role that sees the tracker (a member, an admin, an owner), on a site it reads. A
+  guest is refused: it reads no note of a visitor that nobody approved.
+  test:`refuses a guest, and a person of another workspace reads nothing`.
+- Approved, the note goes to the first place of the site as it would have gone at once, and is the
+  visitor's own in the index. One statement claims it first, for an hour, so two members who approve
+  at once send it once; the row goes only once the note is in its place, and only by the claim that
+  sent it. A tracker that refuses it or does not answer, an error, or an approval that stops half way
+  leaves it in the queue. A database that does not take the removal after the send leaves the row
+  claimed: the answer is still `200`, and the note shows again after the hour.
+  test:`lets a late approval neither release nor remove the claim of the next one (review of #987)`.
+  test:`answers 200 for a note sent to its place even when its row is not removed at once (review of #987)`.
+  A release that the database does not take after a failed send leaves the row claimed for the
+  hour too, and the answer still says why the note did not go; a reject that does not remove the
+  row answers an error, as nothing was rejected, and frees its claim, so the note shows again at once
+  (test:`shows a note again at once when its reject does not remove it (review of #987)`).
+  test:`still says why an approval failed when the database does not take the release (review of #987)`.
+  test:`sends an approved note to its place, as the visitor’s own, once`.
+  test:`keeps the note in the queue when its tracker does not answer the approval`.
+  test:`keeps the note when its send throws, and gives it back when an approval stops half way (review of #987)`.
+- Rejected, the row goes, and nothing is sent.
+  test:`removes a rejected note, and sends it nowhere`.
+- How long. 30 days, then the note goes, unanswered: the queue does not show it and an approval does
+  not send it from then, and the sweep of the worker deletes the row within the hour. A site removed
+  takes its held notes with it.
+  test:`forgets a note that waited 30 days, in the queue at once and in the table at the sweep`.
+- The guard is taken out of a copy of `feedback-routes.ts`, and the note goes at once:
+  test:`fails when the route does not hold (planted violation)`.
 
 ### « Looks fixed » and « Still wrong », from the extension (FRU-294)
 

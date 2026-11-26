@@ -478,6 +478,9 @@ export async function authOptions(
     user: {
       additionalFields: {
         locale: { type: 'string', required: false, input: false },
+        // The look of the console the person chose (FRU-716). `input: false`: only the route of the
+        // worker sets it, after `readAppearanceChoice`.
+        appearance: { type: 'json', required: false, input: false },
         ...INSTANCE_ADMIN_FIELDS,
       },
       // FRU-415: a link from « My account » writes no row on the way back from the provider. It is

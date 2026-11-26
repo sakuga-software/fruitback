@@ -910,7 +910,7 @@ export function sentFromHere(
 /** The key that sends a reply, written as a key and not as a word, as the kit writes its keys. */
 const SENDS_A_REPLY: Readonly<Record<string, true>> = { Enter: true };
 
-/** The longest reply the worker takes (`REPLY_LENGTH` of `apps/worker/src/app.ts`, FRU-257). */
+/** The longest reply the worker takes (`REPLY_LENGTH` of `apps/worker/src/reply-text.ts`, FRU-257). */
 export const REPLY_MAX_LENGTH = 2000;
 
 /** What a reply that did not go says. The text stays in the field. */

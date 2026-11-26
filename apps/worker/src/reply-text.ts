@@ -9,6 +9,12 @@ import {
 import type { CheckVerdict, NewCheck, NewEdit, NewMove, NewReply, NewWithdrawal } from './store.ts';
 
 /**
+ * The longest reply, in characters. A longer one is refused, never cut: by the widget, by `/mcp`
+ * and by the console (FRU-712).
+ */
+export const REPLY_LENGTH = 2000;
+
+/**
  * The text of a reply in a tracker (FRU-257): one line that says who wrote it, then what they wrote,
  * quoted.
  *

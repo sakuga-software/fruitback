@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, foreignKey, index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, index, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 /**
  * The tables of better-auth, in the schema of the database of a worker (FRU-144, FRU-180).
@@ -48,6 +48,10 @@ export const user = pgTable(
       .notNull(),
     // The language a person chose (FRU-146): an additional field of `user` in `authOptions`.
     locale: text('locale'),
+    // The look of the console the person chose (FRU-716), checked by `readAppearanceChoice` before
+    // each write. Empty: the default look. An additional field of `user` in `authOptions`, which no
+    // request to better-auth gives.
+    appearance: jsonb('appearance'),
     // The administrator of the instance (FRU-261): `role` is `admin` for one, NULL for the others.
     // The four columns are the ones of the admin plugin of better-auth, which the worker does not
     // mount: additional fields of `user` in `authOptions`. `instance-admin.ts` says who reads them.

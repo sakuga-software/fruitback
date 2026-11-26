@@ -112,6 +112,7 @@ import { excerptOf } from './notes-index.ts';
 import { changedTaskFields, ownStatusName } from './note-events.ts';
 import { queueTaskEvents } from './note-events-postgres.ts';
 import { StoreError } from './store.ts';
+import { keptAppearanceOf } from './appearance.ts';
 import { MAX_LABELS, type TaskChange, type TaskLabel } from './task-fields.ts';
 
 /**
@@ -183,6 +184,7 @@ const SITE_WITH_DESTINATION = {
   visitor_edit: sites.visitor_edit,
   visitor_delete: sites.visitor_delete,
   visitor_notes_per_hour: sites.visitor_notes_per_hour,
+  hold_visitor_notes: sites.hold_visitor_notes,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -911,6 +913,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .update(user)
           .set({ locale: locale ?? null, updatedAt: new Date() })
+          .where(eq(user.id, person)),
+      );
+    },
+
+    async appearanceOf(person) {
+      const rows = await run((db) => db.select({ appearance: user.appearance }).from(user).where(eq(user.id, person)));
+
+      return keptAppearanceOf(rows[0]?.appearance);
+    },
+
+    async setAppearance(person, appearance) {
+      await run((db) =>
+        db
+          .update(user)
+          .set({ appearance: appearance ?? null, updatedAt: new Date() })
           .where(eq(user.id, person)),
       );
     },
@@ -1691,7 +1708,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async addSite(
       workspace,
-      { origin, visibility, writers, notifyDone, visitorEdit, visitorDelete, visitorNotesPerHour },
+      { origin, visibility, writers, notifyDone, visitorEdit, visitorDelete, visitorNotesPerHour, holdVisitorNotes },
     ) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
       // the destinations it had, so the statement that writes it reads them too. It keeps who writes
@@ -1712,6 +1729,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               visitor_edit: visitorEdit ?? DEFAULT_VISITOR_RIGHT,
               visitor_delete: visitorDelete ?? DEFAULT_VISITOR_RIGHT,
               visitor_notes_per_hour: visitorNotesPerHour ?? DEFAULT_VISITOR_NOTES_PER_HOUR,
+              hold_visitor_notes: holdVisitorNotes ?? false,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1725,6 +1743,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 ...(visitorEdit === undefined ? {} : { visitor_edit: visitorEdit }),
                 ...(visitorDelete === undefined ? {} : { visitor_delete: visitorDelete }),
                 ...(visitorNotesPerHour === undefined ? {} : { visitor_notes_per_hour: visitorNotesPerHour }),
+                ...(holdVisitorNotes === undefined ? {} : { hold_visitor_notes: holdVisitorNotes }),
               },
             })
             .returning({
@@ -1737,6 +1756,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               visitor_edit: sites.visitor_edit,
               visitor_delete: sites.visitor_delete,
               visitor_notes_per_hour: sites.visitor_notes_per_hour,
+              hold_visitor_notes: sites.hold_visitor_notes,
             }),
         );
 
@@ -1752,6 +1772,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             visitor_edit: site.visitor_edit,
             visitor_delete: site.visitor_delete,
             visitor_notes_per_hour: site.visitor_notes_per_hour,
+            hold_visitor_notes: site.hold_visitor_notes,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

@@ -109,6 +109,34 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.signIn({ ...ALICE, locale: 'en-US' })).locale, 'en-US');
   });
 
+  it('keeps the appearance a person chose with their account alone, and a sign-in keeps it (FRU-716)', async (store) => {
+    const alice = await store.signIn(ALICE);
+    const bob = await store.signIn(BOB);
+    const dark = {
+      mode: 'dark',
+      light: 'slate',
+      dark: 'graphite',
+      sidebar: 'ink',
+      accent: 'blue',
+      density: 'comfortable',
+      radius: 0,
+      fontSize: 12,
+    } as const;
+    assert.equal(await store.appearanceOf(alice.id), undefined);
+
+    await store.setAppearance(alice.id, dark);
+    assert.deepEqual(await store.appearanceOf(alice.id), dark);
+    assert.equal(await store.appearanceOf(bob.id), undefined);
+    // No other read of the account carries it: `/console/me` asks for it alone.
+    assert.equal('appearance' in ((await store.account(alice.id)) ?? {}), false);
+    await store.signIn(ALICE);
+    assert.deepEqual(await store.appearanceOf(alice.id), dark, 'a sign-in from another browser changed it');
+
+    await store.setAppearance(alice.id, undefined);
+    assert.equal(await store.appearanceOf(alice.id), undefined);
+    assert.equal(await store.appearanceOf('acc_nobody'), undefined);
+  });
+
   it('keeps the name a person chose, and a later sign-in does not write over it (FRU-249)', async (store) => {
     const { alice } = await world(store);
 
@@ -238,6 +266,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       visitorDelete: 'while-open',
       // FRU-704: the notes of a visitor in an hour of the mockup, for a new site.
       visitorNotesPerHour: 10,
+      // FRU-704: « Hold new visitor notes » is off for a new site, as the mockup draws it.
+      holdVisitorNotes: false,
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -396,6 +426,25 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
     await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members', visitorNotesPerHour: 20 });
     assert.equal((await store.clientMap())[made.id]?.visitorNotesPerHour, undefined);
+  });
+
+  it('holds no note of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.holdVisitorNotes, false);
+    assert.equal((await store.client(made.id))?.holdVisitorNotes, undefined);
+    assert.equal(
+      (await store.addSite(workspace.id, { origin, visibility: 'everyone', holdVisitorNotes: true })).holdVisitorNotes,
+      true,
+    );
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).holdVisitorNotes, true);
+    assert.equal((await store.client(made.id))?.holdVisitorNotes, true);
+    // A site of its members only has no note of a visitor to hold.
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    assert.equal((await store.clientMap())[made.id]?.holdVisitorNotes, undefined);
   });
 
   it('keeps one address apart in two workspaces', async (store) => {

@@ -1,8 +1,12 @@
+import { handleHeld } from './console-held.ts';
+import type { HeldNote, HeldNotes } from './held-notes.ts';
+import type { HeldSent } from './feedback-routes.ts';
 import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
 import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
+import type { ReplyToNote } from './console-replies.ts';
 import { handleRail } from './console-rail.ts';
 import { askLinear, handleConnectors, listRepositories } from './console-connectors.ts';
 import { pluginOf } from './trackers/index.ts';
@@ -11,6 +15,7 @@ import type { TrackerApps } from './trackers/oauth.ts';
 import type { Http } from './trackers/plugin.ts';
 import { accessOf, askPlugin, readOf } from './trackers/routes.ts';
 import { readJsonObject } from './bounded-body.ts';
+import { readAppearanceChoice } from './appearance.ts';
 import {
   type InstanceAdminContext,
   type InstanceAdminReads,
@@ -100,8 +105,14 @@ export type ConsoleApiContext = {
   tasks?: 'on' | 'off';
   /** FRU-653: one note as its page reads it. Absent: the page of a task is not read. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
+  /** FRU-712: writes a reply under a note of a page. Absent: the console writes no reply. */
+  replyToNote?: ReplyToNote;
   /** Who to tell when a note is done (FRU-604). */
   done?: DoneNoticeSeams;
+  /** FRU-704: the notes of visitors that wait for a member. Absent: the queue is empty. */
+  heldNotes?: HeldNotes;
+  /** FRU-704: sends a note a member approved to its place. Absent: an approval answers `502`. */
+  sendHeld?: (held: HeldNote) => Promise<HeldSent>;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
@@ -227,6 +238,8 @@ type SiteView = {
   visitorDelete: VisitorRight;
   /** FRU-704: the notes a visitor leaves in an hour, `0` for no limit, as it is stored. */
   visitorNotesPerHour: VisitorNoteLimit;
+  /** FRU-704: « Hold new visitor notes », as it is stored. */
+  holdVisitorNotes: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -249,6 +262,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visitorEdit: site.visitorEdit,
     visitorDelete: site.visitorDelete,
     visitorNotesPerHour: site.visitorNotesPerHour,
+    holdVisitorNotes: site.holdVisitorNotes,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -618,6 +632,7 @@ export async function handleConsoleApi(
   const isApi =
     pathname === '/console/me' ||
     pathname === '/console/me/locale' ||
+    pathname === '/console/me/appearance' ||
     pathname === '/console/me/name' ||
     pathname === '/console/workspaces' ||
     WORKSPACE_PATH.test(pathname);
@@ -629,15 +644,17 @@ export async function handleConsoleApi(
 
   if (pathname === '/console/me') {
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-    const [memberships, instanceAdmin] = await Promise.all([
+    const [memberships, instanceAdmin, appearance] = await Promise.all([
       context.accounts.memberships(account.id),
       context.accounts.isInstanceAdmin(account.id),
+      context.accounts.appearanceOf(account.id),
     ]);
 
     return json(
       200,
       {
-        account,
+        // FRU-716: the look of the console the person chose, for their console alone. No other answer has it.
+        account: appearance === undefined ? account : { ...account, appearance },
         instanceAdmin,
         // FRU-651: the console offers no change to a note this worker keeps when it keeps no task.
         tasks: context.tasks !== 'off',
@@ -664,6 +681,20 @@ export async function handleConsoleApi(
     await context.accounts.setLocale(account.id, locale);
 
     return json(200, { account: { ...account, locale } }, headers);
+  }
+
+  // The look of the console the person chose (FRU-716), as `/console/me/locale`: their own account
+  // only. A whole appearance, each field a value the console knows, or `null` for the default look.
+  if (pathname === '/console/me/appearance') {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const body = await readJsonObject(request);
+    const appearance = body?.appearance === null ? undefined : readAppearanceChoice(body?.appearance);
+    if (body?.appearance !== null && appearance === undefined) {
+      return json(400, { error: 'invalid-appearance' }, headers);
+    }
+    await context.accounts.setAppearance(account.id, appearance);
+
+    return json(200, { appearance: appearance ?? null }, headers);
   }
 
   // The name on the notes of the person (FRU-249). Their own account only. The notes already sent
@@ -774,6 +805,19 @@ export async function handleConsoleApi(
     return json(200, { reads: traced, actions }, headers);
   }
 
+  // FRU-704: the queue « To approve »: `console-held.ts`.
+  const held = await handleHeld(rest, request, {
+    workspace: workspaceId as string,
+    account: account.id,
+    allowed,
+    accounts: context.accounts,
+    held: context.heldNotes,
+    send: context.sendHeld,
+    now: context.now ?? Date.now(),
+    headers,
+  });
+  if (held !== undefined) return held;
+
   // The notes of the workspace, and « Send again » (FRU-244): `console-notes.ts`.
   const notes = await handleNotes(rest, request, {
     workspace: workspaceId as string,
@@ -784,6 +828,17 @@ export async function handleConsoleApi(
     noteIndex: context.noteIndex,
     tasks: context.tasks ?? 'on',
     ...(context.readNote === undefined ? {} : { readNote: context.readNote }),
+    ...(context.replyToNote === undefined ? {} : { replyToNote: context.replyToNote }),
+    // FRU-712: who writes a reply from the console, as the widget names a session of the workspace.
+    replier: async () => {
+      const membership = (await context.accounts.memberships(account.id)).find(
+        (each) => each.workspace.id === workspaceId,
+      );
+
+      return membership === undefined
+        ? undefined
+        : { kind: 'member', name: account.name ?? account.email, workspace: membership.workspace.name };
+    },
     ...(context.done === undefined ? {} : { done: context.done }),
     accounts: context.accounts,
     kv: context.kv,
@@ -898,6 +953,11 @@ export async function handleConsoleApi(
     if (body?.visitorNotesPerHour !== undefined && visitorNotesPerHour === undefined) {
       return json(400, { error: 'invalid-visitor-notes-per-hour' }, headers);
     }
+    // FRU-704: absent, a new site holds nothing and a site that exists keeps what it had.
+    const holdVisitorNotes = body?.holdVisitorNotes;
+    if (holdVisitorNotes !== undefined && typeof holdVisitorNotes !== 'boolean') {
+      return json(400, { error: 'invalid-hold-visitor-notes' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -907,6 +967,7 @@ export async function handleConsoleApi(
       ...(visitorEdit === undefined ? {} : { visitorEdit }),
       ...(visitorDelete === undefined ? {} : { visitorDelete }),
       ...(visitorNotesPerHour === undefined ? {} : { visitorNotesPerHour }),
+      ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

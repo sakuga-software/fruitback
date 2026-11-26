@@ -42,7 +42,7 @@ import {
   takesReplies,
   takesStatuses,
 } from './store.ts';
-import { attachmentStoreFor } from './worker-stores.ts';
+import { attachmentStoreFor, heldNotesFor } from './worker-stores.ts';
 import { OWN_SOURCE, type SiteStatus, envelopeStatuses, withoutTrackerStatus } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
 import type { StageExceptions } from './linear.ts';
@@ -546,6 +546,20 @@ export async function postFeedback(
     ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders)
     : undefined;
   if (limited !== undefined) return limited;
+  // FRU-704: « Hold new visitor notes ». The note of a visitor waits for a member, and goes nowhere yet.
+  // A visitor sends no file (`takeFiles` needs a session): a note that names one goes the way below,
+  // which refuses it.
+  if (identity.visitor && route.client?.holdVisitorNotes === true && attachmentIds.length === 0) {
+    return heldAnswer(
+      config,
+      context,
+      checks.visitorOf(request, clientId),
+      route.client,
+      clientId,
+      [attributed],
+      corsHeaders,
+    );
+  }
 
   try {
     // A note of before FRU-331, sent again, names its picture in its note: it goes with it while the
@@ -667,6 +681,43 @@ async function visitorLimit(
   }
 
   return json(429, { error: 'visitor-limit', perHour }, corsHeaders);
+}
+
+/**
+ * Keeps the notes of a visitor for a member (FRU-704), and answers `202` with `held: true`: the note is
+ * kept, and is not in the tracker yet. One note answers `{ held, id }`, a batch `{ results }` with each
+ * id held. A database that does not answer is `502 store-unavailable`, so the widget keeps the text and
+ * tries again; a note held already answers `202` again.
+ */
+async function heldAnswer(
+  config: Served,
+  context: RequestContext | undefined,
+  visitor: string | undefined,
+  client: ClientConfig,
+  clientId: string | undefined,
+  notes: readonly Note[],
+  corsHeaders: Record<string, string>,
+  batch = false,
+): Promise<Response> {
+  const held = context?.heldNotes ?? heldNotesFor(config);
+  const workspace = client.workspace;
+  if (held === undefined || workspace === undefined || clientId === undefined) {
+    return json(502, { error: 'store-unavailable' }, corsHeaders);
+  }
+  const now = Date.now();
+  try {
+    for (const note of notes) {
+      await held.hold({ site: clientId, workspace, note, ...(visitor === undefined ? {} : { visitor }), heldAt: now });
+    }
+  } catch (error) {
+    console.error(`[fruitback] a note of site ${clientId} was not held: ${String(error)}`);
+
+    return json(502, { error: 'store-unavailable' }, corsHeaders);
+  }
+
+  return batch
+    ? json(202, { results: notes.map((note) => ({ id: note.id, held: true })) }, corsHeaders)
+    : json(202, { held: true, id: notes[0]?.id }, corsHeaders);
 }
 
 /** The help of a `502 destination-unavailable` for the author of this request (FRU-640). */
@@ -798,6 +849,23 @@ async function postBatch(
     await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
 
     return limited;
+  }
+  // FRU-704: a batch of a visitor on a site that holds their notes waits for a member, whole. A note
+  // held already is not held twice: its site and its id are the key. The locks of the Kv go at once.
+  if (visitor && route.client?.holdVisitorNotes === true) {
+    const answer = await heldAnswer(
+      config,
+      context,
+      checks.visitorOf(request, clientId),
+      route.client,
+      clientId,
+      fresh,
+      corsHeaders,
+      true,
+    );
+    await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
+
+    return answer;
   }
 
   let planted: BatchAnswer[] = [];
@@ -1035,5 +1103,58 @@ async function statusesOfSite(
     );
 
     return [];
+  }
+}
+
+/** What became of a held note a member approved (FRU-704). */
+export type HeldSent =
+  | { ok: true; issue: CreatedIssue }
+  /** The site no longer takes notes, or holds none of this id: nothing is sent. */
+  | { ok: false; reason: 'site-gone' }
+  /** The place or its tracker refused or did not answer: the note waits again. */
+  | { ok: false; reason: 'place-gone' | 'store-unavailable' | 'no-destination' };
+
+/**
+ * Sends a note that waited for a member to its place (FRU-704), as `postFeedback` would have sent it
+ * at once: the first place of the site, its index row with the digest of the visitor's browser, the
+ * place marked as working, the cache of its page dropped. The route of the console takes the note out
+ * of the queue first, and puts it back when this answers a failure of the place.
+ *
+ * No e-mail of a note done is offered: that question is asked in the browser of the visitor, right
+ * after the note, and the visitor left long ago. An agent is not started either, as for any note of
+ * a visitor (`verifiedNotesArrived`).
+ */
+export async function sendHeldNote(
+  seams: {
+    store: NoteStore;
+    kv: Kv;
+    noteIndex: NoteIndex | undefined;
+    accounts: AccountStore | undefined;
+    route: ClientResolution;
+  },
+  held: { site: string; workspace: string; note: Note; visitor?: string },
+): Promise<HeldSent> {
+  const { store, kv, noteIndex, accounts, route } = seams;
+  if (!route.ok || route.client === undefined || route.client.workspace !== held.workspace) {
+    return { ok: false, reason: 'site-gone' };
+  }
+  const target = route.client;
+  try {
+    const { files: _files, ...issue } = await store.create(held.note, target, route.policy);
+    await notePlaceWorks(accounts, held.site, target);
+    await invalidatePages(kv, [held.note.page.url]);
+    const entry = noteEntry(held.workspace, held.site, held.note, 'script', target, issue, held.visitor);
+    await indexed(noteIndex, (index) => index.record([entry], Date.now()));
+
+    return { ok: true, issue };
+  } catch (error) {
+    if (error instanceof PlaceUnavailable) {
+      await notePlaceGone(accounts, held.site, target, error);
+
+      return { ok: false, reason: 'place-gone' };
+    }
+    if (error instanceof NoDestination) return { ok: false, reason: 'no-destination' };
+    if (error instanceof StoreError) return { ok: false, reason: 'store-unavailable' };
+    throw error;
   }
 }

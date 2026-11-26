@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router';
 import { API, type Account, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
+import { adoptAppearance } from '../appearance';
 import { instanceOf } from '../instance';
 import { RailIcon, type RailIconName } from '../rail-icons';
 import { ReleaseBanner } from '../release-banner';
@@ -55,6 +56,7 @@ export default function AdminFrame() {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/sign-in', { replace: true });
       adoptLanguage(me.data.account, saveLanguage);
+      adoptAppearance(me.data.account);
       if (me.data.instanceAdmin !== true) return navigate('/', { replace: true });
       setContext({ me: me.data });
     });

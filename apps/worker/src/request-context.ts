@@ -14,6 +14,7 @@ import type { Kv } from './kv.ts';
 import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { DoneNoticeSeams, DoneNotices } from './done-notices.ts';
+import type { HeldNotes } from './held-notes.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
@@ -69,6 +70,8 @@ export type RequestContext = {
   noteIndex?: NoteIndex;
   /** Who to tell when a note is done (FRU-604). A suite hands over one on PGlite. */
   doneNotices?: DoneNotices;
+  /** The notes of visitors that wait for a member (FRU-704). A suite hands over one on PGlite. */
+  heldNotes?: HeldNotes;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
   /**
@@ -182,7 +185,7 @@ export type CallerChecks = {
   ) => Promise<string | undefined>;
   /** Whether the caller is a guest, who reads no reference of a tracker: `hidesTracker` of `app.ts`. */
   hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
-  /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
+  /** The longest reply: `REPLY_LENGTH` of `reply-text.ts`, where the side panel of the extension reads it. */
   REPLY_LENGTH: number;
   /**
    * FRU-721: the widget read a page of this site: when it was seen there, and by which way

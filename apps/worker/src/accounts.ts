@@ -1,6 +1,7 @@
 import { isOneOf } from './one-of.ts';
 import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
+import type { AppearanceChoice } from './appearance.ts';
 import { NOTE_STAGES, type NoteStage, type TaskIssue } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 import { PLUGIN_KINDS } from './trackers/kinds.ts';
@@ -403,6 +404,8 @@ export type Site = {
   visitorDelete: VisitorRight;
   /** The notes a visitor with no account leaves in an hour, `0` for no limit (FRU-704). */
   visitorNotesPerHour: VisitorNoteLimit;
+  /** Whether a note of a visitor waits for a member before it goes to its place (FRU-704). */
+  holdVisitorNotes: boolean;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -664,6 +667,13 @@ export type AccountStore = {
   /** The language the person chose. `undefined` removes the choice. */
   setLocale(account: string, locale: string | undefined): Promise<void>;
   /**
+   * The look of the console the person chose (FRU-716), as it was kept: an object, or `undefined`
+   * for none. Read for `GET /console/me` alone, so no other answer carries it.
+   */
+  appearanceOf(account: string): Promise<Record<string, unknown> | undefined>;
+  /** Keeps the look of the console the person chose, checked by `readAppearanceChoice`. `undefined` removes it. */
+  setAppearance(account: string, appearance: AppearanceChoice | undefined): Promise<void>;
+  /**
    * The name the person chose for their notes (FRU-249), read by `readPersonName`. A later sign-in
    * does not write over it: a provider gives a name only to an account that has none.
    */
@@ -789,7 +799,7 @@ export type AccountStore = {
    * absent: `defaultWriters` for a new site, and what it was for a site that exists (FRU-330), so a
    * caller that does not know the field opens nothing and closes nothing. The same for
    * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
-   * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`.
+   * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`, and `holdVisitorNotes`, off.
    */
   addSite(
     workspace: string,
@@ -801,6 +811,7 @@ export type AccountStore = {
       visitorEdit?: VisitorRight;
       visitorDelete?: VisitorRight;
       visitorNotesPerHour?: VisitorNoteLimit;
+      holdVisitorNotes?: boolean;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
@@ -1290,6 +1301,8 @@ export function clientOf(site: Site): ClientMap[string] {
           visitorEdit: site.visitorEdit,
           visitorDelete: site.visitorDelete,
           ...(site.visitorNotesPerHour > 0 ? { visitorNotesPerHour: site.visitorNotesPerHour } : {}),
+          // FRU-704: a note of a visitor waits for a member. Absent: it goes at once.
+          ...(site.holdVisitorNotes ? { holdVisitorNotes: true as const } : {}),
         }
       : {}),
     // The first place is where the client routes, as when a site had one destination.

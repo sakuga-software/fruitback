@@ -563,8 +563,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   computes each pair: 4.5:1 for a text, 3:1 for the border of a control and the ring). **No flash**:
   the choice and the variables of its two themes are kept in `localStorage`, and
   `public/appearance.js`, a script of the page before the bundle, writes them on `<html>` before the
-  first paint; it knows no theme. The mockup keeps the choice with the account: the worker keeps no
-  appearance yet, so this browser keeps it until FRU-716. The density is `--spacing-row`, which the
+  first paint; it knows no theme. **The account keeps the choice** (FRU-716): each choice goes to
+  `POST /console/me/appearance` (`keepWithAccount`, one request at a time, then only the last
+  choice made meanwhile), and each answer of `/console/me` writes the choice of the account in this
+  browser (`adoptAppearance`), or takes the copy away when the account holds none, so the choice of
+  one account never stays for another one. A sign-out takes it away too (`forgetAppearance`). A
+  choice on its way wins over an answer of `/console/me` read before it. A choice the account did
+  not take shows in the tab, and the page says so. `app/appearance-account.test.ts` holds the
+  values of the worker and of the console together. The density is `--spacing-row`, which the
   table of the notes reads; a table that is drawn again reads it too.
   `e2e/console-workspace-settings.spec.ts` holds the entry by role, the section, « Save » disabled
   with no change, and the deletion typed in its dialog.
@@ -962,10 +968,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     takes the whole width, 44 px high in 16 px (iOS zooms on a smaller font), and the groups stay on
     one line that scrolls sideways. A tile: the logo in a box
     of 36 px, the name, one line of what a note becomes there (cut at its end; the long sentence is
-    its tooltip), and its state: « Connected » (with a « + » that connects another one: a workspace
-    can connect a second Linear or a second address), « Connect », « Soon » (no connector of this
+    its tooltip), and its state: « Add » for a kind already connected, « Connect », « Soon » (no connector of this
     kind on this worker), or « Not set up » (the worker has the kind, and its operator did not set
-    it up: the line then says so). The routine says « New » beside its name. Where a tracker
+    it up: the line then says so). The routine says « New » beside its name. **A kind is connected
+    more than once** (FRU-727): two workspaces of Linear, two addresses. The worker already gives one
+    entry of `GET …/connectors` for each connection, with its account (its `label`), so the table has
+    a row for each, and the account tells them apart. The tile of a connected kind counts them in a
+    green disc of 16 px on the top right corner of its logo (`aria-hidden`), and offers « Add » in
+    place of « Connected » and « + »: it does what « Connect » does (the consent of Linear again, the
+    form of an address), and a screen reader hears « Add another Linear (2 connected) ». A person
+    who cannot add one (a member, a worker that cannot keep a key) reads « Connected », and hears the
+    count in words. Where a tracker
     connects two ways (the consent, a key or a token), « Connect » is the consent and a menu beside
     it offers the other. **The form of a source opens in its tile, which then takes the whole row**,
     and so does the sentence of a way back that went wrong (`LINEAR_RETURNS`, `GITHUB_RETURNS`,
@@ -1683,6 +1696,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
+- **« Hold new visitor notes » is the second line of « Safeguards » (FRU-704)**, a switch, sent where
+  anybody writes, « n/a » elsewhere. Its notes wait in the screen « To approve » (`/w/<id>/approve`),
+  an entry of « Views » in the bar for a role that sees the tracker, shown while notes wait or while
+  it is on screen: the bar reads `…/held/count` once by workspace, and the screen tells it each new
+  count. A note shows its site, its page, its author and its age; « Approve » and « Reject » answer
+  it, and a refusal says why, with the note still there.
 - **The e-mail of a note done (FRU-604) is the card « After a note »**, which the mockup does not
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».

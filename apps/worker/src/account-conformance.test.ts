@@ -321,6 +321,15 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   },
   {
     breaks:
+      'holds no note of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'never changes the switch of a site that exists',
+    replace: {
+      from: '...(holdVisitorNotes === undefined ? {} : { hold_visitor_notes: holdVisitorNotes }),',
+      to: '',
+    },
+  },
+  {
+    breaks:
       'gives a new site 10 notes of a visitor an hour, keeps the value on a site added again, and serves it where a visitor writes (FRU-704)',
     by: 'gives a new site no limit',
     replace: {
@@ -868,6 +877,15 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       after: 'async settleDelivery(id, outcome) {',
       from: '.set({ delivered_at: outcome.at })',
       to: '.set({ delivered_at: sql`${connectors.delivered_at}` })',
+    },
+  },
+  {
+    breaks: 'keeps the appearance a person chose with their account alone, and a sign-in keeps it (FRU-716)',
+    by: 'writes the appearance of one person on every account',
+    replace: {
+      after: 'async setAppearance(person, appearance) {',
+      from: '.where(eq(user.id, person))',
+      to: '.where(sql`true`)',
     },
   },
 ];

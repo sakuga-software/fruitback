@@ -152,6 +152,11 @@ name of their account and the workspace for a member, the name they typed (or «
 verified » for anybody else. The worker keeps no copy of a reply that went to a tracker. In Linear
 the comment is shown under the app of Fruitback, or under the owner of a personal key.
 
+A reply written from the panel of a note in the console is the same reply: it goes the same
+way, under the same line, with the name of the account of the person signed in to the console and
+their workspace, a guest included. The worker keeps nothing more for it, and no copy of a reply that
+went to a tracker.
+
 ### « Looks fixed » and « Still wrong » (FRU-294)
 
 A verdict on a note marked done is a reply: it goes where the note went, under the same line as a
@@ -260,6 +265,11 @@ The table `done_notices` keeps one row for each note that waits:
   one-minute windows, and keeps a window for two. It is a row of the table `kv` of the database,
   so that the replicas share one limit: the address is in the database for those two
   minutes, and in a backup taken during them. Expired rows are removed as requests come.
+- The note of a visitor that waits for a member, on a site that holds the notes of its visitors: its
+  text, its page, its anchor, the name the visitor typed and the digest of the key of their browser,
+  in the table `held_notes` of the database. It goes when a member approves it (it then goes to the
+  tracker, as any note) or rejects it, and after 30 days with no answer. The site chooses this in its
+  tab « Access », so that nothing a visitor writes reaches the tracker unseen.
 - The address and the key of a visitor, for two hours, on a site that limits the notes of a
   visitor in an hour (10 by default). The worker counts the notes of each visitor with no
   account by the digest of the key of their browser and by their address, on that site, over
@@ -523,10 +533,15 @@ what it writes each time.
   address of the server. `FRUITBACK_NO_UPDATE_CHECK=1` stops it. The worker keeps the answer in its
   memory, and nowhere else. The browser of the administrator keeps the version of a banner that they
   dismissed, in `localStorage`, and nothing else of it.
-- The browser of a person keeps the appearance they chose in Settings › Appearance, in
-  `localStorage` under `fruitback.appearance`: the theme, the mode, the tint of the sidebar, the
-  accent, the density, the radius, the size of the text, and the values of the tokens they give.
-  Nothing of it leaves the browser: the worker keeps no appearance. « Reset » erases it.
+- The account of a person keeps the appearance they chose in Settings › Appearance, so
+  their other browsers show it: the theme, the mode, the tint of the sidebar, the accent, the
+  density, the radius and the size of the text, as eight words and numbers of a fixed list. It is a
+  preference of display, for their own console: no other person reads it, and it goes with the
+  account when the account is deleted. « Reset » erases it from the account.
+- Their browser keeps a copy, in `localStorage` under `fruitback.appearance`, with the values of the
+  tokens it gives, so the first paint of a page shows it. The console writes the choice of the
+  account there at each sign-in and visit, and erases it when the account holds none and at a
+  sign-out.
 
 ### What the extension declares to Firefox (FRU-333)
 

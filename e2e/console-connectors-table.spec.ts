@@ -529,7 +529,9 @@ for (const locale of ['en', 'fr'] as const) {
     for (const each of await tiles(page).all())
       expect.soft((await box(each)).x + (await box(each)).width).toBeLessThanOrEqual(390);
     await page
-      .getByRole('button', { name: locale === 'en' ? 'Connect another REST API' : 'Connecter un autre API REST' })
+      .getByRole('button', {
+        name: locale === 'en' ? 'Add another REST API (1 connected)' : 'Ajouter un autre API REST (1 connecté)',
+      })
       .click();
     expect.soft(await sideScroll(page), 'the form of an address').toBe(0);
     await expectNoViolation(page, `390 px in ${locale}`);

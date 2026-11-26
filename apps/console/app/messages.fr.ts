@@ -746,6 +746,31 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Per hour, then the widget asks to wait': 'Par heure, puis le widget demande d’attendre',
   'No limit': 'Sans limite',
   '{count} / hour': '{count} / heure',
+  'To approve': 'À approuver',
+  'Notes from visitors on the sites that hold them. Approve one to send it on, or reject it.':
+    'Les notes des visiteurs sur les sites qui les retiennent. Approuvez-en une pour la transmettre, ou rejetez-la.',
+  'The tracker no longer has the place of this site. The note still waits.':
+    'L’outil de suivi n’a plus l’emplacement de ce site. La note attend toujours.',
+  'This site sends its notes nowhere yet. The note still waits.':
+    'Ce site n’envoie encore ses notes nulle part. La note attend toujours.',
+  'The tracker did not answer. The note still waits: try again.':
+    'L’outil de suivi n’a pas répondu. La note attend toujours : réessayez.',
+  'This site no longer takes notes. The note was removed.': 'Ce site ne prend plus de notes. La note a été retirée.',
+  'The note did not change. Try again.': 'La note n’a pas changé. Réessayez.',
+  'Rejected. The note was removed.': 'Rejetée. La note a été retirée.',
+  'Approved. The note was sent.': 'Approuvée. La note a été transmise.',
+  'Approved. The note was sent as {identifier}.': 'Approuvée. La note a été transmise sous {identifier}.',
+  'The notes to approve did not load. Try again.': 'Les notes à approuver ne se sont pas chargées. Réessayez.',
+  'No note waits for approval.': 'Aucune note n’attend d’approbation.',
+  'Notes to approve': 'Notes à approuver',
+  'A visitor': 'Un visiteur',
+  'a visitor': 'un visiteur',
+  'Approve the note of {who}': 'Approuver la note de {who}',
+  'Reject the note of {who}': 'Rejeter la note de {who}',
+  Approve: 'Approuver',
+  Reject: 'Rejeter',
+  'Hold new visitor notes': 'Retenir les nouvelles notes des visiteurs',
+  'A member approves before they are sent': 'Un membre les approuve avant leur envoi',
   'Cannot be changed once sent': 'Ne se modifie plus une fois envoyée',
   'Editable while the note is open': 'Modifiable tant que la note est ouverte',
   'The order form rejects postcodes with a space.':
@@ -1363,6 +1388,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Base size of the console': 'Taille de base de la console',
   'This browser does not keep your choice: it shows in this tab only, until you close it.':
     'Ce navigateur ne garde pas votre choix : il s’affiche dans cet onglet seulement, jusqu’à sa fermeture.',
+  'Your account did not keep this choice: other browsers do not show it. Choose again to retry.':
+    'Votre compte n’a pas gardé ce choix : les autres navigateurs ne l’affichent pas. Choisissez de nouveau pour réessayer.',
   // The page « General » of the settings, FRU-693.
   'Every member of {name} sees these.': 'Chaque membre de {name} les voit.',
   Identity: 'Identité',
@@ -1884,6 +1911,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Note moved by its author': 'Note déplacée par son auteur',
   'Status of the task changed': 'Statut de la tâche changé',
   'Reply to the note': 'Réponse à la note',
+  'Reply to this note': 'Répondre à cette note',
+  'Reply, it posts to {place} too': 'Répondre, la réponse part aussi dans {place}',
+  Send: 'Envoyer',
+  'The reply is too long: {max} characters at most.': 'La réponse est trop longue : {max} caractères au plus.',
+  'This note takes no reply.': 'Cette note ne prend pas de réponse.',
+  'The reply did not leave. Your text is kept: try again in a moment.':
+    'La réponse n’est pas partie. Votre texte est gardé : réessayez dans un instant.',
   'Fields of the task changed': 'Champs de la tâche changés',
   'This address is not in the workspace any more. Choose another one.':
     'Cette adresse n’est plus dans l’espace de travail. Choisissez-en une autre.',
@@ -2188,7 +2222,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '1 send not delivered': '1 envoi non livré',
   '{count} sends not delivered': '{count} envois non livrés',
   Soon: 'Bientôt',
-  'Connect another {source}': 'Connecter un autre {source}',
+  'Add another {source} (1 connected)': 'Ajouter un autre {source} (1 connecté)',
+  'Add another {source} ({count} connected)': 'Ajouter un autre {source} ({count} connectés)',
+  '1 connected': '1 connecté',
+  '{count} connected': '{count} connectés',
   'Other ways to connect {source}': 'Autres façons de connecter {source}',
   ...JIRA,
   ...GITLAB,

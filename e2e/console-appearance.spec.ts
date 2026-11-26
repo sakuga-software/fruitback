@@ -6,8 +6,10 @@ import { ACME, painted, rgb, sideScroll, stubWorker } from './console-workspace.
  * Settings › Appearance (FRU-694): the theme, the mode, the tint of the sidebar, the accent, the
  * density, the radius and the size of the text. Each choice shows at once, as the tokens of
  * `theme.css` written on <html>, and stays at the next visit of this browser, written before the
- * first paint by `public/appearance.js`. `app/appearance.test.ts` computes the contrasts of every
- * theme; this spec reads what the browser paints. The worker is answered by stubs.
+ * first paint by `public/appearance.js`. The account keeps the choice (FRU-716): `/console/me`
+ * answers it, so another browser shows it, and another account in this browser does not.
+ * `app/appearance.test.ts` computes the contrasts of every theme; this spec reads what the browser
+ * paints. The worker is answered by stubs; `account` of `stubWorker` keeps the appearance.
  */
 const CONSOLE = 'http://localhost:5178';
 const APPEARANCE = `${CONSOLE}/w/w1/account/appearance`;
@@ -27,7 +29,7 @@ const choose = (page: Page, group: string, name: string) =>
     .click();
 
 test('a theme, a tint and an accent show at once, and stay at the next visit with no flash', async ({ page }) => {
-  await stubWorker(page, { workspaces: [ACME] });
+  await stubWorker(page, { workspaces: [ACME], account: {} });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${CONSOLE}/w/w1/account`);
   await page
@@ -99,7 +101,11 @@ test('a theme, a tint and an accent show at once, and stay at the next visit wit
 test('the page shows the kept choice from its first render, so a press builds on it (raised in review)', async ({
   page,
 }) => {
-  await stubWorker(page, { workspaces: [ACME] });
+  // The account holds the choice this browser kept: `/console/me` changes nothing.
+  await stubWorker(page, {
+    workspaces: [ACME],
+    account: { appearance: { mode: 'dark', dark: 'graphite', accent: 'teal' } },
+  });
   await page.addInitScript(() => {
     if (sessionStorage.getItem('planted') !== null) return;
     sessionStorage.setItem('planted', '1');
@@ -138,10 +144,11 @@ test('a choice made in another tab shows here, and the next press builds on it (
   page,
   context,
 }) => {
-  await stubWorker(page, { workspaces: [ACME] });
+  const account = {};
+  await stubWorker(page, { workspaces: [ACME], account });
   await page.goto(APPEARANCE);
   const other = await context.newPage();
-  await stubWorker(other, { workspaces: [ACME] });
+  await stubWorker(other, { workspaces: [ACME], account });
   await other.goto(APPEARANCE);
   await choose(other, 'Theme', 'Midnight');
   // This tab follows: the page, and the choice it draws.
@@ -185,6 +192,76 @@ test('a browser that refuses to keep the choice shows it in this tab, and says s
   await expect(page.getByRole('alert')).toHaveCount(1);
   await page.getByRole('button', { name: 'Reset the appearance' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('the account keeps the choice: another browser shows it, another account here does not (FRU-716)', async ({
+  page,
+  browser,
+}) => {
+  const ana = {};
+  await stubWorker(page, { workspaces: [ACME], account: ana });
+  const sent: unknown[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/console/me/appearance')) sent.push(request.postDataJSON());
+  });
+  await page.goto(APPEARANCE);
+  await choose(page, 'Theme', 'Midnight');
+  await expect.poll(() => ana).toMatchObject({ appearance: { mode: 'dark', dark: 'midnight' } });
+  // The whole choice leaves, not the field that changed.
+  expect(sent).toEqual([
+    {
+      appearance: {
+        mode: 'dark',
+        light: 'slate',
+        dark: 'midnight',
+        sidebar: 'theme',
+        accent: 'red',
+        density: 'default',
+        radius: 6,
+        fontSize: 13,
+      },
+    },
+  ]);
+
+  // Another browser of Ana, which never chose: dark once the account answered, and from the first
+  // paint of its next page.
+  const elsewhere = await browser.newContext({ locale: 'en-US' });
+  const second = await elsewhere.newPage();
+  await stubWorker(second, { workspaces: [ACME], account: ana });
+  await second.goto(`${CONSOLE}/w/w1/sites`);
+  await expect.poll(() => painted(second.locator('body'), 'backgroundColor')).toEqual(rgb('#111a2e'));
+  await second.reload();
+  await expect(second.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(
+    await second.evaluate(() => JSON.parse(localStorage.getItem('fruitback.appearance') ?? 'null')?.appearance),
+  ).toMatchObject({ mode: 'dark', dark: 'midnight' });
+  await elsewhere.close();
+
+  // Ben, in the browser of Ana: his account holds no choice, so the one of Ana goes.
+  const ben = await browser.newContext({ locale: 'en-US', storageState: await page.context().storageState() });
+  const his = await ben.newPage();
+  await stubWorker(his, { workspaces: [ACME], account: { id: 'a2', email: 'ben@acme.dev' } });
+  await his.goto(`${CONSOLE}/w/w1/sites`);
+  await expect.poll(() => painted(his.locator('body'), 'backgroundColor')).toEqual(rgb('#ffffff'));
+  expect(await his.evaluate(() => localStorage.getItem('fruitback.appearance'))).toBeNull();
+  expect(await his.evaluate(() => document.documentElement.getAttribute('style') ?? '')).toBe('');
+  await ben.close();
+});
+
+test('a choice the account did not take shows here, and says so (FRU-716)', async ({ page }) => {
+  await stubWorker(page, {
+    workspaces: [ACME],
+    answer: (pathname, route) =>
+      pathname === '/console/me/appearance'
+        ? route.fulfill({ status: 400, json: { error: 'invalid-appearance' } })
+        : undefined,
+  });
+  await page.goto(APPEARANCE);
+  await choose(page, 'Theme', 'Midnight');
+  expect(await painted(page.locator('body'), 'backgroundColor')).toEqual(rgb('#111a2e'));
+  await expect(page.getByRole('alert')).toHaveText(
+    'Your account did not keep this choice: other browsers do not show it. Choose again to retry.',
+  );
 });
 
 test('an ink sidebar on a light theme writes its words light, and keeps its ring', async ({ page }) => {
