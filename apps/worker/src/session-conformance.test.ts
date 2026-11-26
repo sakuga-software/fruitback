@@ -12,6 +12,7 @@ import {
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   createMigratedPgliteDatabase,
   createMigratedRealDatabase,
   onDatabase,
@@ -30,6 +31,7 @@ const PGLITE = onDatabase(
   'createPostgresSessionStore',
   createMigratedPgliteDatabase,
   createPostgresSessionStore,
+  PGLITE_ELSEWHERE,
 );
 
 const SUBJECTS: Subject<SessionStore>[] = [
