@@ -23,7 +23,7 @@ import {
   placeBetween,
 } from '../parts/notes-model';
 import { NotesFailed } from '../parts/note-parts';
-import { type More, NotesMore } from '../parts/notes-more';
+import { NotesMore, moreStore } from '../parts/notes-more';
 import { NOTES_PER_READ, againLimit, appended, hasMore, wanted } from '../notes-chunks';
 import { NotesHead, NotesToolbar, Pinned, Places } from '../parts/notes-filters';
 import { NotesTable, useFoldedGroups } from '../parts/notes-table';
@@ -110,8 +110,7 @@ export default function Notes() {
   const [reading, setReading] = useState(false);
   // FRU-724: the notes after the list are read as it scrolls, by the cursor of the last answer. Their
   // read is apart: it adds to the list, and one that failed leaves the list on the screen.
-  const [more, setMore] = useState<More>('idle');
-  const [arrived, setArrived] = useState<number | undefined>();
+  const [more] = useState(moreStore);
   // What the screen shows now, for a read that started before it: a read again reads back as many
   // notes, and the next notes go on from its cursor. Set with the state, not at the next render: a
   // read can start between the two (raised in review).
@@ -175,7 +174,7 @@ export default function Notes() {
     // A view read again says its new count with its answer.
     if (!fresh) for (const each of VIEWS) reportView.current(each.id, undefined);
     asNew.current = false;
-    setMore('idle');
+    more.set({ state: 'idle' });
     busy.current = true;
     setReading(true);
     // The next notes on their way count too: this read drops their answer, so it reads them back.
@@ -215,8 +214,7 @@ export default function Notes() {
     setReading(false);
     if (got === undefined) return draw('failed');
     if (fresh) toTop.current = true;
-    setArrived(undefined);
-    setMore(failed ? 'failed' : 'idle');
+    more.set({ state: failed ? 'failed' : 'idle', arrived: undefined });
     draw(got);
     // `list` is made of the workspace, the view and the filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,7 +240,7 @@ export default function Notes() {
     const mine = asked.current;
     const from = list.next as string;
     moreFrom.current = from;
-    setMore('reading');
+    more.set({ state: 'reading' });
     const query = queryOf();
     query.set('limit', String(NOTES_PER_READ));
     query.set('cursor', from);
@@ -251,10 +249,9 @@ export default function Notes() {
     // The list was read again, or another list chosen, meanwhile: this read is of none of them.
     if (mine !== asked.current || moreFrom.current !== from) return;
     moreFrom.current = undefined;
-    if (!answer.ok || !Array.isArray(answer.data?.notes)) return setMore('failed');
+    if (!answer.ok || !Array.isArray(answer.data?.notes)) return more.set({ state: 'failed' });
     const chunk = { ...answer.data, notes: answer.data.notes };
-    setMore('idle');
-    setArrived(chunk.notes.length);
+    more.set({ state: 'idle', arrived: chunk.notes.length });
     const before = now.current;
     if (typeof before === 'object') draw(appended(before, chunk));
     // `list` is made of the workspace, the view and the filters.
@@ -665,8 +662,7 @@ export default function Notes() {
                   shown={shown.notes.length}
                   total={shown.total}
                   more={hasMore(shown)}
-                  state={more}
-                  arrived={arrived}
+                  store={more}
                   onMore={() => void readMore()}
                 />
                 <TaskBulkBar />
