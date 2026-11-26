@@ -135,7 +135,9 @@ describe('when the widget was last seen on a site (FRU-721)', () => {
     await readPins(world, site.id, {});
     assert.ok(Number((await seenAt(world, site.id)).script) >= first);
 
-    // The store alone: a date of the hour is not written again; one an hour old is.
+    // The store alone, from a site never seen, on instants of its own: a date of the hour is not
+    // written again; one an hour old is.
+    await rowsOf(world.database, `UPDATE sites SET script_seen_at = NULL WHERE id = '${site.id}'`);
     await world.accounts.markSiteSeen(site.id, 'script', NOW);
     await world.accounts.markSiteSeen(site.id, 'script', NOW + SEEN_EVERY_MS - 1);
     assert.equal(Number((await seenAt(world, site.id)).script), NOW);
