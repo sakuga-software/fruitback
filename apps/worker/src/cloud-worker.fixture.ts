@@ -6,6 +6,7 @@ import { authConfigOf, authOptions, startAuth } from './auth.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { firstAdminLines } from './first-admin.ts';
 import { createMemoryKv } from './kv.ts';
+import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage } from './mail.ts';
@@ -29,6 +30,11 @@ export async function cloudWorker(options: {
   publicUrl: string;
   /** `false`: a worker that sends no e-mail, whose first administrator gets a link another way (FRU-221). */
   mail?: boolean;
+  /**
+   * `true`: the index of the notes, on the database of the worker, as a worker with a database has
+   * it: the Notes screen reads its list (FRU-723). Without it, the list answers `404`.
+   */
+  index?: boolean;
 }) {
   // From the data folder of `initdb` on disk: each spec starts a worker, and `initdb` costs 1.5 to
   // 2.5 s of CPU each time on a loaded machine (measured). The first worker writes the file.
@@ -55,6 +61,7 @@ export async function cloudWorker(options: {
   const sessions = createPostgresSessionStore(database);
   const connectStore = createPostgresConnectStore(database);
   const instanceAdmin = createPostgresInstanceAdmin(database);
+  const noteIndex = options.index === true ? createPostgresNoteIndex(database) : undefined;
   const auth =
     settings === undefined
       ? undefined
@@ -89,6 +96,7 @@ export async function cloudWorker(options: {
           : { mailer: { send: async (message: MailMessage) => void sent.push(message) } }),
         kv,
         ...(auth === undefined ? {} : { auth }),
+        ...(noteIndex === undefined ? {} : { noteIndex }),
       });
     },
     /**

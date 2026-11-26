@@ -32,7 +32,7 @@ export type Worker = {
 type Started = { child: ChildProcess; port: string };
 
 /** Spawns the process of a worker of the Cloud, and answers when it listens. */
-function spawnWorker(options: { mail?: boolean }): Promise<Started> {
+function spawnWorker(options: { mail?: boolean; index?: boolean }): Promise<Started> {
   const child: ChildProcess = spawn(process.execPath, ['src/cloud-worker.fixture.ts'], {
     // Relative to the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
     cwd: 'apps/worker',
@@ -68,7 +68,7 @@ function spawnWorker(options: { mail?: boolean }): Promise<Started> {
  */
 const spares = new Map<string, Promise<Started>>();
 
-function spareOf(options: { mail?: boolean }): Promise<Started> {
+function spareOf(options: { mail?: boolean; index?: boolean }): Promise<Started> {
   const started = spawnWorker(options);
   // A spare that fails is reported to the test that takes it, not as an unhandled rejection.
   started.catch(() => {});
@@ -83,7 +83,7 @@ function spareOf(options: { mail?: boolean }): Promise<Started> {
  * The time the test waits for the process is added to its timeout: the timeout is for the steps of
  * the test, not for the start of its worker. With a spare that is ready, that time is about 0.
  */
-export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Worker> {
+export async function cloudWorker(options: { mail?: boolean; index?: boolean } = {}): Promise<Worker> {
   const key = JSON.stringify(options);
   const spare = spares.get(key);
   spares.delete(key);
