@@ -4,9 +4,11 @@ import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import type { NoteIssue } from '@fruitback/shared';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { createTranslator } from './messages.ts';
+import { keepTyping } from './key-guard.ts';
 import {
   type MountedPage,
   attachShadowHtml,
+  keyboardEventCtor,
   mountPage,
   pressKey,
   setDocumentSize,
@@ -874,6 +876,35 @@ describe('createOverlay', () => {
     pressKey(page, 'Escape');
 
     assert.equal(page.document.querySelector('[data-fruitback-thread]'), null);
+  });
+
+  // FRU-726: the keys of a field of the widget stop before the document, and come back to the root.
+  it('closes the thread on Escape in a field of the widget, and not on Escape in a field of the page', () => {
+    const page = mountWithCta();
+    const search = page.document.createElement('input');
+    const holder = page.document.createElement('div');
+    page.document.body.append(search, holder);
+    const root = holder.attachShadow({ mode: 'open' });
+    const stop = keepTyping(root);
+    overlay = createOverlay({ document: page.document, host: root });
+    overlay.render([issueOnCta()]);
+    const open = () => (root.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    const thread = () => root.querySelector('[data-fruitback-thread]');
+    const Key = keyboardEventCtor(page);
+    const escape = (on: Element) =>
+      on.dispatchEvent(new Key('keydown', { key: 'Escape', bubbles: true, cancelable: true, composed: true }));
+
+    open();
+    search.focus();
+    escape(search);
+    assert.ok(thread(), 'Escape in a field of the page closed the thread');
+
+    const field = page.document.createElement('textarea');
+    thread()?.append(field);
+    field.focus();
+    escape(field);
+    assert.equal(thread(), null);
+    stop();
   });
 
   it('reports what found each pin, so a bad resolution is visible rather than plausible', () => {
