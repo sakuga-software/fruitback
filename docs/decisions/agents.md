@@ -153,8 +153,10 @@ with no key, nothing leaves.
   kept 30 days in `agent_sessions` and shown in the panel of the routine. A `401` or `403` gives the
   call up and puts the connector in « attention » (`key-refused`). A `404` gives it up too, and since
   FRU-627 puts it in « attention » as `routine-gone`: the routine or its API trigger was deleted, and
-  no token starts it again. The panel of the routine and the box « Start an agent » of a site say so;
-  the next call that starts the routine ends the attention. Tested against a local `/fire` that follows the
+  no token starts it again. The panel of the routine and the box « Start an agent » of a site say so,
+  and say to connect a routine with a new trigger and to disconnect the one that is gone: the Fire URL
+  names its trigger, so a new trigger is a new connector, and the one that is gone keeps its attention
+  until it is removed. A call that starts it ends the attention, as for `key-refused`. Tested against a local `/fire` that follows the
   documentation (`routine-fire.fixture.ts`); no real routine was called.
 - The REST connector (FRU-132) posts `note.created`, signed, with the whole note, to the address of a
   workspace. A receiver of the team can start an agent with it today, with no other change.

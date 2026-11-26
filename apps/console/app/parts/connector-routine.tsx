@@ -86,7 +86,7 @@ export function RoutinePanel({ id, base, connector, manages, onChanged, onRemove
       {connector.attention?.reason === 'routine-gone' ? (
         <Problem>
           {t(
-            'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, then connect the routine again.',
+            'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, connect it here and choose it on the sites, then disconnect this one.',
             { when: moment(connector.attention.since) },
           )}
         </Problem>

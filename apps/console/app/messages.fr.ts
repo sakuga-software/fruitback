@@ -1999,8 +1999,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The routine refused its token. Generate a new token at claude.ai/code/routines, then connect the routine again.':
     'La routine a refusé son jeton. Générez un nouveau jeton sur claude.ai/code/routines, puis connectez la routine à nouveau.',
   // FRU-627: `/fire` answered 404.
-  'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, then connect the routine again.':
-    'Depuis {when}, claude.ai dit que cette routine ou son déclencheur d’API n’existe plus, et les appels ne la lancent pas. Ajoutez un déclencheur d’API à une routine sur claude.ai/code/routines, puis connectez la routine à nouveau.',
+  'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, connect it here and choose it on the sites, then disconnect this one.':
+    'Depuis {when}, claude.ai dit que cette routine ou son déclencheur d’API n’existe plus, et les appels ne la lancent pas. Ajoutez un déclencheur d’API à une routine sur claude.ai/code/routines, connectez-la ici et choisissez-la sur les sites, puis déconnectez celle-ci.',
   '{place} is gone, and the calls of this site do not start it. Connect the routine again from the connectors.':
     '{place} n’existe plus, et les appels de ce site ne la lancent pas. Connectez la routine à nouveau depuis les connecteurs.',
   'The trigger of a site calls it when a note arrives. The call carries ids only: the routine reads the notes through the MCP server.':

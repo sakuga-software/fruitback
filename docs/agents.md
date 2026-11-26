@@ -289,7 +289,8 @@ Notes sent together start one session that lists them all. The panel of the rout
 start it. If claude.ai refuses the token (you regenerated or deleted it), the call stops at once and
 the routine needs attention: generate a new token, then connect the routine again. If claude.ai
 answers that the routine or its API trigger is gone (you deleted it), the call stops at once too, and
-the routine needs attention: add an API trigger to a routine, then connect it again. claude.ai starts
+the routine needs attention: add an API trigger to a routine, connect it and choose it on your sites,
+then disconnect the one that is gone. Its attention stays until then: no call starts it any more. claude.ai starts
 a routine 30 times an hour at most, and the calls above that limit are tried again later.
 
 ## Recipes with no code
