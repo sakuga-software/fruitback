@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { globSync, readFileSync } from 'node:fs';
+import { globSync, readFileSync, readdirSync } from 'node:fs';
 import { join, matchesGlob, relative } from 'node:path';
 import { describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
@@ -456,6 +456,162 @@ describe('each test file with cases on a real PostgreSQL runs in the job « post
       unlisted: ['apps/worker/src/left-out.test.ts', 'apps/worker/src/left-out-too.test.ts'],
       listedWithoutCases: ['apps/worker/src/listed-pglite.test.ts', 'apps/worker/src/gone.test.ts'],
       fixtures: ['apps/worker/src/hidden.fixture.ts'],
+    });
+  });
+});
+
+/**
+ * Rule 6. The job `postgres` skips the subjects on PGlite, and only them, and no other job does (FRU-720).
+ *
+ * `PGLITE_ELSEWHERE` of `postgres.fixture.ts` is a reason when `FRUITBACK_TEST_POSTGRES=required`,
+ * and `false` otherwise. The jobs `test` run every file of the worker (`tools/ci/test-parts.ts`), so
+ * they run each case on PGlite, as long as nothing sets that variable for them. Two things would lose
+ * a case:
+ *
+ * - the variable set anywhere but in `test:postgres`: then the jobs `test` skip the cases on PGlite
+ *   too, and no job runs them;
+ * - `PGLITE_ELSEWHERE` given to a subject on a real server: then the job `postgres` skips it.
+ *
+ * So each `PGLITE_ELSEWHERE` is read inside the object or the call that holds it. That text must name
+ * PGlite, and must name no real server.
+ */
+const POSTGRES_REQUIRED = /\bFRUITBACK_TEST_POSTGRES\b/;
+const PGLITE_SKIP = /\bPGLITE_ELSEWHERE\b/g;
+const ON_A_SERVER = /\b(?:createRealDatabase|createMigratedRealDatabase|ownDatabase|TEST_DATABASE_URL)\b|real server/;
+
+/** Where the innermost object, array or call around `index` starts and ends, brackets included. */
+function enclosing(source: string, index: number): { start: number; end: number } {
+  const pairs: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
+  let depth = 0;
+  let start = index;
+  for (; start > 0; start -= 1) {
+    const char = source[start - 1] ?? '';
+    if (char in pairs) depth += 1;
+    else if ('([{'.includes(char)) {
+      if (depth === 0) break;
+      depth -= 1;
+    }
+  }
+  start -= 1;
+  depth = 0;
+  let end = start;
+  for (; end < source.length; end += 1) {
+    const char = source[end] ?? '';
+    if ('([{'.includes(char)) depth += 1;
+    else if (char in pairs && (depth -= 1) === 0) break;
+  }
+
+  return { start, end: end + 1 };
+}
+
+/** Each place that gives `PGLITE_ELSEWHERE` to a subject, and the text around it. An import is no such place. */
+function pgliteSkips(source: string): { index: number; around: string }[] {
+  return [...source.matchAll(PGLITE_SKIP)].flatMap((found) => {
+    const { start, end } = enclosing(source, found.index);
+    if (/^\s*from\s/.test(source.slice(end))) return [];
+
+    return [{ index: found.index, around: source.slice(start, end).replace(PGLITE_SKIP, '') }];
+  });
+}
+
+/** What rule 6 finds: the places that set the variable but `test:postgres`, and the misused reasons. */
+function pgliteSkipGaps(
+  scripts: Record<string, Record<string, string>>,
+  others: Record<string, string>,
+  sources: Record<string, string>,
+): { setters: string[]; notOnPglite: string[] } {
+  const setters = [
+    ...Object.entries(scripts).flatMap(([manifest, all]) =>
+      Object.entries(all)
+        .filter(
+          ([name, script]) =>
+            POSTGRES_REQUIRED.test(script) && !(manifest === `${WORKER}/package.json` && name === 'test:postgres'),
+        )
+        .map(([name]) => `${manifest} › ${name}`),
+    ),
+    ...Object.entries(others)
+      .filter(([, source]) => POSTGRES_REQUIRED.test(source))
+      .map(([file]) => file),
+  ];
+  const notOnPglite = Object.entries(sources).flatMap(([file, source]) =>
+    pgliteSkips(source)
+      .filter(({ around }) => !/pglite/i.test(around) || ON_A_SERVER.test(around))
+      .map(({ index }) => `${file}:${source.slice(0, index).split('\n').length}`),
+  );
+
+  return { setters, notOnPglite };
+}
+
+describe('the job « postgres » skips the subjects on PGlite, which the jobs « test » run (FRU-720)', () => {
+  it('finds the variable set by test:postgres alone, and the reason on subjects on PGlite alone', () => {
+    const scripts = Object.fromEntries(
+      files('{apps,packages}/*/package.json').map((manifest) => [
+        manifest,
+        (JSON.parse(readFileSync(`${REPOSITORY}${manifest}`, 'utf8')) as { scripts?: Record<string, string> })
+          .scripts ?? {},
+      ]),
+    );
+    const others = Object.fromEntries(
+      [
+        ...readdirSync(`${REPOSITORY}.github/workflows`).map((name) => `.github/workflows/${name}`),
+        ...readdirSync(`${REPOSITORY}.githooks`).map((name) => `.githooks/${name}`),
+        ...files('package.json'),
+        ...files('{apps,packages}/*/vitest.config.ts'),
+      ].map((file) => [file, readFileSync(`${REPOSITORY}${file}`, 'utf8')]),
+    );
+    const sources = Object.fromEntries(
+      files(`${WORKER}/src/**/*.ts`)
+        .filter((file) => file !== SELF && file !== `${WORKER}/src/postgres.fixture.ts`)
+        .map((file) => [file, readFileSync(`${REPOSITORY}${file}`, 'utf8')]),
+    );
+    assert.ok(
+      Object.keys(others).some((file) => file.startsWith('.github/workflows/')),
+      'no workflow found',
+    );
+    assert.ok(POSTGRES_REQUIRED.test(scripts[`${WORKER}/package.json`]?.['test:postgres'] ?? ''));
+    const skips = Object.values(sources).reduce((count, source) => count + pgliteSkips(source).length, 0);
+    assert.ok(skips >= 12, `only ${skips} subjects on PGlite take PGLITE_ELSEWHERE`);
+
+    assert.deepEqual(pgliteSkipGaps(scripts, others, sources), { setters: [], notOnPglite: [] });
+  });
+
+  it('fails on the variable set for another job, and on the reason given to a real server', () => {
+    const scripts = {
+      'apps/worker/package.json': {
+        test: 'FRUITBACK_TEST_POSTGRES=required vitest run',
+        'test:postgres': 'FRUITBACK_TEST_POSTGRES=required vitest run src/a.test.ts',
+      },
+      'packages/shared/package.json': { 'test:postgres': 'FRUITBACK_TEST_POSTGRES=required node --test' },
+    };
+    const others = {
+      '.github/workflows/ci.yml': 'env:\n  FRUITBACK_TEST_POSTGRES: required',
+      '.githooks/pre-push': 'export FRUITBACK_TEST_CONCURRENCY=2',
+    };
+    const sources = {
+      'apps/worker/src/a.test.ts': [
+        "  { label: 'PGlite', open: createPgliteDatabase, skip: PGLITE_ELSEWHERE },",
+        "  { label: 'a real server', open: createRealDatabase, skip: PGLITE_ELSEWHERE },",
+        "contract('PostgreSQL (PGlite)', pglite.connect, { skip: PGLITE_ELSEWHERE, closed: pglite.closed });",
+        "const ON = on('the store, on a real server', createPgliteDatabase, PGLITE_ELSEWHERE);",
+        "describe('the store', { skip: PGLITE_ELSEWHERE !== false }, () => {});",
+      ].join('\n'),
+      'apps/worker/src/b.test.ts': [
+        "import { NO_REAL_POSTGRES, PGLITE_ELSEWHERE, createRealDatabase } from './postgres.fixture.ts';",
+        'const PGLITE = onDatabase(',
+        "  'the store, on PGlite',",
+        '  createMigratedPgliteDatabase,',
+        '  PGLITE_ELSEWHERE,',
+        ');',
+      ].join('\n'),
+    };
+
+    assert.deepEqual(pgliteSkipGaps(scripts, others, sources), {
+      setters: [
+        'apps/worker/package.json › test',
+        'packages/shared/package.json › test:postgres',
+        '.github/workflows/ci.yml',
+      ],
+      notOnPglite: ['apps/worker/src/a.test.ts:2', 'apps/worker/src/a.test.ts:4', 'apps/worker/src/a.test.ts:5'],
     });
   });
 });

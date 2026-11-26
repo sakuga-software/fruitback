@@ -16,6 +16,7 @@ import {
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  PGLITE_ELSEWHERE,
   createMigratedPgliteDatabase,
   createMigratedRealDatabase,
   onDatabase,
@@ -31,6 +32,7 @@ const PGLITE = onDatabase(
   'createPostgresAccountStore',
   createMigratedPgliteDatabase,
   createPostgresAccountStore,
+  PGLITE_ELSEWHERE,
 );
 
 const SUBJECTS: Subject<AccountStore>[] = [
