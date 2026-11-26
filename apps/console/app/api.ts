@@ -37,6 +37,9 @@ export type Visibility = 'members' | 'everyone';
 export type Writers = 'members' | 'anyone';
 /** What a visitor may do to a note of their own (FRU-703): change its text, or take it back. */
 export type VisitorRight = 'never' | 'while-open';
+/** FRU-704: the notes a visitor leaves on a site in an hour, as the worker takes them. `0` is « No limit ». */
+export const VISITOR_NOTE_LIMITS = [0, 5, 10, 20, 50] as const;
+export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
 /**
  * Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it.
  *
@@ -87,6 +90,11 @@ export type Site = {
    */
   visitorEdit?: VisitorRight;
   visitorDelete?: VisitorRight;
+  /**
+   * FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. A worker of
+   * before sends nothing: it counted nothing, « No limit ».
+   */
+  visitorNotesPerHour?: VisitorNoteLimit;
   destination?: Destination;
   destinations?: Destination[];
   /**

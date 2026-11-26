@@ -1123,7 +1123,7 @@ async function attributionFor(
   policy: ClientPolicy,
   claimed: NoteReporter | undefined,
 ): Promise<
-  | { ok: true; reporter: NoteReporter | undefined; channel: Channel; account: boolean }
+  | { ok: true; reporter: NoteReporter | undefined; channel: Channel; account: boolean; visitor: boolean }
   | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
 > {
   const token = readBearerToken(request.headers.get('Authorization'));
@@ -1134,7 +1134,8 @@ async function attributionFor(
       return { ok: false, error: 'identity-required', reason: 'identity-required' };
     }
 
-    return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script', account: false };
+    // FRU-704: the one answer that names a visitor. A token that does not verify never gets this far.
+    return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script', account: false, visitor: true };
   }
 
   const verified = await verifyForClient(token, policy);
@@ -1150,6 +1151,8 @@ async function attributionFor(
     channel: verified.session === true ? 'extension' : 'script',
     // A session of an account (FRU-238): `postFeedback` reads it again before it writes.
     account: verified.session === true && verified.account === true,
+    // A token the worker verified: a session, or a page that signs its reporter. Not counted (FRU-704).
+    visitor: false,
   };
 }
 

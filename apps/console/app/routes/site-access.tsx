@@ -6,7 +6,14 @@ import { problemOf } from '../problems';
 import { siteName } from '../site-address';
 import { Button, Problem } from '../ui';
 import { useLocale } from '../use-locale';
-import { AccessLevels, DoneNotice, VisitorPreview, VisitorRecognition, VisitorRights } from '../parts/site-access';
+import {
+  AccessLevels,
+  DoneNotice,
+  Safeguards,
+  VisitorPreview,
+  VisitorRecognition,
+  VisitorRights,
+} from '../parts/site-access';
 import { useSite } from './site-frame';
 
 const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
@@ -15,8 +22,8 @@ const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
 const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
 
 /**
- * The tab « Access » of a site (FRU-703): who reads its notes, who leaves them, and what a visitor may
- * do to a note of their own, as the mockup « Onglet Access » draws it. The worker checks every value;
+ * The tab « Access » of a site (FRU-703): who reads its notes, who leaves them, what a visitor may do
+ * to a note of their own, and the safeguards (FRU-704), as the mockup « Onglet Access » draws it. The worker checks every value;
  * this page shows them and sends them, with « Save », as one `POST …/sites` of the address of the site
  * (`addSite` of the store keeps its id, its script and its places).
  *
@@ -60,7 +67,13 @@ export default function SiteAccessPage() {
     // Another id would be another site, and an answer without the rights that were sent is a worker that
     // did not keep them (one of before FRU-703): this access was not saved. What was chosen stays on screen.
     const data = answer.data;
-    if (data?.id !== site.id || data.visitorEdit !== body.visitorEdit || data.visitorDelete !== body.visitorDelete) {
+    // FRU-704: the same for the notes of a visitor in an hour, where they are sent.
+    if (
+      data?.id !== site.id ||
+      data.visitorEdit !== body.visitorEdit ||
+      data.visitorDelete !== body.visitorDelete ||
+      (body.visitorNotesPerHour !== undefined && data.visitorNotesPerHour !== body.visitorNotesPerHour)
+    ) {
       return setProblem(ACCESS_NOT_CHANGED);
     }
     const kept = { ...site, ...data };
@@ -104,6 +117,7 @@ export default function SiteAccessPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-[16px]">
           <VisitorPreview access={draft} />
+          <Safeguards access={draft} disabled={!manages || busy} onChange={change} />
           <DoneNotice access={draft} disabled={!manages || busy} onChange={change} />
         </div>
       </div>

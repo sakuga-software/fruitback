@@ -125,6 +125,9 @@ export const sites = pgTable(
     // written at most once an hour (`site-seen.ts`). A date and nothing else: no page, no address.
     script_seen_at: instant('script_seen_at'),
     extension_seen_at: instant('extension_seen_at'),
+    // FRU-704: the notes a visitor with no account leaves in an hour, `0` for no limit. `0056` adds it
+    // with 10, the value of the mockup, for every site, those of before included.
+    visitor_notes_per_hour: integer('visitor_notes_per_hour').notNull().default(10),
   },
   (table) => [
     foreignKey({

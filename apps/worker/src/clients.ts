@@ -147,6 +147,11 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
   visitorEdit?: VisitorRight;
   /** FRU-703: whether a visitor takes back a note of their own. Absent: `never`. */
   visitorDelete?: VisitorRight;
+  /**
+   * FRU-704: the notes a visitor with no account leaves on this site in an hour, more than `0`. Only a
+   * site of a workspace where anybody writes says it. Absent: no limit of the hour.
+   */
+  visitorNotesPerHour?: number;
 };
 export type ClientMap = Record<string, ClientConfig>;
 
