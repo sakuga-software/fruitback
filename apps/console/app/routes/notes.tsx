@@ -16,6 +16,7 @@ import { boardColumns } from '../board-columns';
 import { NotesBoard } from '../parts/notes-board';
 import {
   FILTERS,
+  weekStart,
   type IndexedNote,
   NOTES_PER_PAGE,
   type NotesAnswer,
@@ -171,7 +172,9 @@ export default function Notes() {
     asNew.current = false;
     setReading(true);
     const query = new URLSearchParams();
-    for (const name of FILTERS) if (filters[name] !== '') query.set(name, filters[name]);
+    for (const name of FILTERS) if (filters[name] !== '' && name !== 'created') query.set(name, filters[name]);
+    // FRU-722: « This week » starts on a day of the person, which the worker cannot know: an instant.
+    if (filters.created === 'week') query.set('since', String(weekStart()));
     // FRU-655: « Overdue » and « Due this week » count from the day of the person, which the worker
     // cannot know.
     if (filters.due === 'overdue' || filters.due === 'week') query.set('today', dayFromToday(0));
@@ -523,6 +526,7 @@ export default function Notes() {
                 onType={setTyped}
                 view={view}
                 onView={show}
+                seesTracker={seesTracker}
                 // FRU-655: the filters on the tasks, once the list holds one Fruitback keeps, or one is set.
                 {...(shown.notes.some((note) => note.task !== undefined) ||
                 TASK_FILTERS.some((name) => filters[name] !== '')

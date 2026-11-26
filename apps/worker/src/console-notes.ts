@@ -27,7 +27,7 @@ import {
 /**
  * The notes of a workspace, for the page « Notes » of the console (FRU-244).
  *
- * `GET /console/workspaces/<id>/notes?site=&stage=&place=&mine=1&q=&cursor=&limit=` reads one page of
+ * `GET /console/workspaces/<id>/notes?site=&stage=&place=&mine=1&since=&undelivered=1&q=&cursor=&limit=` reads one page of
  * the index of the notes (FRU-237), the newest first. `counts=none` leaves out `total` and `counts`,
  * which read the whole filter: the console asks for them on the first page only (FRU-502). `POST …/notes/<note>/retry` sends again a note
  * whose delivery to a receiving connector did not arrive. `POST …/notes/<note>/status` puts a note the
@@ -131,10 +131,12 @@ export async function handleNotes(
   if (index === undefined) return json(404, { error: 'not-found' }, headers);
 
   const seesTracker = context.allowed('see-tracker');
-  // The table of the console reads its notes by status (FRU-551): `order` is for this route only.
-  const query = queryOf(new URL(request.url).searchParams, context.account, { orders: true });
+  // The table of the console reads its notes by status (FRU-551), and the views of its bar by the
+  // day a note was left and by its delivery (FRU-722): those are for this route only.
+  const query = queryOf(new URL(request.url).searchParams, context.account, { console: true });
   if (!query.ok) return json(400, { error: query.error }, headers);
-  if (query.query.place !== undefined && !seesTracker) return forbidden(context);
+  // Where a note went is about the tracker: its place, and whether its delivery arrived.
+  if ((query.query.place !== undefined || query.query.undelivered === true) && !seesTracker) return forbidden(context);
   // FRU-502: `counts=none` reads the page alone. The counts read the whole filter, and the console
   // holds them from the first page of the same filter.
   const counts = new URL(request.url).searchParams.get('counts') ?? undefined;
@@ -187,10 +189,11 @@ type Parsed = { ok: true; query: NoteQuery } | { ok: false; error: string };
 
 /**
  * The query of the list, from the address. Any field that is not what it should be is refused.
- * `orders`: the caller reads `order=status` (FRU-551), the route of the console only. Elsewhere the
- * list is the newest first, and a cursor of a list by status is refused.
+ * `console`: the route of the console, which alone reads `order=status` (FRU-551), `since` and
+ * `undelivered` (FRU-722). Elsewhere the list is the newest first, a cursor of a list by status is
+ * refused, and those two fields are not read.
  */
-export function queryOf(params: URLSearchParams, account: string, options: { orders?: boolean } = {}): Parsed {
+export function queryOf(params: URLSearchParams, account: string, options: { console?: boolean } = {}): Parsed {
   const site = params.get('site') ?? undefined;
   if (site !== undefined && !ID.test(site)) return { ok: false, error: 'invalid-site' };
   const stage = params.get('stage') ?? undefined;
@@ -223,8 +226,18 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
   const today = params.get('today') ?? undefined;
   if (dueBy !== undefined && !['overdue', 'week', 'none'].includes(dueBy)) return { ok: false, error: 'invalid-due' };
   if ((dueBy === 'overdue' || dueBy === 'week') && !isDay(today)) return { ok: false, error: 'invalid-today' };
-  const order = options.orders === true ? (params.get('order') ?? undefined) : undefined;
+  const order = options.console === true ? (params.get('order') ?? undefined) : undefined;
   if (order !== undefined && order !== 'status') return { ok: false, error: 'invalid-order' };
+  // FRU-722: the notes left at this instant or after it, in milliseconds. The console counts the day
+  // of the person, which the worker cannot know, as for `due`.
+  const sinceText = options.console === true ? (params.get('since') ?? undefined) : undefined;
+  const since = sinceText === undefined ? undefined : Number(sinceText);
+  if (since !== undefined && (!/^\d{1,16}$/.test(sinceText as string) || !Number.isSafeInteger(since))) {
+    return { ok: false, error: 'invalid-since' };
+  }
+  // FRU-722: the notes whose delivery did not arrive.
+  const undelivered = options.console === true ? (params.get('undelivered') ?? undefined) : undefined;
+  if (undelivered !== undefined && undelivered !== '1') return { ok: false, error: 'invalid-undelivered' };
   const cursor = params.get('cursor') ?? undefined;
   const after = cursor === undefined ? undefined : readCursor(cursor);
   if (cursor !== undefined && after === undefined) return { ok: false, error: 'invalid-cursor' };
@@ -252,6 +265,8 @@ export function queryOf(params: URLSearchParams, account: string, options: { ord
       ...(priority === undefined ? {} : { priority: priority === 'none' ? null : priority }),
       ...(label === undefined ? {} : { label }),
       ...(dueBy === undefined ? {} : { due: dueOf(dueBy, today as string) }),
+      ...(since === undefined ? {} : { since }),
+      ...(undelivered === undefined ? {} : { undelivered: true as const }),
       ...(q === undefined ? {} : { q }),
       ...(after === undefined ? {} : { after }),
       ...(order === undefined ? {} : { order }),

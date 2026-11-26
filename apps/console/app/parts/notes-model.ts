@@ -106,6 +106,8 @@ export type NotesAnswer = {
 // FRU-665: `archived` reads the archived tasks, in place of the others.
 // FRU-667: `unresolved` reads the notes that are not done nor closed.
 // FRU-655: `assignee`, `priority`, `label` and `due` read the fields of the tasks.
+// FRU-722: `created=week`, the notes left in the last seven days, and `undelivered`, the notes whose
+// delivery did not arrive.
 export const FILTERS = [
   'place',
   'site',
@@ -117,8 +119,19 @@ export const FILTERS = [
   'priority',
   'label',
   'due',
+  'created',
+  'undelivered',
   'q',
 ] as const;
+
+/**
+ * FRU-722: where « This week » starts, as an instant: midnight of the day of the person six days
+ * ago, so the seven days end today, as « Due this week » (FRU-655). The worker cannot know the day of
+ * the person.
+ */
+export function weekStart(now: Date = new Date()): number {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+}
 export type Filter = (typeof FILTERS)[number];
 
 /** How the notes are drawn (FRU-436): the table, or the board, as `?view=board` keeps it. */

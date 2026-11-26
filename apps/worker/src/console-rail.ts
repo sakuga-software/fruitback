@@ -7,15 +7,20 @@ import type { NoteIndex } from './notes-index.ts';
  * the console, in one read that the frame asks for when it mounts and at each change of workspace,
  * never for each screen.
  *
+ * `GET …/rail?since=<ms>` (FRU-722) adds the count of « New this week »: the notes left at that
+ * instant or after it. The console says the instant: the day of the person, which the worker cannot
+ * know, as for `due` of the list.
+ *
  * ```json
- * { "sites": 4, "notes": 12, "failing": 2, "views": { "assigned": 4 } }
+ * { "sites": 4, "notes": 12, "failing": 2, "views": { "assigned": 4, "new": 7, "undelivered": 2 } }
  * ```
  *
  * - `sites`: the sites the caller reads.
  * - `notes`: the notes of those sites that are not done nor closed, and not archived: the `total` of
  *   `GET …/notes?unresolved=1`.
  * - `views`: the count of each view of the bar (FRU-697), the `total` of the list with its filter:
- *   `assigned` is `assignee=me`.
+ *   `assigned` is `assignee=me`, `new` is `since` (when it is asked), and `undelivered` is
+ *   `undelivered=1`, for whoever sees the tracker only (FRU-722).
  * - `failing`: the deliveries of the connectors that did not arrive yet, as the Connectors screen adds
  *   them up. For whoever sees the tracker only, as `GET …/connectors/<id>/deliveries`.
  *
@@ -43,9 +48,15 @@ export async function handleRail(rest: string, request: Request, context: RailCo
   const { headers } = context;
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
   if (!context.allowed('read-feedback')) return json(403, { error: 'forbidden' }, headers);
+  const sinceText = new URL(request.url).searchParams.get('since') ?? undefined;
+  const since = sinceText === undefined ? undefined : Number(sinceText);
+  if (since !== undefined && (!/^\d{1,16}$/.test(sinceText as string) || !Number.isSafeInteger(since))) {
+    return json(400, { error: 'invalid-since' }, headers);
+  }
   const reach = await context.reach();
   if (reach === undefined) return json(404, { error: 'not-found' }, headers);
   const only = reach.sites === 'every' ? undefined : reach.sites;
+  const seesTracker = context.allowed('see-tracker');
 
   const [counted, notes] = await Promise.all([
     context.accounts.frameCounts(context.workspace, only),
@@ -53,6 +64,8 @@ export async function handleRail(rest: string, request: Request, context: RailCo
       context.noteIndex?.frameCounts(context.workspace, {
         account: context.account,
         ...(only === undefined ? {} : { sites: only }),
+        ...(since === undefined ? {} : { since }),
+        ...(seesTracker ? { undelivered: true } : {}),
       }),
     ),
   ]);
@@ -61,8 +74,17 @@ export async function handleRail(rest: string, request: Request, context: RailCo
     200,
     {
       sites: counted.sites,
-      ...(notes === undefined ? {} : { notes: notes.open, views: { assigned: notes.assigned } }),
-      ...(context.allowed('see-tracker') ? { failing: counted.waiting } : {}),
+      ...(notes === undefined
+        ? {}
+        : {
+            notes: notes.open,
+            views: {
+              assigned: notes.assigned,
+              ...(notes.fresh === undefined ? {} : { new: notes.fresh }),
+              ...(notes.undelivered === undefined ? {} : { undelivered: notes.undelivered }),
+            },
+          }),
+      ...(seesTracker ? { failing: counted.waiting } : {}),
     },
     headers,
   );

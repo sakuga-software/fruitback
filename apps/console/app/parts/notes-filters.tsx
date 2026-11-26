@@ -243,6 +243,11 @@ export function filtersOn(
     });
   if (filters.due in DUE)
     on.push({ key: 'due', field: t('Due day'), value: t(DUE[filters.due as keyof typeof DUE]), off: { due: '' } });
+  // FRU-722: the view « New this week », and the one « Not delivered ».
+  if (filters.created === 'week')
+    on.push({ key: 'created', field: t('Left'), value: t('This week'), off: { created: '' } });
+  if (filters.undelivered === '1')
+    on.push({ key: 'undelivered', field: t('Delivery'), value: t('Not delivered'), off: { undelivered: '' } });
 
   return on;
 }
@@ -261,6 +266,7 @@ function branchesOf(
   sites: Listed<SiteChoice>,
   tasks: Tasks | undefined,
   onFilter: (changes: Partial<Record<Filter, string>>) => void,
+  seesTracker: boolean,
 ): TreeBranch[] {
   const branches: TreeBranch[] = [
     {
@@ -305,6 +311,34 @@ function branchesOf(
       ],
       onAction: (who) => onFilter({ mine: who === 'me' ? '1' : '' }),
     },
+    // FRU-722: the day a note was left, from the day of the person.
+    {
+      id: 'created',
+      label: t('Left'),
+      choice: 'single',
+      checked: [filters.created === 'week' ? 'week' : 'any'],
+      items: [
+        { id: 'any', label: t('Any time') },
+        { id: 'week', label: t('This week') },
+      ],
+      onAction: (when) => onFilter({ created: when === 'week' ? 'week' : '' }),
+    },
+    // FRU-722: whether the delivery of a note arrived, for whoever sees where the notes go.
+    ...(seesTracker
+      ? [
+          {
+            id: 'undelivered',
+            label: t('Delivery'),
+            choice: 'single' as const,
+            checked: [filters.undelivered === '1' ? 'undelivered' : 'any'],
+            items: [
+              { id: 'any', label: t('Any delivery') },
+              { id: 'undelivered', label: t('Not delivered') },
+            ],
+            onAction: (delivery: string) => onFilter({ undelivered: delivery === 'undelivered' ? '1' : '' }),
+          },
+        ]
+      : []),
   ];
   if (tasks === undefined) return branches;
 
@@ -407,6 +441,7 @@ export function NotesToolbar({
   tasks,
   view,
   onView,
+  seesTracker = false,
 }: {
   /** The notes of the whole list under the filters. */
   total: number;
@@ -424,6 +459,8 @@ export function NotesToolbar({
   tasks?: Tasks | undefined;
   view: View;
   onView: (view: View) => void;
+  /** FRU-722: the filter on the deliveries is offered to whoever sees where the notes go. */
+  seesTracker?: boolean;
 }) {
   useLocale();
   const [open, setOpen] = useState(false);
@@ -451,7 +488,7 @@ export function NotesToolbar({
       <MenuTree
         trigger="plain"
         triggerClassName={TOOL_BUTTON}
-        branches={branchesOf(filters, sites, tasks, onFilter)}
+        branches={branchesOf(filters, sites, tasks, onFilter, seesTracker)}
         items={[]}
         onAction={() => undefined}
         open={open}

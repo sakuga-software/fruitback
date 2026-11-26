@@ -26,6 +26,7 @@ import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
 import { type SavedView, type ViewId, VIEWS, viewAddress, viewOf, viewsFor } from '../saved-views';
+import { weekStart } from '../parts/notes-model';
 
 /**
  * The frame of a workspace (FRU-234): the bar with the workspace and its sections, and the section
@@ -141,7 +142,7 @@ export default function WorkspaceFrame() {
     if (id === undefined) return;
     told.current = { workspace: id, what: new Set() };
     let current = true;
-    void railCounts(id).then((read) => {
+    void railCounts(id, weekStart()).then((read) => {
       if (!current || read === undefined) return;
       const said = told.current.what;
       setCounts({
@@ -394,11 +395,15 @@ type RailEntry = {
   mark?: ReactNode;
   count?: number;
   alert?: number;
+  /** FRU-722: a count of what did not arrive, red when it is more than zero (« Not delivered »). */
+  redCount?: boolean;
 };
 
 /** The words of each view of the bar (FRU-697). */
 const VIEW_LABELS: Readonly<Record<ViewId, string>> = {
+  new: msg('New this week'),
   assigned: msg('Assigned to me'),
+  undelivered: msg('Not delivered'),
 };
 
 /** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
@@ -596,8 +601,9 @@ export function Rail({
             to: viewAddress(workspace.id, view),
             label: t(VIEW_LABELS[view.id]),
             current: view.id === currentView,
-            mark: <PersonMark account={account} />,
+            mark: <ViewMark view={view.id} account={account} />,
             ...(viewCounts[view.id] === undefined ? {} : { count: viewCounts[view.id] }),
+            ...(view.alert === true ? { redCount: true } : {}),
           }))}
         />
       )}
@@ -862,7 +868,7 @@ function PersonMark({ account }: { account: Account }) {
 }
 
 /** What an entry counts, at its right: a count of what failed is red, after a red dot. */
-function EntryCount({ count, alert }: { count: number | undefined; alert: number | undefined }) {
+function EntryCount({ count, alert, red }: { count: number | undefined; alert: number | undefined; red: boolean }) {
   useLocale();
   if (alert !== undefined)
     return (
@@ -876,8 +882,30 @@ function EntryCount({ count, alert }: { count: number | undefined; alert: number
       </span>
     );
   if (count === undefined) return null;
+  // FRU-722: what did not arrive is red, with no dot: the dot says a failure of a connector.
+  if (red && count > 0)
+    return (
+      <span data-alert-count="" className={`${COUNT} font-semibold text-accent-strong`}>
+        {count}
+      </span>
+    );
 
   return <span className={COUNT}>{count}</span>;
+}
+
+/**
+ * The mark of a view of the bar (FRU-697, FRU-722), as the mockup draws it: a circle of dashes for
+ * « New this week », the initial of the person for « Assigned to me », and red braces for « Not
+ * delivered ». Decorative: the words of the view are beside it.
+ */
+function ViewMark({ view, account }: { view: ViewId; account: Account }) {
+  if (view === 'assigned') return <PersonMark account={account} />;
+
+  return (
+    <span data-view-mark="" className={`${ENTRY_ICON} ${view === 'undelivered' ? 'text-accent-strong' : ''}`}>
+      <RailIcon name={view === 'new' ? 'fresh' : 'braces'} />
+    </span>
+  );
 }
 
 /**
@@ -929,7 +957,7 @@ export function RailNav({
               </span>
             ))}
           <span className="min-w-0 truncate">{entry.label}</span>
-          <EntryCount count={entry.count} alert={entry.alert} />
+          <EntryCount count={entry.count} alert={entry.alert} red={entry.redCount === true} />
         </Link>
       ))}
     </nav>

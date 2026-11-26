@@ -7,10 +7,10 @@ import { LUMEN, type StubbedWorkspace, box, contrast, painted, rgb, stubWorker, 
  * count, as option A of the mockup of FRU-684 draws them (« Barre latérale (3 options) », attached to
  * FRU-697). A view is a link to the address of its filter.
  *
- * Only « Assigned to me » is a view: the worker filters neither the day a note was left nor its
- * delivery, which « New this week » and « Not delivered » need (FRU-722). The count of a view is the
- * one of the read of the bar (FRU-711), then the total the worker answered to the Notes screen for
- * that filter: no screen reads the notes for it.
+ * The three views of the mockup: « New this week » (`created=week`, which the Notes screen asks the
+ * worker as `since`), « Assigned to me » (`assignee=me`) and « Not delivered » (`undelivered=1`,
+ * FRU-722). The count of a view is the one of the read of the bar (FRU-711), then the total the worker
+ * answered to the Notes screen for that filter: no screen reads the notes for it.
  */
 const CONSOLE = 'http://localhost:5178';
 const KIT = 'http://localhost:5179';
@@ -24,6 +24,8 @@ const ENTRY_TEXT = '#334155';
 const rail = (page: Page) => page.locator('aside.kit-rail');
 const views = (page: Page) => rail(page).getByRole('navigation', { name: 'Views' });
 const assigned = (page: Page) => views(page).getByRole('link', { name: /^Assigned to me/ });
+const fresh = (page: Page) => views(page).getByRole('link', { name: /^New this week/ });
+const undelivered = (page: Page) => views(page).getByRole('link', { name: /^Not delivered/ });
 const sections = (page: Page) => rail(page).getByRole('navigation', { name: 'Workspace' });
 
 /** A note given to the person: a task Fruitback keeps. */
@@ -74,7 +76,10 @@ async function workerWith(page: Page, workspaces?: StubbedWorkspace[], locale: '
       const query = new URL(route.request().url()).searchParams;
       worker.asked.push({ pathname, query: query.toString() });
       const mine = query.get('assignee') === 'me';
-      const total = mine ? worker.total : 12;
+      // FRU-722: 7 notes left this week, 2 that did not arrive.
+      let total = mine ? worker.total : 12;
+      if (query.has('since')) total = 7;
+      if (query.get('undelivered') === '1') total = 2;
       const held = mine ? undefined : worker.hold;
       worker.hold = undefined;
 
@@ -116,7 +121,7 @@ test('at 1440 px the views have the values of the mockup, under the sections', a
 
   // The boxes of the mockup: « Settings » at 164, « Views » at 263, the first view at 279.
   const settings = await box(sections(page).getByRole('link', { name: 'Settings' }));
-  const entry = await box(assigned(page));
+  const entry = await box(fresh(page));
   const words = await box(heading);
   expect.soft(settings.y).toBeCloseTo(48 + 29 * 4, 0);
   expect.soft(entry.y - (settings.y + settings.height)).toBeCloseTo(31, 0);
@@ -255,7 +260,7 @@ test('the read of the bar counts a view at once, and a count the Notes screen sa
   let holding = false;
   const worker = await workerWith(page);
   // The read of the bar, before the stubs of `workerWith`: 4 for the view, held when a case asks.
-  await page.route('**/console/workspaces/w1/rail', async (route) => {
+  await page.route(/\/console\/workspaces\/w1\/rail(\?|$)/, async (route) => {
     if (holding) await held;
     await route.fulfill({ json: { sites: 1, notes: 12, failing: 0, views: { assigned: 4 } } });
   });
@@ -277,23 +282,104 @@ test('the read of the bar counts a view at once, and a count the Notes screen sa
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
 });
 
-test('a guest has no view: a task is never given to a guest', async ({ page }) => {
+test('a guest has « New this week » alone: no task is theirs, nor where a note went', async ({ page }) => {
   await workerWith(page, [{ ...LUMEN, id: 'w1', role: 'guest' }]);
   await open(page, '/w/w1/notes');
   await expect(sections(page)).toBeVisible();
-  await expect(views(page)).toHaveCount(0);
-  // The control: a member of the same workspace has it.
+  await expect(views(page).getByRole('link')).toHaveCount(1);
+  await expect(fresh(page)).toBeVisible();
+  // Nor the filter on the deliveries in « Filter ».
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Left', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Delivery', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // The control: a member of the same workspace has the three, and the filter.
   await workerWith(page, [{ ...LUMEN, id: 'w1', role: 'member' }]);
   await open(page, '/w/w1/notes');
-  await expect(assigned(page)).toBeVisible();
+  await expect(views(page).getByRole('link')).toHaveText([/^New this week/, /^Assigned to me/, /^Not delivered/]);
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'Delivery', exact: true })).toBeVisible();
+});
+
+test('« New this week » asks the notes left since midnight six days ago, and says it in a chip (FRU-722)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page, '/w/w1/sites');
+  await expect(fresh(page)).toHaveAttribute('href', '/w/w1/notes?created=week');
+  await fresh(page).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?created=week`);
+  await expect.poll(() => worker.asked.at(-1)?.query ?? '').toContain('since=');
+  const asked = new URLSearchParams(worker.asked.at(-1)?.query);
+  // The day of the browser: midnight, six days before today.
+  const expected = await page.evaluate(() => {
+    const now = new Date();
+
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+  });
+  expect(Number(asked.get('since'))).toBe(expected);
+  // The worker is not asked a filter it does not read.
+  expect(asked.has('created')).toBe(false);
+  await expect(fresh(page)).toHaveAttribute('aria-current', 'page');
+  await expect(fresh(page)).toHaveAccessibleName('New this week 7');
+  const chips = page.getByRole('group', { name: 'Filters on' });
+  await expect(chips).toContainText('Left');
+  await expect(chips).toContainText('This week');
+  // Its cross takes it away: the list of every note, and « Notes » on screen.
+  await chips.getByRole('button', { name: 'Remove the filter Left: This week' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes`);
+  await expect(sections(page).getByRole('link', { name: /^Notes/ })).toHaveAttribute('aria-current', 'page');
+});
+
+test('« Not delivered » asks the notes whose delivery did not arrive, and its count is red (FRU-722)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page, '/w/w1/sites');
+  await expect(undelivered(page)).toHaveAttribute('href', '/w/w1/notes?undelivered=1');
+  await undelivered(page).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?undelivered=1`);
+  await expect.poll(() => worker.asked.at(-1)?.query ?? '').toContain('undelivered=1');
+  await expect(undelivered(page)).toHaveAccessibleName('Not delivered 2');
+  await expect(page.getByRole('group', { name: 'Filters on' })).toContainText('Not delivered');
+  // Red, as the mockup draws it, with no dot: the dot says a failure of a connector.
+  const count = undelivered(page).locator('[data-alert-count]');
+  expect.soft(await painted(count, 'color')).toEqual(rgb('#b91c1c'));
+  await expect(undelivered(page).locator('[data-failing]')).toHaveCount(0);
+  // Its braces are red too, and the circle of « New this week » is not.
+  expect.soft(await painted(undelivered(page).locator('[data-view-mark]'), 'color')).toEqual(rgb('#b91c1c'));
+  expect.soft(await painted(fresh(page).locator('[data-view-mark]'), 'color')).not.toEqual(rgb('#b91c1c'));
+
+  // The filter is in « Filter » too, and chosen there it is the same view.
+  await page.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(page.locator('main h1')).toBeVisible();
+  await page.getByRole('button', { name: 'Filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Delivery', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Not delivered', exact: true }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/notes?undelivered=1`);
+  await expect(undelivered(page)).toHaveAttribute('aria-current', 'page');
+});
+
+test('a count of « Not delivered » of zero is not red', async ({ page }) => {
+  await stubWorker(page, {
+    answer: (pathname, route) =>
+      /\/console\/workspaces\/w1\/rail$/.test(pathname)
+        ? route.fulfill({ json: { sites: 1, notes: 3, failing: 0, views: { new: 0, assigned: 0, undelivered: 0 } } })
+        : undefined,
+  });
+  await open(page, '/w/w1/sites');
+  await expect(undelivered(page)).toHaveAccessibleName('Not delivered 0');
+  await expect(undelivered(page).locator('[data-alert-count]')).toHaveCount(0);
 });
 
 test('the views speak French, and the bar with them passes axe', async ({ page }) => {
   await workerWith(page, undefined, 'fr');
   await open(page, '/w/w1/notes?assignee=me');
   const vues = rail(page).getByRole('navigation', { name: 'Vues' });
-  await expect(vues.getByRole('link')).toHaveCount(1);
-  await expect(vues.getByRole('link')).toHaveAccessibleName('Assignées à moi 4');
+  await expect(vues.getByRole('link')).toHaveCount(3);
+  await expect(vues.getByRole('link', { name: /^Assignées à moi/ })).toHaveAccessibleName('Assignées à moi 4');
+  await expect(vues.getByRole('link').first()).toHaveAccessibleName(/^Nouvelles cette semaine/);
+  await expect(vues.getByRole('link').last()).toHaveAccessibleName(/^Non livrées/);
   const results = await new AxeBuilder({ page }).include('aside.kit-rail').analyze();
   expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual([]);
 });

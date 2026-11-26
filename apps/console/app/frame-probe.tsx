@@ -28,7 +28,7 @@ export default function FrameProbe() {
           counts={{ notes: 12, sites: 4 }}
           failing={2}
           views={VIEWS}
-          viewCounts={{ assigned: 4 }}
+          viewCounts={{ new: 7, assigned: 4, undelivered: 2 }}
         />
       }
     />

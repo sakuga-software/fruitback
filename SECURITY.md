@@ -1071,9 +1071,10 @@ whole.
   not shared). test:`lets the guest read a site not shared with them in the reads of FRU-497 without their filter`.
 - The counts of the bar of the console (`GET /console/workspaces/<id>/rail`) are of the
   same reads, for the same roles: the sites the caller reads, the notes of those sites that are not
-  done nor closed, and the tasks of the caller. A guest counts the sites shared with them and their
-  notes; the sends of the connectors that did not arrive (`failing`) are about the tracker, and only
-  a role with `see-tracker` gets them
+  done nor closed, the tasks of the caller, and the notes left since an instant. A guest counts the
+  sites shared with them and their notes; the sends of the connectors that did not arrive (`failing`)
+  and the notes whose delivery did not arrive (`views.undelivered`) are about the tracker, and only a
+  role with `see-tracker` gets them
   (test:`counts for a guest the sites shared with them and their notes, and no delivery`). A person
   of another workspace gets `404`, as for a workspace that does not exist, and a caller with no
   session `401` (test:`answers 404 to a person who is not a member, 401 to nobody, 405 to a write`).
@@ -1101,7 +1102,8 @@ tell it which note carries which reference (raised by the heavy review of #306; 
   on the sites shared with them only: the list, its counts and its search are of those
   sites, whatever `site` the query names. Where a note went is read with `see-tracker` only: the place and the
   connector, the reference and its link in the tracker, the delivery that did not arrive, and the
-  counts by place. A guest gets none of it, and a `place` filter is `403` to it. A person of another
+  counts by place. A guest gets none of it, and a `place` or an `undelivered` filter is `403` to it
+  (test:`is refused to a guest, who does not see where a note went, and takes 1 only`). A person of another
   workspace gets `404`, a caller with no session `401`, and the token of an extension `401`.
 - The name of an author is the name its account has now, for a member of the workspace only;
   a member who left is shown with no name. A name a reporter typed is not in the index, so it is

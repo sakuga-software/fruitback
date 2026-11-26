@@ -466,11 +466,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   - **The views are under the sections** (FRU-697, « Views » of the same mockup): a view is a filter
     of the Notes screen with a name, and its entry is a link to the address of that filter
     (`saved-views.ts`, which has its own test). « Views » is 600 11px in `muted` and names the
-    navigation; an entry is one of the bar, its first one 31 px under « Settings ». **Only « Assigned
-    to me » is a view** (`assignee=me`), with the initial of the person on `avatar` in 16 px: « New
-    this week » needs a filter on the day a note was left and « Not delivered » one on its delivery,
-    and the route of the notes reads neither (FRU-722). A view the worker does not filter would show
-    a list it did not filter. A guest has no view: a task is never given to a guest (FRU-673). **The
+    navigation; an entry is one of the bar, its first one 31 px under « Settings ». **The views are the
+    three of the mockup** (FRU-722): « New this week » (`created=week`: the notes left since midnight
+    of the day of the person six days ago, which the Notes screen asks the worker as `since`, an
+    instant; a circle of dashes), « Assigned to me » (`assignee=me`, the initial of the person on
+    `avatar` in 16 px) and « Not delivered » (`undelivered=1`, red braces, and its count red when it is
+    more than zero, with no dot: the dot says a failure of a connector). Each filter is in « Filter »
+    too (« Left », « Delivery »), with its chip. A view exists only for a filter the worker reads: a
+    view it did not filter would show a list it did not filter. A guest has « New this week » alone:
+    a task is never given to a guest (FRU-673), and a guest does not see where a note went. **The
     Notes screen with the filters of a view, and no other, is that view**: its entry is the one on
     screen, not « Notes »; the page, the board and a task opened are no filter. **The count of a
     view is the one of the read of the bar (FRU-711), then the `total` of the last read of the Notes
@@ -764,9 +768,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   there. Every note whose status does not change is on one page, and one only
   (`notes-list.test.ts`, every role and filter crossed). The console reads the page in view again
   after a status it saves, so the person sees the note in its new group. The chips are every note and each place that has notes, in the order
-  of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
-  counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
-  them says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
+  of the sources of the workspace. **« Not delivered » is no chip of the places**: it is a
+  filter of « Filter » (« Delivery », FRU-722), with its chip under the bar, and a view of the bar;
+  each of those notes says « Not delivered yet » on its row. The search searches the 64 characters, the page and the reference, and not « the author » of the
   mockup; since FRU-686 its field says « Search notes », in 220 px. A guest
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload

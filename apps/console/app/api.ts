@@ -154,13 +154,20 @@ function countOf(value: unknown): number | undefined {
 
 /**
  * The counts of the bar (FRU-711): one read, when the frame of a workspace mounts and at each change
- * of workspace, never for a screen. Quiet: the bar is not the screen, and a read that fails shows no
+ * of workspace, never for a screen. `since`: where « New this week » starts (FRU-722). Quiet: the bar is not the screen, and a read that fails shows no
  * count. A field that is not a count is no count.
  */
-export async function railCounts(workspace: string): Promise<RailCounts | undefined> {
-  const answer = await call<Record<string, unknown>>('GET', `/console/workspaces/${workspace}/rail`, undefined, {
-    quiet: true,
-  });
+export async function railCounts(workspace: string, since?: number): Promise<RailCounts | undefined> {
+  // FRU-722: « New this week » starts on a day of the person, which the worker cannot know.
+  const query = since === undefined ? '' : `?since=${since}`;
+  const answer = await call<Record<string, unknown>>(
+    'GET',
+    `/console/workspaces/${workspace}/rail${query}`,
+    undefined,
+    {
+      quiet: true,
+    },
+  );
   if (!answer.ok || typeof answer.data !== 'object' || answer.data === null) return undefined;
   const { sites, notes, failing, views } = answer.data;
   const counted = { sites: countOf(sites), notes: countOf(notes), failing: countOf(failing) };
