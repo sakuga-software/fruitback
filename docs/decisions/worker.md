@@ -4061,7 +4061,7 @@ and `account` are names that such a database has already.
   together, 19 out of 20 runs named the pooler and none migrated twice.
 - **It does not move a database from `public`**, and does not copy from one schema to another.
 - **PGlite holds one schema per case as before.** The tests that need two roles, two schemas of one
-  database or a setting of the database run on a real server (`test:postgres`, 17 in CI).
+  database or a setting of the database run on a real server (`test:postgres`, in the CI job `postgres`).
 
 ## Rotation, and the grace that is not a clock (FRU-61)
 

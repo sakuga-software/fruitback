@@ -1,4 +1,5 @@
 import { type MouseEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { composes, ownsKeys } from '../keys';
 import { t } from '../i18n';
 import { SelectBox } from '../ui';
 import { useLocale } from '../use-locale';
@@ -133,17 +134,6 @@ export function useTaskSelection(
   );
 }
 
-/** Whether a key or a press is the work of a field of text, a menu or a dialog: they keep their keys. */
-export function ownsKeys(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  if (target.closest('[role="dialog"], [role="menu"], [role="listbox"], [role="alertdialog"]') !== null) return true;
-
-  return (
-    target.closest('input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"]') !==
-    null
-  );
-}
-
 /**
  * The keys of a selection on the screen of the notes (FRU-656): Cmd or Ctrl and A selects every task
  * of the page, unless the focus is in a field, a menu or a dialog, which keep the key for their text;
@@ -153,7 +143,7 @@ export function ownsKeys(target: EventTarget | null): boolean {
 export function useSelectionKeys(selection: TaskSelection): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || ownsKeys(event.target)) return;
+      if (event.defaultPrevented || composes(event) || ownsKeys(event)) return;
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'a') {
         if (selection.selectable.length === 0) return;
         event.preventDefault();
