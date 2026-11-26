@@ -1540,6 +1540,14 @@ describe('why a send failed', () => {
 
   it('says to wait on a 429', () => {
     assert.equal(failureOf(answer(429, 'rate-limited')), 'wait');
+    assert.equal(failureOf(answer(429)), 'wait');
+  });
+
+  it('says to wait longer on the notes of the hour of a visitor (FRU-704)', () => {
+    assert.equal(
+      failureOf({ status: 429, body: JSON.stringify({ error: 'visitor-limit', perHour: 10 }) }),
+      'visitor-limit',
+    );
   });
 
   it('says to sign in again on a 401 (FRU-193), and that the site is for members when no session came (FRU-394)', () => {

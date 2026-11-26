@@ -329,6 +329,20 @@ export type VisitorRight = (typeof VISITOR_RIGHTS)[number];
 export const DEFAULT_VISITOR_RIGHT: VisitorRight = 'while-open';
 
 /**
+ * The notes a visitor with no account may leave on a site in an hour (FRU-704), as the card
+ * « Safeguards » of the tab « Access » offers them: `checkVisitorNotes` of `rate-limit.ts` counts
+ * them. `0` is « No limit ». A member, and a page that signs its reporter, are not counted.
+ */
+export const VISITOR_NOTE_LIMITS = [0, 5, 10, 20, 50] as const;
+export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
+
+/**
+ * What a site takes when nobody chose (FRU-704): 10, the value of the mockup. `0056` gives it to every
+ * site of before too: Fruitback has no users yet, and a site open to anybody is the one to protect.
+ */
+export const DEFAULT_VISITOR_NOTES_PER_HOUR: VisitorNoteLimit = 10;
+
+/**
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
  * places, so `teamId` is required for one. An address that only receives has none (FRU-122).
  *
@@ -387,6 +401,8 @@ export type Site = {
   visitorEdit: VisitorRight;
   /** Whether a visitor takes back their own note (FRU-703). */
   visitorDelete: VisitorRight;
+  /** The notes a visitor with no account leaves in an hour, `0` for no limit (FRU-704). */
+  visitorNotesPerHour: VisitorNoteLimit;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -772,7 +788,8 @@ export type AccountStore = {
    * A new site, or the site of that address again with the visibility asked for last. `writers`
    * absent: `defaultWriters` for a new site, and what it was for a site that exists (FRU-330), so a
    * caller that does not know the field opens nothing and closes nothing. The same for
-   * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site.
+   * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
+   * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`.
    */
   addSite(
     workspace: string,
@@ -783,6 +800,7 @@ export type AccountStore = {
       notifyDone?: boolean;
       visitorEdit?: VisitorRight;
       visitorDelete?: VisitorRight;
+      visitorNotesPerHour?: VisitorNoteLimit;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
@@ -1260,7 +1278,14 @@ export function clientOf(site: Site): ClientMap[string] {
     ...(offersDoneNotice(site) ? { notifyDone: true } : {}),
     // FRU-703: what a visitor may do to a note of their own. Said only where a visitor may write: a
     // site of members only has no note of a visitor, and absent is `never`.
-    ...(site.writers === 'anyone' ? { visitorEdit: site.visitorEdit, visitorDelete: site.visitorDelete } : {}),
+    // FRU-704: and how many notes a visitor leaves in an hour. Absent, or `0`, is no limit.
+    ...(site.writers === 'anyone'
+      ? {
+          visitorEdit: site.visitorEdit,
+          visitorDelete: site.visitorDelete,
+          ...(site.visitorNotesPerHour > 0 ? { visitorNotesPerHour: site.visitorNotesPerHour } : {}),
+        }
+      : {}),
     // The first place is where the client routes, as when a site had one destination.
     ...(first === undefined
       ? {}

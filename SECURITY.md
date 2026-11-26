@@ -181,7 +181,9 @@ clear unless this list says otherwise:
   the address of the session only to a session of a member of the workspace whose role sees the
   tracker. It is added to each answer after the cache, so a reader never gets it from the answer
   of another; and only an `https` address is given.
-- The addresses of callers, for two minutes, in the table `kv` of the rate limit.
+- The addresses of callers, for two minutes, in the table `kv` of the rate limit. For the notes of
+  a visitor in an hour, the address and the digest of the key of the browser, with the
+  site, for two hours.
 - The logo of a workspace, when its owner or an admin sent one: the bytes of one image,
   in the table `workspace_logos`, until it is removed or replaced, or its workspace goes. See below.
 
@@ -2647,6 +2649,47 @@ them by a key that their browser holds, and by nothing else.
   and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
+
+### The notes of a visitor in an hour (FRU-704)
+
+The line « Notes per visitor » of the card « Safeguards », in the tab « Access » of a site, sets how
+many notes a visitor with no account may leave there in an hour: « No limit », 5, 10, 20 or 50. `POST
+/feedback` counts them before anything is written; over it, `429 visitor-limit` with the limit, and
+the widget says « Send it again later » with the text kept.
+
+- Who is counted. A caller with no token, on a site that takes the notes of anybody. A session of a
+  member, a token that the site signs, a site of its members only and a client of
+  `FRUITBACK_CLIENTS` are not counted.
+  test:`never counts a member of the workspace, after a visitor spent the hour`.
+  A visitor is what `attributionFor` names one, after the token was read: a token that does not
+  verify is refused with `401` before the count, never taken for a member.
+  test:`lets no token that does not verify pass the count: it is refused, and writes nothing (review of #984)`.
+- Two counts, by site. The key of the browser (its digest, `visitorDigestOf`) at the limit, and the
+  address at three times it, as the people of one office share an address. Over either one refuses;
+  with no key the address counts alone, so a visitor who clears their key meets it.
+  test:`takes 10 notes of one browser on a new site, refuses the 11th with nothing written, and takes another browser`.
+  test:`counts 3 browsers on one address, so a visitor who clears their key meets it`.
+- A batch counts the notes this request may plant: not one an earlier attempt kept, nor one another
+  request holds. One that would pass the limit is refused whole: its notes are free at once for a
+  later attempt, but its count is spent, as every refused request of a limiter is (below).
+  test:`counts only the notes of a batch sent again that no earlier attempt kept (review of #984)`.
+  test:`gives back the notes of a refused batch, so a later attempt plants them (review of #984)`.
+  test:`counts every note of a batch, and refuses one that would pass the limit with none written`.
+- How. `chargeRateLimit` with a window of an hour, in the table `kv`, as every count of the worker: a
+  refused note is counted too, so a visitor who keeps sending stays refused, for two hours at most.
+  A note that the tracker then fails to keep (`502`) is counted too: a count is never taken back, as
+  `incr` takes no amount below one. A visitor whose tracker fails spends a note of the hour at each
+  try; the widget keeps the text for the try after.
+  A database that does not answer refuses the note with `503 limiter-unavailable`.
+- The default. 10, the value of the mockup, for a new site and, by `0056`, for every site of before:
+  Fruitback has no users yet. A value out of the list is refused by the console API
+  (test:`refuses a value that is not one of the list, and changes nothing`), and a row that holds one
+  counts as 10, never as « No limit ».
+- What it is not. A key and an address are no proof of who somebody is: a visitor with many
+  addresses passes many times. It keeps a page that anybody writes on from flooding the tracker; the
+  limit of the requests of an address (`RATE_LIMIT_PER_MINUTE`) still holds under it.
+- The guard is taken out of a copy of `feedback-routes.ts`, and the 11th note goes:
+  test:`fails without the count of the route (planted violation)`.
 
 ### « Looks fixed » and « Still wrong », from the extension (FRU-294)
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { type Access, type Level, LEVELS, levelOf, visitorReplies, withLevel } from '../access-policy';
-import type { Visibility, VisitorRight, Writers } from '../api';
+import { VISITOR_NOTE_LIMITS, type Visibility, type VisitorNoteLimit, type VisitorRight, type Writers } from '../api';
 import { msg, t } from '../i18n';
 import { Choice, PickCards, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
@@ -11,9 +11,9 @@ import { useLocale } from '../use-locale';
  * visitor sees » on the right. The console only shows and sends what the worker stores: a cell that
  * no setting of the worker holds is written as words, not drawn as a list that could change it.
  *
- * Left out of the mockup, as the orchestrator asked: the card « Safeguards » (FRU-704). Drawn and not
- * chosen: the level « Collaborate » (FRU-707) and the two ways to recognise a visitor that come later
- * (FRU-705, FRU-706).
+ * The card « Safeguards » (FRU-704) grows one line by safeguard, each with its pull request: « Notes
+ * per visitor » first. Drawn and not chosen: the level « Collaborate » (FRU-707) and the two ways to
+ * recognise a visitor that come later (FRU-705, FRU-706).
  */
 
 /** The icons of the tab, drawn as every icon of the console: a grid of 24, a stroke of 2. */
@@ -33,6 +33,8 @@ const PATHS = {
   screen: 'M3 5h18v11H3zM8 20h8M12 16v4',
   mail: 'M3 6h18v12H3zM3 7l9 6 9-6',
   key: 'M15 4a5 5 0 1 0 0 10a5 5 0 1 0 0-10M11.5 12.5L4 20M7 17l2 2',
+  shield: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9c-4.6-.7-8-4.5-8-9V6z',
+  clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
 } as const;
 
 type IconName = keyof typeof PATHS;
@@ -521,6 +523,74 @@ export function DoneNotice({
           onChange={(notifyDone) => onChange({ ...access, notifyDone })}
         />
       </div>
+    </AccessCard>
+  );
+}
+
+/** One line of the card « Safeguards »: its icon, its name and what it does, then its control. */
+function Safeguard({
+  icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: IconName;
+  title: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-[12px] border-t border-line px-[16px] py-[10px] first:border-t-0">
+      <span className="text-ink-soft">
+        <Icon name={icon} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-(length:--text-small) font-medium text-ink">{title}</span>
+        <span className="text-(length:--text-hint) text-muted">{hint}</span>
+      </span>
+      <span className="flex-none">{children}</span>
+    </div>
+  );
+}
+
+/**
+ * « Safeguards » (FRU-704): what keeps the notes of anybody in hand, one line each, as the mockup
+ * draws them. The worker applies each value. « Notes per visitor »: the notes a visitor with no account
+ * leaves on the site in an hour, by the key of their browser and by their address; then the widget asks
+ * them to wait. Where only members write, no visitor is counted: the value is said, not changed.
+ */
+export function Safeguards({
+  access,
+  disabled,
+  onChange,
+}: {
+  access: Access;
+  disabled: boolean;
+  onChange: (access: Access) => void;
+}) {
+  useLocale();
+  const writes = access.writers === 'anyone';
+  const limitWord = (limit: VisitorNoteLimit) =>
+    limit === 0 ? t('No limit') : t('{count} / hour', { count: String(limit) });
+
+  return (
+    <AccessCard id="safeguards" icon="shield" title={t('Safeguards')}>
+      <Safeguard icon="clock" title={t('Notes per visitor')} hint={t('Per hour, then the widget asks to wait')}>
+        {writes ? (
+          <Choice
+            compact
+            labelHidden
+            label={t('Notes per visitor')}
+            value={String(access.visitorNotesPerHour)}
+            disabled={disabled}
+            options={VISITOR_NOTE_LIMITS.map((limit) => ({ value: String(limit), label: limitWord(limit) }))}
+            onChange={(value) => onChange({ ...access, visitorNotesPerHour: Number(value) as VisitorNoteLimit })}
+          />
+        ) : (
+          // Members only: no visitor leaves a note, so none is counted.
+          <Fixed>{t('n/a')}</Fixed>
+        )}
+      </Safeguard>
     </AccessCard>
   );
 }

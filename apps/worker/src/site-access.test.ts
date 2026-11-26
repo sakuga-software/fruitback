@@ -106,3 +106,61 @@ describe('what a visitor may do on a site, set in the console (FRU-703)', () => 
     assert.deepEqual(await stored(), ['everyone', 'anyone', 'while-open', 'while-open']);
   });
 });
+
+describe('the notes of a visitor in an hour, set in the console (FRU-704)', () => {
+  const limitOf = async (world: Awaited<ReturnType<typeof aSite>>['world'], site: string) =>
+    (await rowsOf(world.database, `SELECT visitor_notes_per_hour FROM sites WHERE id = '${site}'`))[0]
+      ?.visitor_notes_per_hour;
+
+  it('gives a new site 10 an hour, changes it for an owner, and keeps it when a caller does not name it', async () => {
+    const { world, ana, workspace, site } = await aSite();
+    assert.equal(await limitOf(world, site), 10);
+    const read = await callOn(world, 'GET', `/console/workspaces/${workspace}/sites/${site}`, { token: ana.token });
+    assert.equal(((await read.json()) as Record<string, unknown>).visitorNotesPerHour, 10);
+
+    for (const value of [0, 50, 5]) {
+      const set = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+        token: ana.token,
+        body: { url: SITE, visibility: 'everyone', writers: 'anyone', visitorNotesPerHour: value },
+      });
+      assert.equal(set.status, 201, await set.clone().text());
+      assert.equal(((await set.json()) as Record<string, unknown>).visitorNotesPerHour, value);
+      assert.equal(await limitOf(world, site), value);
+    }
+    // The extension changes the visibility only, and keeps the limit.
+    await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+      token: ana.token,
+      body: { url: SITE, visibility: 'members' },
+    });
+    assert.equal(await limitOf(world, site), 5);
+  });
+
+  it('refuses a value that is not one of the list, and changes nothing', async () => {
+    const { world, ana, workspace, site } = await aSite();
+
+    for (const value of [7, -1, '10', null, 10.5, 1000]) {
+      const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+        token: ana.token,
+        body: { url: SITE, visibility: 'everyone', writers: 'anyone', visitorNotesPerHour: value },
+      });
+      assert.equal(answer.status, 400, String(value));
+      assert.deepEqual(await answer.json(), { error: 'invalid-visitor-notes-per-hour' });
+    }
+    assert.equal(await limitOf(world, site), 10);
+  });
+
+  it('refuses a member and a guest, and changes nothing', async () => {
+    const { world, workspace, site } = await aSite();
+
+    for (const role of ['member', 'guest'] as const) {
+      const person = await signInTo(world, `${role}-limit@acme.dev`);
+      await memberOf(world, workspace, person.id, role);
+      const answer = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+        token: person.token,
+        body: { url: SITE, visibility: 'everyone', writers: 'anyone', visitorNotesPerHour: 0 },
+      });
+      assert.equal(answer.status, 403, role);
+    }
+    assert.equal(await limitOf(world, site), 10);
+  });
+});

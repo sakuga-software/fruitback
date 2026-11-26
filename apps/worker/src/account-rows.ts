@@ -20,6 +20,9 @@ import {
   VISIBILITIES,
   VISITOR_RIGHTS,
   type VisitorRight,
+  DEFAULT_VISITOR_NOTES_PER_HOUR,
+  VISITOR_NOTE_LIMITS,
+  type VisitorNoteLimit,
   type Visibility,
   WRITERS,
   type Workspace,
@@ -76,6 +79,10 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
   // FRU-703: a value that is not one of the three gives nothing to a visitor, as for `writers`.
   const visitorEdit: VisitorRight = isOneOf(row.visitor_edit, VISITOR_RIGHTS) ? row.visitor_edit : 'never';
   const visitorDelete: VisitorRight = isOneOf(row.visitor_delete, VISITOR_RIGHTS) ? row.visitor_delete : 'never';
+  // FRU-704: a value that is not one of the list is the default, never « No limit ».
+  const visitorNotesPerHour: VisitorNoteLimit = isOneOf(row.visitor_notes_per_hour, VISITOR_NOTE_LIMITS)
+    ? row.visitor_notes_per_hour
+    : DEFAULT_VISITOR_NOTES_PER_HOUR;
 
   return {
     id: row.id,
@@ -86,6 +93,7 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     notifyDone,
     visitorEdit,
     visitorDelete,
+    visitorNotesPerHour,
     destinations,
   };
 }
