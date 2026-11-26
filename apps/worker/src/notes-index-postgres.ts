@@ -515,6 +515,29 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       return new Map(rows.flatMap((row) => (row.site === null ? [] : [[row.site, Number(row.waiting)] as const])));
     },
 
+    async byConnector(workspace) {
+      // One pass over the notes of the workspace by `note_index_by_workspace`: 9 to 15 ms for 60,000
+      // notes, measured (FRU-714). An index of the connector made it 3 to 8 ms, and cost every note
+      // that is written: not taken.
+      const rows = await run((db) =>
+        db
+          .select({ connector: note_index.connector_id, notes: count() })
+          .from(note_index)
+          .where(
+            and(
+              eq(note_index.workspace_id, workspace),
+              isNotNull(note_index.connector_id),
+              isNull(note_index.archived_at),
+            ),
+          )
+          .groupBy(note_index.connector_id),
+      );
+
+      return new Map(
+        rows.flatMap((row) => (row.connector === null ? [] : [[row.connector, Number(row.notes)] as const])),
+      );
+    },
+
     async forget(which, options = {}) {
       const columns = {
         site: note_index.site_id,

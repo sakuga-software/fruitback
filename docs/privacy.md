@@ -285,7 +285,9 @@ The table `done_notices` keeps one row for each note that waits:
   provider signed them in or was linked by them
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
-  tracker it connected, encrypted, and where each site sends its notes; its name, its members and their roles, and the address
+  tracker it connected, encrypted, and where each site sends its notes; for each connector, whether
+  its tracker refused it and since when, and when its last send arrived (a moment, never what was
+  sent); its name, its members and their roles, and the address
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members, its sites and the notes that Fruitback keeps for them; the notes already in a tracker stay
   there.

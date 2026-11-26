@@ -2026,6 +2026,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Les déclencheurs qui l’appellent s’arrêtent, et les appels en attente ne partent pas.',
   'The routine refused its token. Generate a new token at claude.ai/code/routines, then connect the routine again.':
     'La routine a refusé son jeton. Générez un nouveau jeton sur claude.ai/code/routines, puis connectez la routine à nouveau.',
+  // FRU-627: `/fire` answered 404.
+  'Since {when}, claude.ai says that this routine or its API trigger is gone, and the calls do not start it. Add an API trigger to a routine at claude.ai/code/routines, connect it here and choose it on the sites, then disconnect this one.':
+    'Depuis {when}, claude.ai dit que cette routine ou son déclencheur d’API n’existe plus, et les appels ne la lancent pas. Ajoutez un déclencheur d’API à une routine sur claude.ai/code/routines, connectez-la ici et choisissez-la sur les sites, puis déconnectez celle-ci.',
+  '{place} is gone, and the calls of this site do not start it. Connect the routine again from the connectors.':
+    '{place} n’existe plus, et les appels de ce site ne la lancent pas. Connectez la routine à nouveau depuis les connecteurs.',
   'The trigger of a site calls it when a note arrives. The call carries ids only: the routine reads the notes through the MCP server.':
     'Le déclencheur d’un site l’appelle quand une note arrive. L’appel ne porte que des identifiants : la routine lit les notes par le serveur MCP.',
   'Set up the routine': 'Configurer la routine',
@@ -2165,6 +2170,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Healthy: 'En bonne santé',
   '1 call not delivered': '1 appel non livré',
   '{count} calls not delivered': '{count} appels non livrés',
+  // FRU-714: when the last send to a connector arrived.
+  'Last delivery': 'Dernière livraison',
+  '1 send not delivered': '1 envoi non livré',
+  '{count} sends not delivered': '{count} envois non livrés',
   Soon: 'Bientôt',
   'Connect another {source}': 'Connecter un autre {source}',
   'Other ways to connect {source}': 'Autres façons de connecter {source}',

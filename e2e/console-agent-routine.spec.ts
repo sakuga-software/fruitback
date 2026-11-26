@@ -25,9 +25,28 @@ const SESSION = 'https://claude.ai/code/session_01HJKLMNOPQRSTUVWXYZ';
 
 type Worker = { connectors: unknown[]; added: unknown[]; triggers: unknown[] };
 
+/** The calls that did not start the routine: given up on a 404 (FRU-627), on a 401, or none. */
+function deliveriesOf(options: { refused?: boolean; gone?: boolean }): unknown[] {
+  const call = { event: 'agent.requested', createdAt: '2026-11-06T11:00:00.000Z', attempts: 1 };
+  if (options.gone)
+    return [{ ...call, id: 'dlv_3', lastStatus: 404, lastError: 'The routine or its API trigger is gone' }];
+  if (options.refused) {
+    return [
+      {
+        ...call,
+        id: 'dlv_2',
+        lastStatus: 401,
+        lastError: 'The routine refused its token: generate a new one at claude.ai/code/routines',
+      },
+    ];
+  }
+
+  return [];
+}
+
 async function workerWith(
   page: Page,
-  options: { connectors?: unknown[]; locale?: 'en' | 'fr'; refused?: boolean; trigger?: unknown } = {},
+  options: { connectors?: unknown[]; locale?: 'en' | 'fr'; refused?: boolean; gone?: boolean; trigger?: unknown } = {},
 ): Promise<Worker> {
   const worker: Worker = { connectors: options.connectors ?? [ROUTINE], added: [], triggers: [] };
   const answer = (pathname: string, route: Route) => {
@@ -45,18 +64,7 @@ async function workerWith(
     }
     if (pathname === '/console/workspaces/w1/connectors/c3/deliveries') {
       return json({
-        deliveries: options.refused
-          ? [
-              {
-                id: 'dlv_2',
-                event: 'agent.requested',
-                createdAt: '2026-11-06T11:00:00.000Z',
-                attempts: 1,
-                lastStatus: 401,
-                lastError: 'The routine refused its token: generate a new one at claude.ai/code/routines',
-              },
-            ]
-          : [],
+        deliveries: deliveriesOf(options),
         sessions: [
           {
             id: 'dlv_1',
@@ -164,6 +172,42 @@ test('the calls that wait for a routine are said with its trigger, not as an add
   await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
   const agent = page.getByRole('region', { name: 'Start an agent', exact: true });
   await expect(agent).toContainText('2 calls did not arrive at Claude Code routine · trig_01ABCDEFGHJKLMNOPQRSTUVW.');
+});
+
+test('a routine whose /fire answered 404 needs attention: its row, its panel and the box of its site say so (FRU-627)', async ({
+  page,
+}) => {
+  const gone = { ...ROUTINE, attention: { reason: 'routine-gone', since: '2026-11-06T11:00:00.000Z' } };
+  await workerWith(page, {
+    connectors: [HOOK, gone],
+    gone: true,
+    trigger: { connector: 'c3', moment: 'verified-note', enabled: true, waiting: 1 },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${CONSOLE}/w/w1/connectors`);
+  const row = page.locator('tbody tr[data-connector]').filter({ hasText: 'Claude Code routine' });
+  await expect(row.locator('[data-pill]')).toHaveText('Needs attention');
+  await row.getByRole('button', { name: 'Settings of Claude Code routine', exact: true }).click();
+  await unfolded(page);
+  const panel = page.getByRole('region', { name: /Claude Code routine/ });
+  await expect(panel).toContainText('claude.ai says that this routine or its API trigger is gone');
+  await expect(panel).toContainText('Add an API trigger to a routine at claude.ai/code/routines');
+  // Not the sentence of a token: a new token starts no routine that is gone.
+  await expect(panel).not.toContainText('The routine refused its token');
+  await expect(page.locator('[data-deliveries]')).toContainText('The routine answered 404');
+  await expectNoViolation(page);
+
+  // The box of the site says why its calls stopped, and never « Fruitback tries again ».
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#agent`);
+  const agent = page.getByRole('region', { name: 'Start an agent', exact: true });
+  await expect(agent).toContainText(
+    'Claude Code routine · trig_01ABCDEFGHJKLMNOPQRSTUVW is gone, and the calls of this site do not start it.',
+  );
+  await expect(agent).not.toContainText('Fruitback tries again');
+  await expect(agent.getByRole('link', { name: 'See the calls' })).toHaveAttribute(
+    'href',
+    '/w/w1/connectors?connector=c3',
+  );
 });
 
 test('at 390 px in French, the panel says « Session lancée », and nothing scrolls sideways', async ({ page }) => {
