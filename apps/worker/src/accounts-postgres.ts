@@ -2506,6 +2506,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             attention: connectors.attention,
             attention_at: connectors.attention_at,
             settings: connectors.settings,
+            delivered_at: connectors.delivered_at,
           })
           .from(connectors)
           .where(eq(connectors.workspace_id, workspace))
@@ -2666,6 +2667,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .update(connectors)
           .set({ attention: trouble ?? null, attention_at: trouble === undefined ? null : now })
           .where(and(eq(connectors.id, connector), sql`${connectors.attention} IS DISTINCT FROM ${trouble ?? null}`)),
+      );
+    },
+
+    async noteDelivered(connector, at) {
+      given(connector, 'noteDelivered: connector');
+      given(at, 'noteDelivered: at');
+      // A moment before the one kept writes nothing: two notes that end out of order keep the later.
+      await run((db) =>
+        db
+          .update(connectors)
+          .set({ delivered_at: at })
+          .where(
+            and(eq(connectors.id, connector), or(isNull(connectors.delivered_at), lt(connectors.delivered_at, at))),
+          ),
       );
     },
 
@@ -2880,7 +2895,25 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     async settleDelivery(id, outcome) {
       given(id, 'settleDelivery: id');
       if (outcome.delivered) {
-        await run((db) => db.delete(deliveries).where(eq(deliveries.id, id)));
+        given(outcome.at, 'settleDelivery: outcome.at');
+        // One statement: the delivery goes, and its connector keeps the moment as its last delivery
+        // (FRU-714). A delivery already gone moves nothing, and an earlier moment does not replace a later one.
+        await run((db) => {
+          const gone = db
+            .$with('gone')
+            .as(db.delete(deliveries).where(eq(deliveries.id, id)).returning({ connector: deliveries.connector_id }));
+
+          return db
+            .with(gone)
+            .update(connectors)
+            .set({ delivered_at: outcome.at })
+            .where(
+              and(
+                inArray(connectors.id, db.select({ connector: gone.connector }).from(gone)),
+                or(isNull(connectors.delivered_at), lt(connectors.delivered_at, outcome.at)),
+              ),
+            );
+        });
 
         return;
       }
@@ -2940,6 +2973,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
 
       return { sites: row?.sites ?? 0, waiting: row?.waiting ?? 0 };
+    },
+
+    async waitingDeliveries(workspace) {
+      // By `connectors_by_workspace`, then `deliveries_by_connector`: the rows of this workspace only.
+      const rows = await run((db) =>
+        db
+          .select({ connector: deliveries.connector_id, waiting: count() })
+          .from(deliveries)
+          .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
+          .where(eq(connectors.workspace_id, workspace))
+          .groupBy(deliveries.connector_id),
+      );
+
+      return new Map(rows.map((row) => [row.connector, Number(row.waiting)] as const));
     },
 
     async retryDelivery(workspace, connector, delivery, now) {

@@ -148,6 +148,12 @@ export type NoteIndex = {
    */
   undelivered(workspace: string, sites?: readonly string[]): Promise<Map<string, number>>;
   /**
+   * How many notes went to each connector of a workspace (FRU-714), as the chip of its place on the
+   * Notes screen counts them: an archived task is not counted, and a note its visitor deleted is.
+   * A connector with no note is absent.
+   */
+  byConnector(workspace: string): Promise<Map<string, number>>;
+  /**
    * Removes the rows of these notes, and answers what they held. `notes`: the notes `forget` deleted
    * from the worker's store, each by its reference **and** the id the widget gave it. `notes`: notes
    * that went to a tracker, by the id the widget gave them, which their issue carries (FRU-237).

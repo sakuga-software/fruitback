@@ -903,21 +903,29 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `connector-logos.tsx` (the logos). **The rules, in short:**
   - **« Your connectors » is a table** (`DataTable`, a card for each row under 680 px): the
     connector with its logo and its name (FRU-404), its account (one line, cut at its end, the whole
-    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites;
-    none for a routine), its health, and at its end « Retry » and « … ».
-  - **The health says only what the worker says** (FRU-714 asks for the rest): « Needs attention »
-    when the tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not
-    delivered » and « N calls not delivered » for a connector that receives (an address, a routine,
-    a plugin with `receives`, Slack), from `GET …/connectors/<id>/deliveries`; « Healthy » when that
-    list was read and is empty; « Connected » for a tracker, whose deliveries no route reports yet;
-    « Not read » when the list of an address was not read, with a line above the table and « Try
-    again ». **Never « Healthy » for what was not read.** A red word is `accent-strong`, on a tint of
-    the accent; a green one is `done`, on a tint of `done`. **No « Last delivery », and no count of
-    notes in « Used by »**: no route gives them (FRU-714).
+    in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites,
+    and the notes that went there: « 2 sites · 31 notes »; none for a routine), its health, « Last
+    delivery », and at its end « Retry » and « … ».
+  - **The health says only what the worker says.** Since FRU-714 the worker says it with the list:
+    `health` of each connector, `{ failing, notes?, lastDeliveredAt? }`. « Needs attention » when the
+    tracker refuses the connector (FRU-102) or a place of a site (FRU-640); « N notes not delivered »
+    and « N calls not delivered » for a connector that receives (an address, a routine, a plugin with
+    `receives`, Slack), from `GET …/connectors/<id>/deliveries`, which is read **only for a connector
+    whose `failing` is above 0**, of any kind (the ids of « Retry », and notes apart from calls); « Healthy » for
+    one whose `failing` is 0, and for a tracker whose health the worker said: a tracker takes a note
+    in the request or refuses it there, so nothing of it waits. « Last delivery » is `ago` of
+    `lastDeliveredAt`, « None yet » without it. A worker that says no `health` (one of before, or
+    deliveries that did not answer) gets the screen of before: every list of an address read, «
+    Connected » for a tracker, no count of notes and an empty « Last delivery ». « Not read » when the
+    list of an address was not read, with a line above the table and « Try again »; « N sends not
+    delivered » instead when the worker said that N wait, as the bar counts them, with no « Retry ». **Never «
+    Healthy » for what was not read.** A red word is `accent-strong`, on a tint of the accent; a green
+    one is `done`, on a tint of `done`.
   - **« Retry »** is on a row whose sends wait, for an owner or an admin: it asks each of them again
     (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
     again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
-    screen last read them (`failingRead` of the frame); on another screen it stays until a read says
+    screen last read them (`failingRead` of the frame): `failing` of each connector, or the list
+    read for one whose health the worker did not say; on another screen it stays until a read says
     another number; before it, the bar shows the count of its own read (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents

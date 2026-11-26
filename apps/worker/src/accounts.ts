@@ -455,7 +455,8 @@ export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 export type DueDelivery = { id: string; connectorId: string; body: string; attempts: number };
 
 export type DeliveryOutcome =
-  | { delivered: true }
+  /** `at`: the moment the address took it, the last delivery of its connector (FRU-714). */
+  | { delivered: true; at: number }
   /** `attempts` is the count the attempt started from: see `settleDelivery`. */
   | { delivered: false; attempts: number; at: number; status?: number; error?: string; nextAt?: number };
 
@@ -586,6 +587,11 @@ export type Connector = {
   createdAt: string;
   attention?: ConnectorAttention;
   settings: ConnectorSettings;
+  /**
+   * When the last send to it arrived (FRU-714): a note that its tracker took, or a delivery of the
+   * queue that its address took. Absent: none arrived since the worker keeps it.
+   */
+  deliveredAt?: string;
 };
 
 /** How a sign-in method names the person. `email` is the link, and its subject is the address. */
@@ -1058,6 +1064,11 @@ export type AccountStore = {
    */
   noteConnector(connector: string, trouble: ConnectorTrouble | undefined, now: number): Promise<void>;
   /**
+   * A note that the tracker of a connector took, at `at` (FRU-714): its last delivery. A moment
+   * before the one it keeps changes nothing, and a connector that is gone is ignored.
+   */
+  noteDelivered(connector: string, at: number): Promise<void>;
+  /**
    * Keeps what the tracker said of a place of a site when a note went there (FRU-640). `trouble`
    * absent: the note arrived, and the place loses its trouble. The place is the destination of the
    * site with this connector, this team and this project. It never rejects for a place that is gone.
@@ -1129,6 +1140,11 @@ export type AccountStore = {
    * arrive yet, notes and calls of a trigger, as the Connectors screen adds them up.
    */
   frameCounts(workspace: string, only?: readonly string[]): Promise<{ sites: number; waiting: number }>;
+  /**
+   * How many deliveries did not arrive yet, for each connector of this workspace that has one
+   * (FRU-714): notes, events and calls, tried again or given up. A connector with none is absent.
+   */
+  waitingDeliveries(workspace: string): Promise<Map<string, number>>;
   /**
    * Makes a delivery due now, with its whole series of attempts again. `false` when it is not of this
    * workspace and connector.

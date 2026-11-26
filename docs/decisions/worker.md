@@ -428,6 +428,23 @@ degradation the ticket asked to have written down rather than discovered.
   `manage-workspace`, with the rule and the code of the name of a workspace (`invalid-name`); `null`
   or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
   installed again keeps the name, as it keeps its connector.
+- **The list of the connectors says the health of each one** (FRU-714), for the table of the
+  Connectors screen: `health: { failing, notes?, lastDeliveredAt? }` in `GET
+  /console/workspaces/<id>/connectors`, read beside the list with two grouped statements.
+  - `failing` is `waitingDeliveries`: the deliveries of the connector that did not arrive, tried
+    again or given up. A tracker has none: it takes a note in the request, or refuses it there and
+    the widget keeps the text, so a tracker with `failing: 0` and no `attention` is healthy.
+  - `notes` is `byConnector` of the index: the notes of the workspace with this `connector_id`, as
+    the chip of its place counts them. 9 to 15 ms for 60,000 notes of one workspace (190,000 in the
+    instance), by `note_index_by_workspace`; an index of `(workspace_id, connector_id)` made it 3 to
+    8 ms and cost each note written, so it was not taken. An index that does not answer costs
+    `notes` only.
+  - `lastDeliveredAt` is `connectors.delivered_at` (migration 0054): `settleDelivery` writes it in
+    the statement that removes a delivery that arrived, and `noteDelivered` when a tracker took a
+    note (`delivering` of `connectors.ts`). A later moment is never replaced by an earlier one. A
+    connector of before has none until its next send arrives.
+  - Deliveries that do not answer leave `health` out, and the console reads the list of each address,
+    as before: no count is not « none waits ».
 
 ## Where a note is stored
 
@@ -1582,7 +1599,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3342,7 +3359,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-one BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
