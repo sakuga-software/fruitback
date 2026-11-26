@@ -7,6 +7,7 @@ import {
   AGENT_KEY_USE_STEP_MS,
   MAX_AGENT_KEYS,
   MAX_OAUTH_CLIENTS,
+  MAX_SAVED_VIEWS,
   type NewAgentKey,
   type Workspace,
   destinationId,
@@ -1624,6 +1625,66 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.servesOrigin('https://shared.dev'), true, 'a site of another workspace has it still');
     assert.equal(await store.removeSite(globex.id, theirs.id), true);
     assert.equal(await store.servesOrigin('https://shared.dev'), false);
+  });
+
+  // --- The views of a person (FRU-723)
+
+  it('keeps the views of a person in a workspace of theirs, and reads, renames and removes theirs only (FRU-723)', async (store) => {
+    const { alice, workspace } = await world(store);
+    const other = await otherWorld(store);
+    const first = await store.addSavedView(workspace.id, alice.id, { name: 'Mine', filters: { mine: '1' } }, 2);
+    const second = await store.addSavedView(workspace.id, alice.id, { name: 'New', filters: { stage: 'new' } }, 1);
+    assert.ok(first.added && second.added);
+    assert.deepEqual(first.view, { id: first.view.id, name: 'Mine', filters: { mine: '1' }, createdAt: 2 });
+    // Oldest first.
+    assert.deepEqual(await store.savedViews(workspace.id, alice.id), [second.view, first.view]);
+
+    // Not a member: nothing kept, nothing read. Bob reads none of the views of Alice, in either workspace.
+    assert.deepEqual(await store.addSavedView(other.workspace.id, alice.id, { name: 'X', filters: { mine: '1' } }, 3), {
+      added: false,
+      reason: 'not-member',
+    });
+    assert.deepEqual(await store.savedViews(workspace.id, other.bob.id), []);
+    assert.deepEqual(await store.savedViews(other.workspace.id, alice.id), []);
+    // Nor renames nor removes them, by his workspace or by hers.
+    for (const [where, who] of [
+      [other.workspace.id, other.bob.id],
+      [workspace.id, other.bob.id],
+      [other.workspace.id, alice.id],
+    ] as const) {
+      assert.equal(await store.renameSavedView(where, who, first.view.id, 'Taken'), undefined);
+      assert.equal(await store.removeSavedView(where, who, first.view.id), false);
+    }
+    assert.deepEqual(await store.savedViews(workspace.id, alice.id), [second.view, first.view]);
+
+    // Hers: renamed, then removed.
+    assert.deepEqual(await store.renameSavedView(workspace.id, alice.id, first.view.id, 'Ours'), {
+      ...first.view,
+      name: 'Ours',
+    });
+    assert.equal(await store.removeSavedView(workspace.id, alice.id, second.view.id), true);
+    assert.deepEqual(await store.savedViews(workspace.id, alice.id), [{ ...first.view, name: 'Ours' }]);
+    // The views go with the workspace.
+    await store.deleteWorkspace(workspace.id);
+    assert.deepEqual(await store.savedViews(workspace.id, alice.id), []);
+  });
+
+  it(`keeps ${MAX_SAVED_VIEWS} views of a person in a workspace, also when several are saved at once (FRU-723)`, async (store) => {
+    const { alice, workspace } = await world(store);
+    const other = await otherWorld(store);
+    const saved = await Promise.all(
+      Array.from({ length: MAX_SAVED_VIEWS + 4 }, (_, i) =>
+        store.addSavedView(workspace.id, alice.id, { name: `View ${i}`, filters: { q: `w${i}` } }, i),
+      ),
+    );
+
+    assert.equal(saved.filter((each) => each.added).length, MAX_SAVED_VIEWS);
+    assert.ok(saved.every((each) => each.added || each.reason === 'too-many'));
+    assert.equal((await store.savedViews(workspace.id, alice.id)).length, MAX_SAVED_VIEWS);
+    // The limit is of each person: Bob keeps his.
+    assert.ok(
+      (await store.addSavedView(other.workspace.id, other.bob.id, { name: 'His', filters: { mine: '1' } }, 1)).added,
+    );
   });
 }
 

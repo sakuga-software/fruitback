@@ -695,6 +695,32 @@ export const last_seen = pgTable(
 );
 
 /**
+ * The views of a person in a workspace (FRU-723): a name, and the filters of the Notes screen of the
+ * console. `filters` is a JSON object of the names and values of the address, as `console-saved-views.ts`
+ * checks them. Only its member reads, renames or deletes a view. A view goes with the membership, as
+ * `last_seen`: a person who leaves and comes back starts with none. At most `MAX_SAVED_VIEWS` a member.
+ */
+export const saved_views = pgTable(
+  'saved_views',
+  {
+    id: text('id').notNull(),
+    member_id: text('member_id').notNull(),
+    name: text('name').notNull(),
+    filters: text('filters').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'saved_views_pkey', columns: [table.id] }),
+    foreignKey({
+      name: 'saved_views_member_id_fkey',
+      columns: [table.member_id],
+      foreignColumns: [member.id],
+    }).onDelete('cascade'),
+    index('saved_views_by_member').on(table.member_id, table.created_at),
+  ],
+);
+
+/**
  * The addresses of an account beside the one of better-auth (`user.email`, the primary), FRU-450:
  * `account-emails.ts`. A row is an address that something proved for the account:
  *

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { accountCases } from './account-conformance.fixture.ts';
-import { type AccountStore, MAX_AGENT_KEYS, type Site } from './accounts.ts';
+import { type AccountStore, MAX_AGENT_KEYS, MAX_SAVED_VIEWS, type Site } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import type { ClientMap } from './clients.ts';
 import {
@@ -850,6 +850,44 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       after: 'async settleDelivery(id, outcome) {',
       from: '.set({ delivered_at: outcome.at })',
       to: '.set({ delivered_at: sql`${connectors.delivered_at}` })',
+    },
+  },
+  {
+    breaks:
+      'keeps the views of a person in a workspace of theirs, and reads, renames and removes theirs only (FRU-723)',
+    by: 'reads the views of every person of the workspace',
+    replace: {
+      after: 'async savedViews(workspace, person) {',
+      from: '.where(and(eq(member.organizationId, workspace), eq(member.userId, person)))',
+      to: '.where(eq(member.organizationId, workspace))',
+    },
+  },
+  {
+    breaks:
+      'keeps the views of a person in a workspace of theirs, and reads, renames and removes theirs only (FRU-723)',
+    by: 'renames a view of anybody by its id',
+    replace: {
+      after: 'async renameSavedView(workspace, person, id, name) {',
+      from: '.where(and(eq(saved_views.id, id), inArray(saved_views.member_id, membershipOf(db, workspace, person))))',
+      to: '.where(eq(saved_views.id, id))',
+    },
+  },
+  {
+    breaks:
+      'keeps the views of a person in a workspace of theirs, and reads, renames and removes theirs only (FRU-723)',
+    by: 'removes a view of anybody by its id',
+    replace: {
+      after: 'async removeSavedView(workspace, person, id) {',
+      from: '.where(and(eq(saved_views.id, id), inArray(saved_views.member_id, membershipOf(db, workspace, person))))',
+      to: '.where(eq(saved_views.id, id))',
+    },
+  },
+  {
+    breaks: `keeps ${MAX_SAVED_VIEWS} views of a person in a workspace, also when several are saved at once (FRU-723)`,
+    by: 'keeps one view more than the limit',
+    replace: {
+      from: 'if ((kept?.views ?? 0) >= MAX_SAVED_VIEWS)',
+      to: 'if ((kept?.views ?? 0) > MAX_SAVED_VIEWS)',
     },
   },
 ];

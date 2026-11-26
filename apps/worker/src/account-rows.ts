@@ -15,6 +15,7 @@ import {
   type DueDelivery,
   type PendingDelivery,
   ROLES,
+  type SavedView,
   type Role,
   type Site,
   VISIBILITIES,
@@ -95,6 +96,30 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     visitorDelete,
     visitorNotesPerHour,
     destinations,
+  };
+}
+
+/**
+ * A view of a person (FRU-723). A row is parsed, never trusted: filters that are not an object of
+ * texts are no view, and the console never shows it.
+ */
+export function savedViewOf(row: Record<string, unknown> | undefined): SavedView | undefined {
+  if (row === undefined || typeof row.id !== 'string' || typeof row.name !== 'string') return undefined;
+  if (typeof row.filters !== 'string') return undefined;
+  let filters: unknown;
+  try {
+    filters = JSON.parse(row.filters);
+  } catch {
+    return undefined;
+  }
+  if (typeof filters !== 'object' || filters === null || Array.isArray(filters)) return undefined;
+  if (!Object.values(filters).every((value) => typeof value === 'string')) return undefined;
+
+  return {
+    id: row.id,
+    name: row.name,
+    filters: filters as Record<string, string>,
+    createdAt: typeof row.created_at === 'number' ? row.created_at : 0,
   };
 }
 

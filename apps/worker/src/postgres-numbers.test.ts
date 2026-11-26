@@ -193,6 +193,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO account_emails (email, account_id, verified_at, created_at)
        VALUES ('alice@home.example', 'acc_alice', 1, 1)`,
   );
+  // FRU-723: a view of a member, the first one the move wrote.
+  await rowsOf(
+    database,
+    `INSERT INTO saved_views (id, member_id, name, filters, created_at)
+       SELECT 'view_1', id, 'Mine', '{"mine":"1"}', 1 FROM member ORDER BY id LIMIT 1`,
+  );
 
   return database;
 }
@@ -202,7 +208,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixty-three BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixty-four BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -253,6 +259,7 @@ it('knows the sixty-three BIGINT columns of the worker, and that better-auth has
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',
+    'saved_views.created_at',
     'screenshots.created_at',
     'screenshots.expires_at',
     'sessions.created_at',
