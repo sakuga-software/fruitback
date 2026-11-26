@@ -5,6 +5,7 @@ import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
 import { isStableClass, isStableId } from './selector.ts';
 import { deepActiveElement } from './focus.ts';
+import { keepTyping, pageFieldHasFocus } from './key-guard.ts';
 import { CAPTURE_START } from './events.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
@@ -175,6 +176,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   paintAction(options.actionColor);
 
   const root = container.attachShadow({ mode: 'open' });
+  // FRU-726: a key typed in a field of the widget never reaches a shortcut of the page.
+  const stopKeepingTyping = keepTyping(root);
   // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
   // resolves `var(--fruitback-…)` against them by inheritance, without importing anything.
   adoptStyles(root, THEME_STYLES + STYLES);
@@ -460,8 +463,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    */
   function onKeyDown(event: KeyboardEvent): void {
     if (!capturing) return;
-    // A dialog of the widget that has focus owns the keys, Escape included.
-    if (dialogHasFocus()) return;
+    // A dialog of the widget that has focus owns the keys, Escape included; a field of the page
+    // keeps its own (FRU-726).
+    if (dialogHasFocus() || pageFieldHasFocus(document, root)) return;
 
     if (event.key === 'Escape') {
       // One key press cancels one thing: the page and the thread must not also act on it.
@@ -707,6 +711,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
+      stopKeepingTyping();
       view?.removeEventListener('scroll', onScroll, true);
       view?.removeEventListener('resize', onScroll);
       stopSettling();
