@@ -3909,13 +3909,14 @@ of the caller, one in 50 archived), 300 deliveries that did not arrive, and 50 o
 
 | Read                                  | Median          | p95             | SQL statements |
 | ------------------------------------- | --------------- | --------------- | -------------- |
-| `GET …/rail`, an owner                | 11.7 to 16.3 ms | 15.9 to 25.5 ms | 5              |
-| `GET …/rail`, a guest of one site     | 10.0 to 16.6 ms | 15.6 to 32.8 ms | 5              |
+| `GET …/rail`, an owner                | 12.3 to 17.2 ms | 20.9 to 24.2 ms | 5              |
+| `GET …/rail`, a guest of one site     | 8.1 to 13.7 ms  | 12.1 to 19.5 ms | 5              |
 | `GET …/notes?unresolved=1`, for scale | 26.3 to 28.1 ms | 37.6 to 53.8 ms | 9              |
 | `GET …/sites?limit=24`, for scale     | 13.1 to 18.3 ms | 20.3 to 38.3 ms | 7              |
 
 The count of the notes is one pass over the rows of the workspace by `note_index_by_workspace`
-(9.0 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make; the
+(9.1 to 11.4 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make;
+each of its counts is the condition `filtered` builds for the list, with its filter added; the
 sites and the deliveries are one statement (0.2 ms). The five statements are the account, the role,
 the reach, and the two counts, the last two at the same time. The cookie of better-auth adds its own
 reads, as on every route. A workspace of millions of notes would want counters kept beside them, as

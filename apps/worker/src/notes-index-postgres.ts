@@ -429,18 +429,16 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
     },
 
     async frameCounts(workspace, { account, sites: only }) {
-      // The filter of `list` itself, with no other field: the notes of the workspace that are not
-      // archived, of the sites the caller reads. Each count adds the condition of its filter.
+      // The filter of `list` itself: the notes of the workspace that are not archived, of the sites the
+      // caller reads. Each count is the condition `list` builds for its own filter, not a copy of it.
+      const base = only === undefined ? {} : { sites: only };
+      const counted = (query: Omit<NoteQuery, 'limit'>) =>
+        sql<number>`count(*) FILTER (WHERE ${filtered(workspace, { ...base, ...query })})`.mapWith(Number);
       const [row] = await run((db) =>
         db
-          .select({
-            open: sql<number>`count(*) FILTER (WHERE ${notInArray(note_index.stage, [...RESOLVED_STAGES])})`.mapWith(
-              Number,
-            ),
-            assigned: sql<number>`count(*) FILTER (WHERE ${eq(note_index.task_assignee_id, account)})`.mapWith(Number),
-          })
+          .select({ open: counted({ unresolved: true }), assigned: counted({ assignee: account }) })
           .from(note_index)
-          .where(filtered(workspace, only === undefined ? {} : { sites: only })),
+          .where(filtered(workspace, base)),
       );
 
       return { open: row?.open ?? 0, assigned: row?.assigned ?? 0 };
