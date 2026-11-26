@@ -993,7 +993,7 @@ export function accountCases(it: Declare<AccountStore>): void {
     const arrived = await store.enqueueDelivery(hook.id, '{"n":1}', 0);
     const late = await store.enqueueDelivery(hook.id, '{"n":2}', 1);
 
-    await store.settleDelivery(arrived, { delivered: true });
+    await store.settleDelivery(arrived, { delivered: true, at: 5_000 });
 
     assert.deepEqual(
       (await store.dueDeliveries(10, 10)).map((delivery) => delivery.id),
@@ -1003,6 +1003,59 @@ export function accountCases(it: Declare<AccountStore>): void {
       (await store.deliveries(workspace.id, hook.id)).map((delivery) => delivery.id),
       [late],
     );
+    // FRU-714: the connector keeps the moment as its last delivery.
+    assert.equal((await store.connectors(workspace.id))[0]?.deliveredAt, iso(5_000));
+  });
+
+  it('keeps the last delivery of a connector, and never an earlier one (FRU-714)', async (store) => {
+    const { workspace } = await world(store);
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const deliveredAt = async (id: string) =>
+      (await store.connectors(workspace.id)).find((each) => each.id === id)?.deliveredAt;
+    const first = await store.enqueueDelivery(hook.id, '{"n":1}', 0);
+    const second = await store.enqueueDelivery(hook.id, '{"n":2}', 0);
+
+    assert.equal(await deliveredAt(hook.id), undefined, 'nothing arrived yet');
+    await store.settleDelivery(second, { delivered: true, at: 9_000 });
+    // Two attempts that end out of order: the later moment stays.
+    await store.settleDelivery(first, { delivered: true, at: 8_000 });
+    assert.equal(await deliveredAt(hook.id), iso(9_000));
+    // A delivery that is gone already moves nothing.
+    await store.settleDelivery(first, { delivered: true, at: 12_000 });
+    assert.equal(await deliveredAt(hook.id), iso(9_000));
+
+    // A note that a tracker took, in the request.
+    await store.noteDelivered(linear.id, 7_000);
+    await store.noteDelivered(linear.id, 6_000);
+    assert.equal(await deliveredAt(linear.id), iso(7_000));
+    assert.equal(await deliveredAt(hook.id), iso(9_000), 'the other connector keeps its own');
+
+    // A connector that is gone is ignored: the note of a delivery must never fail the note.
+    await store.noteDelivered('con_nobody', 1_000);
+  });
+
+  it('counts the deliveries that wait for each connector of one workspace, and no other (FRU-714)', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const routine = await store.addConnector(workspace.id, { kind: 'claude-routine', label: 'Routine', sealed: 's' });
+    const quiet = await store.addConnector(workspace.id, { kind: 'rest', label: 'Quiet', sealed: 'sealed' });
+    const foreign = await store.addConnector(other.id, { kind: 'rest', label: 'Theirs', sealed: 'sealed' });
+    const givenUp = await store.enqueueDelivery(hook.id, '{"n":1}', 0);
+    await store.enqueueDelivery(hook.id, '{"n":2}', 0);
+    await store.enqueueDelivery(routine.id, '{}', 0, 'agent.requested');
+    await store.enqueueDelivery(foreign.id, '{}', 0);
+    const arrived = await store.enqueueDelivery(quiet.id, '{}', 0);
+    // Given up: it still waits for somebody to ask again.
+    await store.settleDelivery(givenUp, { delivered: false, attempts: 0, at: 1_000 });
+    await store.settleDelivery(arrived, { delivered: true, at: 1_000 });
+
+    assert.deepEqual(Object.fromEntries(await store.waitingDeliveries(workspace.id)), {
+      [hook.id]: 2,
+      [routine.id]: 1,
+    });
+    assert.deepEqual(Object.fromEntries(await store.waitingDeliveries('ws_nobody')), {});
   });
 
   it('writes what a failed attempt answered, and gives up when no other attempt is set', async (store) => {

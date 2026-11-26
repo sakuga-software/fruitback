@@ -444,7 +444,10 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
         'settleDelivery: outcome.attempts',
         () => store.settleDelivery(first, { delivered: false, attempts: none, at: 1_000, nextAt: 2_000 }),
       ],
-      ['settleDelivery: id', () => store.settleDelivery(none, { delivered: true })],
+      ['settleDelivery: id', () => store.settleDelivery(none, { delivered: true, at: 1_000 })],
+      ['settleDelivery: outcome.at', () => store.settleDelivery(first, { delivered: true, at: none })],
+      ['noteDelivered: at', () => store.noteDelivered(hook.id, none)],
+      ['noteDelivered: connector', () => store.noteDelivered(none, 1_000)],
       ['retryDelivery: now', () => store.retryDelivery(workspace.id, hook.id, second, none)],
       ['dropAbandonedDeliveries: before', () => store.dropAbandonedDeliveries(none)],
     ];

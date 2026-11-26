@@ -428,6 +428,23 @@ degradation the ticket asked to have written down rather than discovered.
   `manage-workspace`, with the rule and the code of the name of a workspace (`invalid-name`); `null`
   or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
   installed again keeps the name, as it keeps its connector.
+- **The list of the connectors says the health of each one** (FRU-714), for the table of the
+  Connectors screen: `health: { failing, notes?, lastDeliveredAt? }` in `GET
+  /console/workspaces/<id>/connectors`, read beside the list with two grouped statements.
+  - `failing` is `waitingDeliveries`: the deliveries of the connector that did not arrive, tried
+    again or given up. A tracker has none: it takes a note in the request, or refuses it there and
+    the widget keeps the text, so a tracker with `failing: 0` and no `attention` is healthy.
+  - `notes` is `byConnector` of the index: the notes of the workspace with this `connector_id`, as
+    the chip of its place counts them. 9 to 15 ms for 60,000 notes of one workspace (190,000 in the
+    instance), by `note_index_by_workspace`; an index of `(workspace_id, connector_id)` made it 3 to
+    8 ms and cost each note written, so it was not taken. An index that does not answer costs
+    `notes` only.
+  - `lastDeliveredAt` is `connectors.delivered_at` (migration 0054): `settleDelivery` writes it in
+    the statement that removes a delivery that arrived, and `noteDelivered` when a tracker took a
+    note (`delivering` of `connectors.ts`). A later moment is never replaced by an earlier one. A
+    connector of before has none until its next send arrives.
+  - Deliveries that do not answer leave `health` out, and the console reads the list of each address,
+    as before: no count is not « none waits ».
 
 ## Where a note is stored
 
