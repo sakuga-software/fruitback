@@ -4,6 +4,7 @@ import { box, contrast, fulfillSites, painted, rgb, sideScroll, styles, LUMEN } 
 import {
   CONSOLE,
   LINE,
+  MUTED,
   CHIP,
   HOVER,
   ACCENT,
@@ -52,11 +53,13 @@ test('the table of the connectors, and the settings of a Linear in their dialog'
     'Account',
     'Used by',
     'Health',
+    'Last delivery',
     'Actions',
   ]);
   await expect(rows(page)).toHaveCount(2);
   const linear = rows(page).first();
-  await expect(linear.locator('td')).toHaveText(['Linear', 'Workspace Acme', '2 sites', 'Connected', '']);
+  // A worker that says no health (FRU-714): no count of notes and no last delivery, never a made-up one.
+  await expect(linear.locator('td')).toHaveText(['Linear', 'Workspace Acme', '2 sites', 'Connected', '', '']);
   await expect(rows(page).nth(1).locator('td').nth(1)).toHaveText('hooks.acme.dev/feedback');
 
   // The logo is a file the console serves itself, in its box of 24 px, 14 px inside.
@@ -75,7 +78,7 @@ test('the table of the connectors, and the settings of a Linear in their dialog'
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(LINE));
   await expect(rows(page).nth(1).locator('img[data-logo="rest"]')).toHaveAttribute('src', '/logos/rest.svg');
 
-  // A tracker says « Connected »: the worker does not say yet whether its notes arrived (FRU-714).
+  // A tracker says « Connected » when the worker says no health (FRU-714).
   const state = linear.locator('[data-pill]');
   expect.soft(await styles(state, ['font-size', 'font-weight', 'height'])).toEqual({
     'font-size': '12px',
@@ -123,6 +126,98 @@ test('the table of the connectors, and the settings of a Linear in their dialog'
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expectNoViolation(page, 'the table');
+});
+
+test('the worker says the health with the list: the last delivery, the notes, « Healthy » for a tracker (FRU-714)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  const minutes = (count: number) => new Date(Date.now() - count * 60_000).toISOString();
+  const last = minutes(12);
+  worker.connectors = [
+    { ...LINEAR, health: { failing: 0, notes: 31, lastDeliveredAt: last } },
+    { ...ADDRESS, health: { failing: 0, notes: 1, lastDeliveredAt: minutes(5 * 60 + 3) } },
+  ];
+  // What the address would answer if it were read: the health says that nothing waits, so it is not.
+  worker.late = LATE;
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/deliveries')) reads.push(new URL(request.url()).pathname);
+  });
+  await open(page);
+
+  const [linear, address] = [rows(page).first(), rows(page).nth(1)];
+  await expect(linear.locator('td')).toHaveText([
+    'Linear',
+    'Workspace Acme',
+    '2 sites · 31 notes',
+    'Healthy',
+    '12 min ago',
+    '',
+  ]);
+  await expect(address.locator('td').nth(2)).toHaveText('1 site · 1 note');
+  await expect(address.locator('td').nth(3)).toHaveText('Healthy');
+  await expect(address.locator('td').nth(4)).toHaveText('5 h ago');
+  // The moment itself, for a screen reader and a copy.
+  await expect(linear.locator('[data-last-delivery] time')).toHaveAttribute('datetime', last);
+  expect.soft(await painted(linear.locator('[data-last-delivery]'), 'color')).toEqual(rgb(MUTED));
+  // One read for the list, and none of the sends of an address that has none waiting.
+  expect(reads).toEqual([]);
+  await expect(failing(page)).toHaveCount(0);
+  await expectNoViolation(page, 'the table with its health');
+});
+
+test('an address whose sends wait is read for « Retry », and the bar counts what the worker said (FRU-714)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.connectors = [
+    { ...LINEAR, health: { failing: 0, notes: 0 } },
+    { ...ADDRESS, health: { failing: 2, notes: 2 } },
+  ];
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/deliveries')) reads.push(new URL(request.url()).pathname);
+  });
+  await open(page);
+
+  const address = rows(page).nth(1);
+  await expect(address.getByText('2 notes not delivered', { exact: true })).toBeVisible();
+  await expect(address.getByRole('button', { name: 'Retry REST API', exact: true })).toBeVisible();
+  // Nothing arrived yet: the cell says so, and the tracker with no note says « 0 notes ».
+  await expect(address.locator('td').nth(4)).toHaveText('None yet');
+  await expect(rows(page).first().locator('td').nth(2)).toHaveText('2 sites · 0 notes');
+  await expect(failing(page)).toHaveText('failed sends:2');
+  expect(reads).toEqual(['/console/workspaces/w1/connectors/r1/deliveries']);
+
+  // The list does not answer: the row says the count the worker said, as the bar does, and offers no
+  // « Retry », whose ids are in the list (raised in review).
+  worker.late = undefined;
+  await open(page);
+  await expect(address.locator('[data-pill]')).toHaveText('2 sends not delivered');
+  await expect(address.getByRole('button', { name: /^Retry/ })).toHaveCount(0);
+  await expect(failing(page)).toHaveText('failed sends:2');
+});
+
+test('any connector whose sends the worker says wait is read, and the bar counts it (FRU-714, review)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // A kind this console does not take for one that receives, whose sends the worker says wait.
+  worker.connectors = [
+    { ...LINEAR, health: { failing: 1, notes: 3 } },
+    { ...ADDRESS, health: { failing: 0, notes: 1 } },
+  ];
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors/c1/deliveries`, (route) =>
+    route.fulfill({ json: { deliveries: LATE.slice(0, 1) } }),
+  );
+  await open(page);
+
+  const linear = rows(page).first();
+  await expect(linear.getByText('1 note not delivered', { exact: true })).toBeVisible();
+  await expect(linear.getByRole('button', { name: 'Retry Linear', exact: true })).toBeVisible();
+  await expect(rows(page).nth(1).locator('td').nth(3)).toHaveText('Healthy');
+  await expect(failing(page)).toHaveText('failed sends:1');
 });
 
 test('an address says how many sends wait, « Retry » sends them again, and the bar counts them', async ({ page }) => {
