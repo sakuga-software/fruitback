@@ -344,7 +344,9 @@ function Tile({
             <Button
               tone="outline"
               size="small"
-              label={addLabel(name, connected)}
+              // While the browser leaves for the service, the button says where it goes (raised in
+              // review): a label would hide its words.
+              {...(offer.busy === undefined ? { label: addLabel(name, connected) } : {})}
               disabled={offer.busy !== undefined}
               onClick={offer.primary}
             >

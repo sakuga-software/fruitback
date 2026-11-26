@@ -380,8 +380,19 @@ test('several connections of one kind: a row each, a count on the logo, and « A
   await expect(line).toHaveText('An issue in a team');
   expect(await line.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 
-  // « Add » does what « Connect » does: the consent at Linear for a second workspace of Linear.
+  // « Add » does what « Connect » does: the consent at Linear for a second workspace of Linear. While
+  // the browser leaves, the button is named by the words it shows, not by the label of « Add ».
+  let leave = () => {};
+  const left = new Promise<void>((resolve) => (leave = resolve));
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors/linear/oauth`, async (route) => {
+    await left;
+    await route.fallback();
+  });
   await add.click();
+  const going = linear.getByRole('button', { name: 'Going to Linear…', exact: true });
+  await expect(going).toBeDisabled();
+  await expect(linear.getByRole('button', { name: /^Add another Linear/ })).toHaveCount(0);
+  leave();
   await expect
     .poll(() => worker.sent.map((each) => each.pathname))
     .toContain('/console/workspaces/w1/connectors/linear/oauth');
