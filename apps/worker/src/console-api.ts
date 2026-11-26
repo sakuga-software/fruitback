@@ -3,6 +3,7 @@ import type { DoneNoticeSeams } from './done-notices.ts';
 import { isOneOf } from './one-of.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
+import { handleRail } from './console-rail.ts';
 import { askLinear, handleConnectors, listRepositories } from './console-connectors.ts';
 import { pluginOf } from './trackers/index.ts';
 import { type PluginKind, isPluginKind } from './trackers/kinds.ts';
@@ -778,6 +779,18 @@ export async function handleConsoleApi(
     headers,
   });
   if (notes !== undefined) return notes;
+
+  // FRU-711: the counts of the bar of the console, in one read: `console-rail.ts`.
+  const rail = await handleRail(rest, request, {
+    workspace: workspaceId as string,
+    account: account.id,
+    allowed,
+    reach: () => context.accounts.reach(workspaceId as string, account.id),
+    accounts: context.accounts,
+    noteIndex: context.noteIndex,
+    headers,
+  });
+  if (rail !== undefined) return rail;
 
   /**
    * Sites as the console reads them, each with its notes and, for whoever sees the tracker, what did

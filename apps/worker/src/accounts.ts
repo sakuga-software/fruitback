@@ -1124,6 +1124,12 @@ export type AccountStore = {
   /** The deliveries of a connector that did not arrive yet, newest first. */
   deliveries(workspace: string, connector: string): Promise<PendingDelivery[]>;
   /**
+   * What the bar of the console counts beside the notes (FRU-711), in one statement: the sites of a
+   * workspace (`only`: those sites, for a guest), and the deliveries of its connectors that did not
+   * arrive yet, notes and calls of a trigger, as the Connectors screen adds them up.
+   */
+  frameCounts(workspace: string, only?: readonly string[]): Promise<{ sites: number; waiting: number }>;
+  /**
    * Makes a delivery due now, with its whole series of attempts again. `false` when it is not of this
    * workspace and connector.
    */

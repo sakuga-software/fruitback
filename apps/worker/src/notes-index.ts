@@ -133,6 +133,15 @@ export type NoteIndex = {
    */
   summary(workspace: string, sites?: readonly string[]): Promise<Map<string, SiteNotes>>;
   /**
+   * What the bar of the console counts (FRU-711), in one pass over the notes of a workspace: each
+   * count is the `total` that `list` answers for the same filter, so the bar and the Notes screen
+   * never say two numbers for one list.
+   * - `open`: the notes that are not done nor closed (`unresolved`);
+   * - `assigned`: the tasks of `account` (`assignee`).
+   * `sites`: only those sites, as `NoteQuery.sites` (a guest).
+   */
+  frameCounts(workspace: string, asked: { account: string; sites?: readonly string[] }): Promise<FrameCounts>;
+  /**
    * The deliveries of each site of a workspace that are not delivered: waiting for an attempt, or
    * given up (FRU-122). A delivery that arrived is removed, so it is not counted. `sites`: only those
    * sites (FRU-497).
@@ -192,6 +201,9 @@ export type NoteIndex = {
    */
   taskOf(workspace: string, site: string, note: string): Promise<TaskFields | undefined>;
 };
+
+/** What `frameCounts` answers (FRU-711). */
+export type FrameCounts = { open: number; assigned: number };
 
 /** The smallest and the largest page of `list`, and the page when none is asked. */
 export const PAGE_SIZES = { min: 8, max: 50, default: 25 } as const;

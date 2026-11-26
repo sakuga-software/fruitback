@@ -3880,6 +3880,47 @@ refused by its sentence. What follows is the history.
 - **An index that does not answer is `503`**, said in the log; a worker with no database has no
   list (`404`).
 
+## The counts of the bar of the console (FRU-711)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/rail` answers `{ sites, notes?, views?: { assigned }, failing? }`**
+  (`console-rail.ts`): the counts at the right of the entries of the bar. The console reads it when
+  the frame of a workspace mounts and at each change of workspace, never for a screen.
+- **Each count is a list the worker already answers, with the same filter**: `sites` the sites the
+  caller reads (the `total` of a page of `GET …/sites`), `notes` the notes that are not done nor
+  closed and not archived (`GET …/notes?unresolved=1`), `views.assigned` the tasks of the caller
+  (`GET …/notes?assignee=me`), and `failing` the deliveries of the connectors that did not arrive, of
+  notes and of calls of a trigger, as the Connectors screen adds them up from
+  `GET …/connectors/<id>/deliveries`. `NoteIndex.frameCounts` reads the notes with `filtered`, the
+  condition of `list` itself, so the bar and the Notes screen cannot say two numbers for one list
+  (test:`says the total the list of the notes answers for the same filter`).
+- **Every role reads it (`read-feedback`)**; a guest counts the sites shared with them and the notes
+  of those sites, and gets no `failing`, which is about the tracker (`see-tracker`).
+- **An index of the notes that does not answer costs `notes` and `views`**, never the rest, and is
+  said in the log: an absent count is not a zero.
+
+### What it costs
+
+Measured in the process, through `handleConsoleApi` with the SQL statements counted, on PostgreSQL 17
+in a container: a workspace of 200 sites and 50 000 notes (half of them on one site, one in 40 a task
+of the caller, one in 50 archived), 300 deliveries that did not arrive, and 50 other workspaces of
+2 000 notes each. 60 calls after 10, three runs:
+
+| Read                                  | Median          | p95             | SQL statements |
+| ------------------------------------- | --------------- | --------------- | -------------- |
+| `GET …/rail`, an owner                | 11.7 to 16.3 ms | 15.9 to 25.5 ms | 5              |
+| `GET …/rail`, a guest of one site     | 10.0 to 16.6 ms | 15.6 to 32.8 ms | 5              |
+| `GET …/notes?unresolved=1`, for scale | 26.3 to 28.1 ms | 37.6 to 53.8 ms | 9              |
+| `GET …/sites?limit=24`, for scale     | 13.1 to 18.3 ms | 20.3 to 38.3 ms | 7              |
+
+The count of the notes is one pass over the rows of the workspace by `note_index_by_workspace`
+(9.0 ms of the plan for 50 000 rows), the pass the counts of the Notes screen already make; the
+sites and the deliveries are one statement (0.2 ms). The five statements are the account, the role,
+the reach, and the two counts, the last two at the same time. The cookie of better-auth adds its own
+reads, as on every route. A workspace of millions of notes would want counters kept beside them, as
+for the list.
+
 ## The notes of a whole site, for the extension (FRU-306)
 
 ### The rules, in short

@@ -352,6 +352,97 @@ test('the counts are at the right of the entries, and the failed sends of the co
   await expect(links.nth(3).locator('span')).toHaveCount(2);
 });
 
+test('the bar reads its counts once, when the frame mounts and at each change of workspace (FRU-711)', async ({
+  page,
+}) => {
+  const reads: string[] = [];
+  const counts: Record<string, unknown> = {
+    w1: { sites: 4, notes: 12, failing: 2, views: { assigned: 4 } },
+    w2: { sites: 1, notes: 3, failing: 0, views: { assigned: 0 } },
+  };
+  await stubWorker(page, {
+    answer: (pathname, route) => {
+      const read = /^\/console\/workspaces\/(w\d)\/rail$/.exec(pathname);
+      if (read === null) return undefined;
+      reads.push(read[1] as string);
+
+      return route.fulfill({ json: counts[read[1] as string] });
+    },
+  });
+  await open(page);
+  const links = sections(page).getByRole('link');
+  for (const [index, name] of ['Notes 12', 'Sites 4', 'Connectors failed sends: 2', 'Members', 'Settings'].entries()) {
+    await expect(links.nth(index)).toHaveAccessibleName(name);
+  }
+  const views = rail(page).getByRole('navigation', { name: 'Views' });
+  await expect(views.getByRole('link', { name: /^Assigned to me/ })).toHaveAccessibleName('Assigned to me 4');
+
+  // Another screen reads no count: the bar keeps them.
+  await links.nth(3).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/members`);
+  await expect(links.nth(0)).toHaveAccessibleName('Notes 12');
+  await page.waitForLoadState('networkidle');
+  expect(reads).toEqual(['w1']);
+
+  // Another workspace reads its own, and none of the first one stays: no sends wait there, so no red.
+  await switcher(page).click();
+  await page.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w2/sites`);
+  await expect(links.nth(0)).toHaveAccessibleName('Notes 3');
+  await expect(links.nth(1)).toHaveAccessibleName('Sites 1');
+  await expect(links.nth(2)).toHaveAccessibleName('Connectors');
+  await expect(sections(page).locator('[data-failing]')).toHaveCount(0);
+  expect(reads).toEqual(['w1', 'w2']);
+});
+
+test('the Connectors screen says the sends of now, and the read of the bar answered later does not write over it', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await stubWorker(page, {
+    answer: (pathname, route) =>
+      /^\/console\/workspaces\/w1\/rail$/.test(pathname)
+        ? held.then(() => route.fulfill({ json: { sites: 1, notes: 12, failing: 2, views: { assigned: 4 } } }))
+        : undefined,
+  });
+  // The screen reads the connectors (none) while the read of the bar is on its way: no send waits.
+  // Either order ends with no red count; this one, the screen first, is the one the guard is for.
+  const listed = page.waitForResponse((response) => response.url().endsWith('/console/workspaces/w1/connectors'));
+  await page.goto(`${CONSOLE}/w/w1/connectors`);
+  await expect(page.locator('main h1')).toBeVisible();
+  await listed;
+  release();
+  // The read of the bar is answered: its numbers come, but not its 2 sends, older than the screen's 0.
+  await expect(sections(page).getByRole('link').nth(0)).toHaveAccessibleName('Notes 12');
+  await expect(sections(page).locator('[data-failing]')).toHaveCount(0);
+});
+
+test('a read of the bar that fails shows no count, and a guest has no red count', async ({ page }) => {
+  let answer: { status: number; json: unknown } = { status: 503, json: { error: 'store-unavailable' } };
+  await stubWorker(page, {
+    workspaces: [ACME, { ...LUMEN, role: 'guest' }],
+    answer: (pathname, route) =>
+      /^\/console\/workspaces\/w\d\/rail$/.test(pathname) ? route.fulfill(answer) : undefined,
+  });
+  await open(page);
+  const links = sections(page).getByRole('link');
+  await page.waitForLoadState('networkidle');
+  for (const [index, name] of ['Notes', 'Sites', 'Connectors', 'Members', 'Settings'].entries()) {
+    await expect(links.nth(index)).toHaveAccessibleName(name);
+  }
+
+  // A guest: the worker gives no `failing`, so the bar says no number of sends at all.
+  answer = { status: 200, json: { sites: 1, notes: 5, views: { assigned: 0 } } };
+  await open(page, 'sites', 'w2');
+  await expect(links.nth(0)).toHaveAccessibleName('Notes 5');
+  await expect(sections(page).locator('[data-failing]')).toHaveCount(0);
+  // The control: the same read with `failing` draws it.
+  answer = { status: 200, json: { sites: 4, notes: 12, failing: 2, views: { assigned: 4 } } };
+  await open(page, 'sites', 'w1');
+  await expect(sections(page).getByRole('link', { name: 'Connectors failed sends: 2' })).toBeVisible();
+});
+
 test('a section under the pointer takes the hover, and the keyboard walks the bar with a visible ring', async ({
   page,
 }) => {

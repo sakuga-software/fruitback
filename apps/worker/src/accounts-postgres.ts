@@ -2923,6 +2923,25 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return rows.flatMap((row) => pendingDeliveryOf(row) ?? []);
     },
 
+    async frameCounts(workspace, only) {
+      // The deliveries in a subquery of the count of the sites: one round trip. A delivery that
+      // arrived is removed, so each row counts.
+      const [row] = await run((db) => {
+        const waiting = db
+          .select({ waiting: count() })
+          .from(deliveries)
+          .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
+          .where(eq(connectors.workspace_id, workspace));
+
+        return db
+          .select({ sites: count(), waiting: sql<number>`(${waiting})`.mapWith(Number) })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), onlySites(only)));
+      });
+
+      return { sites: row?.sites ?? 0, waiting: row?.waiting ?? 0 };
+    },
+
     async retryDelivery(workspace, connector, delivery, now) {
       given(workspace, 'retryDelivery: workspace');
       given(connector, 'retryDelivery: connector');

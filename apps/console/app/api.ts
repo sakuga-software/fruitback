@@ -136,6 +136,46 @@ export function readSite(workspace: string, site: string): Promise<Answer<Site>>
 }
 
 /**
+ * What the bar of a workspace counts (FRU-711), as the worker answers it: the sites, the open notes,
+ * the sends of the connectors that did not arrive, and each view by its id. A count the worker did not
+ * give is absent: a guest has no `failing`, and an index that did not answer gives no `notes`.
+ */
+export type RailCounts = {
+  sites?: number;
+  notes?: number;
+  failing?: number;
+  views: Readonly<Record<string, number>>;
+};
+
+/** A count, or `undefined` for anything that is not one. */
+function countOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * The counts of the bar (FRU-711): one read, when the frame of a workspace mounts and at each change
+ * of workspace, never for a screen. Quiet: the bar is not the screen, and a read that fails shows no
+ * count. A field that is not a count is no count.
+ */
+export async function railCounts(workspace: string): Promise<RailCounts | undefined> {
+  const answer = await call<Record<string, unknown>>('GET', `/console/workspaces/${workspace}/rail`, undefined, {
+    quiet: true,
+  });
+  if (!answer.ok || typeof answer.data !== 'object' || answer.data === null) return undefined;
+  const { sites, notes, failing, views } = answer.data;
+  const counted = { sites: countOf(sites), notes: countOf(notes), failing: countOf(failing) };
+  const viewCounts =
+    typeof views === 'object' && views !== null
+      ? Object.entries(views).flatMap(([id, count]) => (countOf(count) === undefined ? [] : [[id, count as number]]))
+      : [];
+
+  return {
+    ...Object.fromEntries(Object.entries(counted).filter(([, count]) => count !== undefined)),
+    views: Object.fromEntries(viewCounts),
+  };
+}
+
+/**
  * A domain the workspace says it owns (FRU-103), as the worker answers it. `state` is the worker's
  * word: `proven` only while the DNS shows `record`. `previews` is the pattern a proven domain covers,
  * and `previewsSite` the site an admin named for it.

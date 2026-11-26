@@ -428,6 +428,24 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
+    async frameCounts(workspace, { account, sites: only }) {
+      // The filter of `list` itself, with no other field: the notes of the workspace that are not
+      // archived, of the sites the caller reads. Each count adds the condition of its filter.
+      const [row] = await run((db) =>
+        db
+          .select({
+            open: sql<number>`count(*) FILTER (WHERE ${notInArray(note_index.stage, [...RESOLVED_STAGES])})`.mapWith(
+              Number,
+            ),
+            assigned: sql<number>`count(*) FILTER (WHERE ${eq(note_index.task_assignee_id, account)})`.mapWith(Number),
+          })
+          .from(note_index)
+          .where(filtered(workspace, only === undefined ? {} : { sites: only })),
+      );
+
+      return { open: row?.open ?? 0, assigned: row?.assigned ?? 0 };
+    },
+
     async undelivered(workspace, only) {
       // The body of a delivery is what was sent, as JSON: the site is in it, and nowhere else. A body
       // that is not JSON names no site, and does not stop the count of the others.
@@ -695,7 +713,7 @@ function readable(sites: readonly string[] | undefined) {
 }
 
 /** Every filter of a query but its place and its cursor. */
-function filtered(workspace: string, query: NoteQuery) {
+function filtered(workspace: string, query: Omit<NoteQuery, 'limit'>) {
   return and(
     eq(note_index.workspace_id, workspace),
     readable(query.sites),
@@ -723,7 +741,7 @@ function filtered(workspace: string, query: NoteQuery) {
 }
 
 /** FRU-655: the filters on the fields of a task, read in the index. */
-function taskFilters(query: NoteQuery): (SQL | undefined)[] {
+function taskFilters(query: Omit<NoteQuery, 'limit'>): (SQL | undefined)[] {
   const due = query.due;
   let byDay: SQL | undefined;
   if (due?.by === 'none') byDay = isNull(note_index.task_due_on);

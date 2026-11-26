@@ -1069,6 +1069,14 @@ whole.
   The other reads of the sites of the console are narrowed the same way: a page of the
   list, the sites to choose from (`…/sites/choices`), and one site (`…/sites/<id>`, `404` for a site
   not shared). test:`lets the guest read a site not shared with them in the reads of FRU-497 without their filter`.
+- The counts of the bar of the console (`GET /console/workspaces/<id>/rail`, FRU-711) are of the
+  same reads, for the same roles: the sites the caller reads, the notes of those sites that are not
+  done nor closed, and the tasks of the caller. A guest counts the sites shared with them and their
+  notes; the sends of the connectors that did not arrive (`failing`) are about the tracker, and only
+  a role with `see-tracker` gets them
+  (test:`counts for a guest the sites shared with them and their notes, and no delivery`). A person
+  of another workspace gets `404`, as for a workspace that does not exist, and a caller with no
+  session `401` (test:`answers 404 to a person who is not a member, 401 to nobody, 405 to a write`).
 - An anonymous reader of a public page writes to the index: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.

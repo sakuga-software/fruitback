@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode, useEffect, useId, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router';
 import {
   type Account,
@@ -9,6 +9,7 @@ import {
   knownMe,
   logoSource,
   onWorkspaceSuspended,
+  railCounts,
   saveLanguage,
   signOut,
 } from '../api';
@@ -24,7 +25,7 @@ import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
-import { type SavedView, type ViewId, viewAddress, viewOf, viewsFor } from '../saved-views';
+import { type SavedView, type ViewId, VIEWS, viewAddress, viewOf, viewsFor } from '../saved-views';
 
 /**
  * The frame of a workspace (FRU-234): the bar with the workspace and its sections, and the section
@@ -121,17 +122,52 @@ export default function WorkspaceFrame() {
   const [asked, askAgain] = useState(0);
   // A change of workspace draws the new one from the last answer too, while the worker is asked.
   const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
-  // FRU-690: the sends that wait, as the Connectors screen last read them in this workspace. No read
-  // gives them on another screen yet (FRU-711): before one, the bar counts nothing.
+  // FRU-711: the counts of the bar, read once when the frame mounts and at each change of workspace.
+  // FRU-690: the sends that wait, from that read, then as the Connectors screen last read them.
+  const [counts, setCounts] = useState<{ workspace: string; counts: Readonly<Record<string, number>> }>();
   const [failing, setFailing] = useState<{ workspace: string; count: number } | undefined>();
-  // A change of workspace forgets the count: back in the first one, a count read before would be old
-  // (raised in review). The Connectors screen of the workspace reads it again.
-  // FRU-697: the counts of the views, as the Notes screen last read their filters in this workspace.
-  // The bar reads nothing for them (FRU-711): a view the screen did not count shows no count.
+  // FRU-697: the counts of the views, from that read, then as the Notes screen last read their filters.
   const [viewCounts, setViewCounts] = useState<{ workspace: string; counts: Partial<Record<ViewId, number>> }>();
+  // What a screen of this workspace said since the read of the bar was asked: `failing`, or the id of
+  // a view. Its answer does not write over them, as a screen read them at the same time or later, and
+  // a count a screen dropped after a write must stay dropped.
+  const told = useRef<{ workspace: string | undefined; what: Set<string> }>({ workspace: undefined, what: new Set() });
   useEffect(() => {
+    // A change of workspace forgets the counts: back in the first one, a count read before would be
+    // old (raised in review). The read of the bar, then the screens of the workspace, say them again.
+    setCounts(undefined);
     setFailing(undefined);
     setViewCounts(undefined);
+    if (id === undefined) return;
+    told.current = { workspace: id, what: new Set() };
+    let current = true;
+    void railCounts(id).then((read) => {
+      if (!current || read === undefined) return;
+      const said = told.current.what;
+      setCounts({
+        workspace: id,
+        counts: Object.fromEntries(
+          (['notes', 'sites'] as const).flatMap((section) =>
+            read[section] === undefined ? [] : [[section, read[section]]],
+          ),
+        ),
+      });
+      if (read.failing !== undefined && !said.has('failing')) setFailing({ workspace: id, count: read.failing });
+      setViewCounts((was) => {
+        const kept = was?.workspace === id ? was.counts : {};
+        const fromRead = Object.fromEntries(
+          VIEWS.flatMap((view) =>
+            read.views[view.id] === undefined || said.has(view.id) ? [] : [[view.id, read.views[view.id]]],
+          ),
+        );
+
+        return { workspace: id, counts: { ...fromRead, ...kept } };
+      });
+    });
+
+    return () => {
+      current = false;
+    };
   }, [id]);
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
@@ -187,9 +223,13 @@ export default function WorkspaceFrame() {
     ...context,
     renamed: (workspace) => changed({ name: workspace.name }),
     logoChanged: (logo) => changed({ logo }),
-    failingRead: (count) => setFailing({ workspace: context.workspace.id, count }),
+    failingRead: (count) => {
+      if (told.current.workspace === context.workspace.id) told.current.what.add('failing');
+      setFailing({ workspace: context.workspace.id, count });
+    },
     viewCounted: (view, count) => {
       const workspace = context.workspace.id;
+      if (told.current.workspace === workspace) told.current.what.add(view);
       setViewCounts((was) => {
         const counts = { ...(was?.workspace === workspace ? was.counts : {}) };
         if (count === undefined) delete counts[view];
@@ -228,6 +268,7 @@ export default function WorkspaceFrame() {
           settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
           admin={context.me.instanceAdmin === true}
           account={context.me.account}
+          {...(counts?.workspace === context.workspace.id ? { counts: counts.counts } : {})}
           {...(failing?.workspace === context.workspace.id ? { failing: failing.count } : {})}
         />
       }
@@ -326,8 +367,8 @@ type RailProps = {
   /** The person signed in: the menu at the foot of the bar (FRU-684). */
   account: Account;
   /**
-   * The counts at the right of the entries, by the `path` of a section (FRU-684). A section with no
-   * count shows none: no read gives them yet, and the bar asks nothing for them.
+   * The counts at the right of the entries, by the `path` of a section (FRU-684): the read of the bar
+   * gives `notes` and `sites` (FRU-711). A section with no count shows none.
    */
   counts?: Readonly<Partial<Record<string, number>>>;
   /** How many sends of the connectors failed: a red dot and the number on « Connectors ». */

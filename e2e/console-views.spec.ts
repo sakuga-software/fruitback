@@ -9,7 +9,8 @@ import { LUMEN, type StubbedWorkspace, box, contrast, painted, rgb, stubWorker, 
  *
  * Only « Assigned to me » is a view: the worker filters neither the day a note was left nor its
  * delivery, which « New this week » and « Not delivered » need (FRU-722). The count of a view is the
- * total the worker answered to the Notes screen for that filter: the bar reads nothing for it (FRU-711).
+ * one of the read of the bar (FRU-711), then the total the worker answered to the Notes screen for
+ * that filter: no screen reads the notes for it.
  */
 const CONSOLE = 'http://localhost:5178';
 const KIT = 'http://localhost:5179';
@@ -175,11 +176,12 @@ test('a view opens the notes with its filter in the address, and is the entry on
   await expect(assigned(page)).toHaveAttribute('aria-current', 'page');
 });
 
-test('the count of a view is the total the notes read for its filter, and the bar reads nothing for it', async ({
+test('the count of a view is the total the notes read for its filter, and no screen reads the notes for it', async ({
   page,
 }) => {
   const worker = await workerWith(page);
-  // On another screen, before the notes read the filter: no count, and no read of the notes at all.
+  // On another screen, before the notes read the filter, and with no read of the bar (the stub does
+  // not answer it): no count, and no read of the notes at all.
   await open(page, '/w/w1/sites');
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
   await expect(assigned(page).locator('span')).toHaveCount(2);
@@ -243,6 +245,36 @@ test('the count of a view is the total the notes read for its filter, and the ba
   await page.goto(`${CONSOLE}/w/w2/sites`);
   await expect(page.locator('main h1')).toBeVisible();
   await expect(assigned(page)).toHaveAccessibleName('Assigned to me');
+});
+
+test('the read of the bar counts a view at once, and a count the Notes screen said is not written over (FRU-711)', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let holding = false;
+  const worker = await workerWith(page);
+  // The read of the bar, before the stubs of `workerWith`: 4 for the view, held when a case asks.
+  await page.route('**/console/workspaces/w1/rail', async (route) => {
+    if (holding) await held;
+    await route.fulfill({ json: { sites: 1, notes: 12, failing: 0, views: { assigned: 4 } } });
+  });
+
+  // On another screen: the count of the bar, and still no read of the notes.
+  await open(page, '/w/w1/sites');
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 4');
+  await page.waitForLoadState('networkidle');
+  expect(worker.asked).toEqual([]);
+
+  // The Notes screen reads 5 for the view while the read of the bar is on its way: its answer, 4,
+  // comes after, and does not take the place of the newer count.
+  worker.total = 5;
+  holding = true;
+  await open(page, '/w/w1/notes?assignee=me');
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
+  release();
+  await page.waitForLoadState('networkidle');
+  await expect(assigned(page)).toHaveAccessibleName('Assigned to me 5');
 });
 
 test('a guest has no view: a task is never given to a guest', async ({ page }) => {

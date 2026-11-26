@@ -452,11 +452,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     build, and « My account » (`ACCOUNT`) to the menu, so no entry leads nowhere and every screen has
     a way in.
   - **The counts at the right of the entries are props of the bar** (`counts`, `failing`): a red dot
-    and the number on « Connectors » when sends failed. The Connectors screen gives the second one
-    when it reads the health of its connectors (FRU-690). No read gives the others yet: counting the
-    notes of every site on every screen was taken away for its cost (FRU-497), and a summary of the
-    worker is FRU-711. With no count the entry shows none. `/kit/frame`, a page of the development
-    server, mounts the bar with the counts of the mockup.
+    and the number on « Connectors » when sends failed. **The frame reads them once** (FRU-711,
+    `GET …/rail`, `railCounts` of `api.ts`), when it mounts and at each change of workspace, never
+    for a screen: « Notes » counts the notes that are not done nor closed, « Sites » the sites the
+    person reads, « Connectors » the sends that did not arrive, and each view its filter. Counting
+    the notes of every site on every screen was taken away for its cost (FRU-497): this read is one
+    statement over the notes, measured in `worker.md`. **A screen that reads a count again says the
+    newer one**: the Connectors screen the sends (FRU-690), the Notes screen the count of a view
+    (FRU-697); the answer of the bar does not write over what a screen said meanwhile. A read that
+    fails, and a count the worker does not give (no `failing` to a guest), show no count, never a
+    zero. `/kit/frame`, a page of the development server, mounts the bar with the counts of the
+    mockup.
   - **The views are under the sections** (FRU-697, « Views » of the same mockup): a view is a filter
     of the Notes screen with a name, and its entry is a link to the address of that filter
     (`saved-views.ts`, which has its own test). « Views » is 600 11px in `muted` and names the
@@ -467,13 +473,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     a list it did not filter. A guest has no view: a task is never given to a guest (FRU-673). **The
     Notes screen with the filters of a view, and no other, is that view**: its entry is the one on
     screen, not « Notes »; the page, the board and a task opened are no filter. **The count of a
-    view is the `total` of the last read of the Notes screen with exactly its filter**, kept by the
-    frame for this workspace as the red count of « Connectors »: the bar reads nothing for it, so no
-    screen asks the worker more than before (`e2e/console-views.spec.ts` counts the reads), and a view
-    the screen did not read shows no count. A read again, after a write (a status, a task, « Send
-    again »), drops the counts of the views when it starts, as the write can change them and its
-    answer can be dropped: a count that may be wrong is not shown, and a view read again says its new
-    count. A read for the bar is FRU-711. A view a person makes
+    view is the one of the read of the bar (FRU-711), then the `total` of the last read of the Notes
+    screen with exactly its filter**, kept by the frame for this workspace as the red count of
+    « Connectors »: no screen asks the worker for a view more than before (`e2e/console-views.spec.ts`
+    counts the reads). A read again, after a
+    write (a status, a task, « Send again »), drops the counts of the views when it starts, as the
+    write can change them and its answer can be dropped: a count that may be wrong is not shown, and
+    a view read again says its new count. A view a person makes
     from the bar of filters needs the worker to keep it (FRU-723): the console keeps none.
   - **The fixed foot**: « What's new » (the releases on GitHub, with a dot until this browser opened
     it with this version of the console, `whats-new.ts`), the extension (« Install the extension
@@ -900,7 +906,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
     (`POST …/deliveries/<id>/retry`, the route of « Try now » in the settings), then reads the health
     again. **The red count of « Connectors » in the bar** is the sum of the sends that wait, as this
     screen last read them (`failingRead` of the frame); on another screen it stays until a read says
-    another number, and before any read the bar counts nothing (FRU-711).
+    another number; before it, the bar shows the count of its own read (FRU-711).
   - **« Add a connector » is a catalogue on the page, under the table**, with or without a
     connector: a search (`folded`: no case, no accent) and the groups All kinds, Trackers, Agents
     and Developers. Its tiles are 64 px, four in a row at 1440 px, one at 390 px: the logo in a box
