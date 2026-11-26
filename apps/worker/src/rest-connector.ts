@@ -323,7 +323,7 @@ export async function deliverDue({
         console.warn('[fruitback] a routine started with no address of a session in its answer', delivery.id);
       }
       await noteRoutine(delivery.connectorId, undefined);
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
 
       return true;
     }
@@ -410,7 +410,7 @@ export async function deliverDue({
     }
     if (answer.ok) {
       await noteRoutine(delivery.connectorId, undefined);
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
       await attachments?.endAt(files, now() + SIGNED_URL_MS).catch((error: unknown) => {
         console.error('[fruitback] the files of a delivery that arrived keep their transit', delivery.id, error);
       });
@@ -473,7 +473,7 @@ export async function deliverDue({
 
     if (status !== undefined && status >= 200 && status < 300) {
       // The note arrived: that is written first, or a store of files that fails would send it again.
-      await accounts.settleDelivery(delivery.id, { delivered: true });
+      await accounts.settleDelivery(delivery.id, { delivered: true, at: now() });
       // The receiver has the addresses of the files: they answer until the end of their signature,
       // and the files go then. A store that does not answer leaves them to the end of their transit,
       // 7 days at most, and the log says so.

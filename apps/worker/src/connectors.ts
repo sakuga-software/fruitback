@@ -437,7 +437,48 @@ export function createConnectorStores(
       ? await pluginStore(kept.kind, held, reach)
       : await TRACKERS[kept.kind](held, reach);
 
-    return withSettings(store, kept.settings);
+    return delivering(withSettings(store, kept.settings), accounts, connector, now);
+  };
+}
+
+/**
+ * The store of a tracker, with each note it takes kept as the last delivery of its connector
+ * (FRU-714). A tracker takes a note in the request, so its answer is the delivery: an address takes
+ * its notes later, from the queue, and `settleDelivery` keeps that moment.
+ *
+ * WARNING: this never rejects for the moment. The note is in the tracker: a failure here would make
+ * the widget send it again, and the tracker would keep it twice.
+ */
+function delivering(store: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
+  const arrived = async (): Promise<void> => {
+    await accounts.noteDelivered(connector, now()).catch((failure: unknown) => {
+      console.error('[fruitback] the last delivery of a connector was not kept', connector, failure);
+    });
+  };
+
+  return {
+    ...store,
+    async create(note, client, policy, files) {
+      const created = await store.create(note, client, policy, files);
+      await arrived();
+
+      return created;
+    },
+    ...(store.createBatch === undefined
+      ? {}
+      : {
+          async createBatch(notes, client, policy, memory) {
+            const answer = await (store.createBatch as NonNullable<NoteStore['createBatch']>)(
+              notes,
+              client,
+              policy,
+              memory,
+            );
+            await arrived();
+
+            return answer;
+          },
+        }),
   };
 }
 

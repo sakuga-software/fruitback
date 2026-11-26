@@ -88,6 +88,48 @@ function connectorView(connector: Connector): {
 }
 
 /**
+ * The health of a connector in the list (FRU-714), for the table of the Connectors screen and the
+ * count of the bar:
+ *
+ * - `failing`: its deliveries that did not arrive yet, tried again or given up. A tracker has none: it
+ *   takes a note in the request, or refuses it there, and the widget keeps the text.
+ * - `notes`: the notes that went to it. Absent when the index of the notes did not answer.
+ * - `lastDeliveredAt`: when the last send to it arrived. Absent: none arrived yet.
+ */
+type ConnectorHealth = { failing: number; notes?: number; lastDeliveredAt?: string };
+
+/**
+ * The health of each connector of a workspace: two grouped reads, the deliveries that wait and the
+ * notes by connector, beside the read of the list. `undefined`: the deliveries did not answer, and
+ * the console then reads them by connector, as before. A note index that does not answer costs
+ * `notes` only.
+ */
+async function healthOf(
+  context: ConsoleApiContext,
+  workspace: string,
+): Promise<((connector: Connector) => ConnectorHealth) | undefined> {
+  const [waiting, notes] = await Promise.all([
+    context.accounts.waitingDeliveries(workspace).catch((error: unknown) => {
+      console.error('[fruitback] the deliveries that wait did not answer', error);
+
+      return undefined;
+    }),
+    context.noteIndex?.byConnector(workspace).catch((error: unknown) => {
+      console.error('[fruitback] the index of the notes did not answer', error);
+
+      return undefined;
+    }),
+  ]);
+  if (waiting === undefined) return undefined;
+
+  return (connector) => ({
+    failing: waiting.get(connector.id) ?? 0,
+    ...(notes === undefined ? {} : { notes: notes.get(connector.id) ?? 0 }),
+    ...(connector.deliveredAt === undefined ? {} : { lastDeliveredAt: connector.deliveredAt }),
+  });
+}
+
+/**
  * A call to the Linear of a connector, with its stored key. What Linear answers is noted on the
  * connector, as for a note (FRU-102): a refusal makes it « Needs attention », and an answer ends it.
  */
@@ -174,12 +216,21 @@ export async function handleConnectors(
   if (rest === '/connectors') {
     if (request.method === 'GET') {
       if (!allowed('see-tracker')) return forbidden();
-      const connectors = await context.accounts.connectors(workspaceId as string);
+      // FRU-714: the health with the list, read at the same time. `see-tracker` reads every site of
+      // the workspace, so a count of the whole workspace says nothing a guest may not know: a guest
+      // is refused above.
+      const [connectors, health] = await Promise.all([
+        context.accounts.connectors(workspaceId as string),
+        healthOf(context, workspaceId as string),
+      ]);
 
       return json(
         200,
         {
-          connectors: connectors.map(connectorView),
+          connectors: connectors.map((connector) => ({
+            ...connectorView(connector),
+            ...(health === undefined ? {} : { health: health(connector) }),
+          })),
           available: context.secretsKey !== undefined,
           // The console offers « Connect with Linear » only where the worker can do it.
           linearOAuth: linearOAuthReady(context),
