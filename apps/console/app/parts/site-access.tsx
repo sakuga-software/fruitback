@@ -36,6 +36,8 @@ const PATHS = {
   shield: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9c-4.6-.7-8-4.5-8-9V6z',
   clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
   inbox: 'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',
+  // FRU-704: two arrows round, as the mockup draws « Keep every version ».
+  history: 'M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4',
 } as const;
 
 type IconName = keyof typeof PATHS;
@@ -559,6 +561,8 @@ function Safeguard({
  * draws them. The worker applies each value. « Notes per visitor »: the notes a visitor with no account
  * leaves on the site in an hour, by the key of their browser and by their address; then the widget asks
  * them to wait. Where only members write, no visitor is counted: the value is said, not changed.
+ * « Keep every version »: an edit or a deletion of a note keeps the version of before, which the page
+ * of the note shows to the members; the same where only members write.
  */
 export function Safeguards({
   access,
@@ -610,6 +614,27 @@ export function Safeguards({
         </div>
       ) : (
         <Safeguard icon="inbox" title={t('Hold new visitor notes')} hint={t('A member approves before they are sent')}>
+          <Fixed>{t('n/a')}</Fixed>
+        </Safeguard>
+      )}
+      {/* FRU-704: « Keep every version », a switch drawn as the one above. Where only members write, said. */}
+      {writes ? (
+        <div className="flex items-center gap-[12px] border-t border-line px-[16px] py-[10px]">
+          <span className="text-ink-soft">
+            <Icon name="history" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <Toggle
+              label={t('Keep every version')}
+              hint={t('Edits and deletions stay in the history')}
+              value={access.keepNoteVersions}
+              disabled={disabled}
+              onChange={(keepNoteVersions) => onChange({ ...access, keepNoteVersions })}
+            />
+          </span>
+        </div>
+      ) : (
+        <Safeguard icon="history" title={t('Keep every version')} hint={t('Edits and deletions stay in the history')}>
           <Fixed>{t('n/a')}</Fixed>
         </Safeguard>
       )}

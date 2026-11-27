@@ -157,6 +157,11 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * (`held-notes.ts`). Only a site of a workspace where anybody writes says it. Absent: it goes at once.
    */
   holdVisitorNotes?: true;
+  /**
+   * FRU-704: an edit or a deletion of a note keeps the version of before (`note-versions.ts`). Only a
+   * site of a workspace where anybody writes says it. Absent: none is kept.
+   */
+  keepNoteVersions?: true;
 };
 export type ClientMap = Record<string, ClientConfig>;
 

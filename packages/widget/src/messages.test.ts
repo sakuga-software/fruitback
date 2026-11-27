@@ -985,10 +985,12 @@ describe('every word the widget shows', () => {
       edit: { send: () => new Promise(() => {}) },
     });
     // A note of its own, still open: the flows above withdrew `found`.
+    // FRU-704: on a site that keeps every version, the form says the team keeps the text of before.
     const ofThisBrowser = noteIssueFixture({
       stage: 'new',
       mine: true,
       editable: true,
+      versionsKept: true,
       url: 'https://linear.app/acme/issue/ACM-9',
       note: found.note,
     });

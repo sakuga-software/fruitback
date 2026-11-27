@@ -86,6 +86,8 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     : DEFAULT_VISITOR_NOTES_PER_HOUR;
   // FRU-704: anything but `true` is off, the default, as `notify_done`.
   const holdVisitorNotes = row.hold_visitor_notes === true;
+  // FRU-704: anything but `false` is on, the default of the column, as the mockup draws it.
+  const keepNoteVersions = row.keep_note_versions !== false;
 
   return {
     id: row.id,
@@ -98,6 +100,7 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     visitorDelete,
     visitorNotesPerHour,
     holdVisitorNotes,
+    keepNoteVersions,
     destinations,
   };
 }

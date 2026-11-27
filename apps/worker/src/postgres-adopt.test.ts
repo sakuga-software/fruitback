@@ -197,6 +197,8 @@ for (const { label, open, skip } of DATABASES) {
           visitorNotesPerHour: 10,
           // FRU-704: a site of before holds no note of a visitor.
           holdVisitorNotes: false,
+          // FRU-704: a site of before keeps every version, as a new one does.
+          keepNoteVersions: true,
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);

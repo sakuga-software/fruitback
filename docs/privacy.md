@@ -172,7 +172,8 @@ The person who left a note can change its text while the note is open: new, to d
 A note done or closed cannot be edited. Where the note goes decides what is kept:
 
 - On a note the worker keeps, the new text replaces the old one in the database: **the worker keeps no
-  copy of the text of before**. A reply under the note says who edited it and when, with no text.
+  copy of the text of before**, unless the site keeps every version (below). A reply under the note
+  says who edited it and when, with no text.
 - On a note sent to an address, the same happens in the worker, and the address receives a
   `note.edited` event that holds identifiers only, never a text. The address keeps the note it was
   first sent.
@@ -183,6 +184,24 @@ A note done or closed cannot be edited. Where the note goes decides what is kept
   the note is.
 
 The excerpt of the index of the notes is written again from the new text.
+
+### The versions of a note (FRU-704)
+
+A site that keeps every version (« Keep every version » in its tab « Access », on by default) keeps,
+for its members, what an edit or a deletion takes away from a note, wherever the note went:
+
+- What: the text before each edit, and the text of the note when its author deleted or withdrew
+  it, with the moment and who did it: the account of a member, or « a visitor » and nothing more (no
+  key, no digest of it, no name, no address). In the table `note_versions` of the database.
+- Who reads it: the members, admins and owners of the workspace, on the page of the note in the
+  console. A guest and the widget read none. The form of an edit tells its author, before they save,
+  that the team keeps the text of before.
+- How long: as long as the note is in the index of its site, 50 versions at most for one note, the
+  oldest going first. They go with the note, its site and its workspace.
+- Why: so that an edit or a deletion of a note left on a public page cannot take away from the team
+  what it already read, or rewrite a note once it was acted on. A site whose authors must be able to
+  take a text out for good turns the switch off: nothing is kept from then, and an edit is again the
+  only copy. The versions kept before stay with their note.
 
 ### A note moved by its author
 

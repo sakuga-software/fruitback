@@ -114,6 +114,28 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
     assert.equal(headers[0]?.[VISITOR_HEADER], 'K'.repeat(43));
   });
 
+  it('tells the author that the team keeps the text of before, on a site that keeps every version, and only there (FRU-704)', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    pageFetch(readOf(aNote({ mine: true, editable: true, versionsKept: true })));
+    const root = await threadOf(page, {});
+    (root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
+    assert.equal(
+      root.querySelector('.fruitback-thread-edit-kept')?.textContent,
+      'The team of this site keeps the text of before in the history of the note.',
+    );
+    for (const undo of cleanup.splice(0)) undo();
+    mock.restoreAll();
+
+    const elsewhere = mounted();
+    elsewhere.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    pageFetch(readOf(aNote({ mine: true, editable: true })));
+    const other = await threadOf(elsewhere, {});
+    (other.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
+    assert.ok(other.querySelector('.fruitback-thread-edit-field') !== null, 'the form is open');
+    assert.equal(other.querySelector('.fruitback-thread-edit-kept'), null);
+  });
+
   it('keeps the words and the move of a member: the read names them by a session', async () => {
     pageFetch(readOf(aNote({ mine: true, editable: true, url: 'https://linear.app/acme/issue/ACM-7' }), true));
     const root = await threadOf(mounted(), {});

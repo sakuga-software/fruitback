@@ -771,6 +771,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Reject: 'Rejeter',
   'Hold new visitor notes': 'Retenir les nouvelles notes des visiteurs',
   'A member approves before they are sent': 'Un membre les approuve avant leur envoi',
+  // FRU-704: « Keep every version », and the history of a note in its panel.
+  'Keep every version': 'Garder chaque version',
+  'Edits and deletions stay in the history': 'Les modifications et les suppressions restent dans l’historique',
+  History: 'Historique',
+  'edited the note': 'a modifié la note',
+  'deleted the note': 'a supprimé la note',
+  Before: 'Avant',
+  'Its text then': 'Son texte à ce moment',
   'Cannot be changed once sent': 'Ne se modifie plus une fois envoyée',
   'Editable while the note is open': 'Modifiable tant que la note est ouverte',
   'The order form rejects postcodes with a space.':

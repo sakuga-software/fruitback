@@ -1,5 +1,6 @@
 import { handleHeld } from './console-held.ts';
 import type { HeldNote, HeldNotes } from './held-notes.ts';
+import type { NoteVersions } from './note-versions.ts';
 import type { HeldSent } from './feedback-routes.ts';
 import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
@@ -114,6 +115,8 @@ export type ConsoleApiContext = {
   heldNotes?: HeldNotes;
   /** FRU-704: sends a note a member approved to its place. Absent: an approval answers `502`. */
   sendHeld?: (held: HeldNote) => Promise<HeldSent>;
+  /** FRU-704: the versions of the notes. Absent: the page of a note shows none. */
+  noteVersions?: NoteVersions;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
@@ -241,6 +244,8 @@ type SiteView = {
   visitorNotesPerHour: VisitorNoteLimit;
   /** FRU-704: « Hold new visitor notes », as it is stored. */
   holdVisitorNotes: boolean;
+  /** FRU-704: « Keep every version », as it is stored. */
+  keepNoteVersions: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -264,6 +269,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visitorDelete: site.visitorDelete,
     visitorNotesPerHour: site.visitorNotesPerHour,
     holdVisitorNotes: site.holdVisitorNotes,
+    keepNoteVersions: site.keepNoteVersions,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -829,6 +835,7 @@ export async function handleConsoleApi(
     noteIndex: context.noteIndex,
     tasks: context.tasks ?? 'on',
     ...(context.readNote === undefined ? {} : { readNote: context.readNote }),
+    ...(context.noteVersions === undefined ? {} : { versions: context.noteVersions }),
     ...(context.replyToNote === undefined ? {} : { replyToNote: context.replyToNote }),
     // FRU-712: who writes a reply from the console, as the widget names a session of the workspace.
     replier: async () => {
@@ -971,6 +978,11 @@ export async function handleConsoleApi(
     if (holdVisitorNotes !== undefined && typeof holdVisitorNotes !== 'boolean') {
       return json(400, { error: 'invalid-hold-visitor-notes' }, headers);
     }
+    // FRU-704: absent, a new site keeps every version and a site that exists keeps what it had.
+    const keepNoteVersions = body?.keepNoteVersions;
+    if (keepNoteVersions !== undefined && typeof keepNoteVersions !== 'boolean') {
+      return json(400, { error: 'invalid-keep-note-versions' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -981,6 +993,7 @@ export async function handleConsoleApi(
       ...(visitorDelete === undefined ? {} : { visitorDelete }),
       ...(visitorNotesPerHour === undefined ? {} : { visitorNotesPerHour }),
       ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
+      ...(keepNoteVersions === undefined ? {} : { keepNoteVersions }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

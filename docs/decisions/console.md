@@ -1707,6 +1707,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
+- **« Keep every version » is the third line of « Safeguards » (FRU-704)**, a switch, on by default as
+  the mockup draws it, sent where anybody writes, « n/a » elsewhere. The panel of a note shows its
+  versions under « Activity » in a section « History », oldest first: who edited or deleted it, when,
+  and the text of before. Only a role that sees the tracker gets them; the section is not drawn for a
+  note with none.
 - **« Hold new visitor notes » is the second line of « Safeguards » (FRU-704)**, a switch, sent where
   anybody writes, « n/a » elsewhere. Its notes wait in the screen « To approve » (`/w/<id>/approve`),
   an entry of « Views » in the bar for a role that sees the tracker, shown while notes wait or while

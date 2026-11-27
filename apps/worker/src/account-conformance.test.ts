@@ -330,6 +330,24 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   },
   {
     breaks:
+      'keeps every version of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'keeps no version of a new site',
+    replace: {
+      from: 'keep_note_versions: keepNoteVersions ?? true,',
+      to: 'keep_note_versions: keepNoteVersions ?? false,',
+    },
+  },
+  {
+    breaks:
+      'keeps every version of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'never changes the switch of versions of a site that exists',
+    replace: {
+      from: '...(keepNoteVersions === undefined ? {} : { keep_note_versions: keepNoteVersions }),',
+      to: '',
+    },
+  },
+  {
+    breaks:
       'gives a new site 10 notes of a visitor an hour, keeps the value on a site added again, and serves it where a visitor writes (FRU-704)',
     by: 'gives a new site no limit',
     replace: {

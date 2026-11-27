@@ -99,6 +99,8 @@ export type Site = {
   visitorNotesPerHour?: VisitorNoteLimit;
   /** FRU-704: « Hold new visitor notes ». A worker of before sends nothing: off, what it did. */
   holdVisitorNotes?: boolean;
+  /** FRU-704: « Keep every version ». A worker of before sends nothing: off, what it did. */
+  keepNoteVersions?: boolean;
   destination?: Destination;
   destinations?: Destination[];
   /**

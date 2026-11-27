@@ -29,7 +29,14 @@ import type { NoteIndex } from './notes-index.ts';
 import { withoutAddress } from './postgres.ts';
 import type { RequestContext, Served } from './request-context.ts';
 import { StoreError } from './store.ts';
-import { connectStoreFor, heldNotesFor, instanceAdminFor, mailerFor, sessionStoreFor } from './worker-stores.ts';
+import {
+  connectStoreFor,
+  heldNotesFor,
+  instanceAdminFor,
+  mailerFor,
+  noteVersionsFor,
+  sessionStoreFor,
+} from './worker-stores.ts';
 import type { HeldNote } from './held-notes.ts';
 import type { HeldSent } from './feedback-routes.ts';
 
@@ -65,6 +72,8 @@ export type ConsoleSeams = {
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
   const { served, context, accounts, kv, noteIndex, done, cors, githubApp, readNote, replyToNote, sendHeld } = seams;
   const heldNotes = context.heldNotes ?? heldNotesFor(served);
+  // FRU-704: the versions of a note, on its page in the console.
+  const noteVersions = context.noteVersions ?? noteVersionsFor(served);
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -235,6 +244,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         // FRU-704: the queue « To approve ».
         ...(heldNotes === undefined ? {} : { heldNotes }),
         ...(sendHeld === undefined ? {} : { sendHeld }),
+        ...(noteVersions === undefined ? {} : { noteVersions }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),
