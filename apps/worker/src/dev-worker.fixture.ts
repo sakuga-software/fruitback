@@ -141,12 +141,14 @@ async function memberOfDev(database: PgDatabase, workspace: string, person: stri
   const accounts = createPostgresAccountStore(database);
   const account = await accounts.signIn({ provider: 'email', subject: person, email: person, name });
   if ((await accounts.role(workspace, account.id)) !== undefined) return account.id;
-  // The row an accepted invitation leaves, as `memberOf` of `console-world.fixture.ts` writes it.
+  // The row an accepted invitation leaves, as `memberOf` of `console-world.fixture.ts` writes it. Two
+  // first calls at the same time both pass the check above: the unique key of the workspace and the
+  // account keeps one row (Kentō #e52d09).
   const pool = await database.pool();
   const client = await pool.connect();
   try {
     await client.query(
-      'INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ($1, $2, $3, $4, now())',
+      'INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ($1, $2, $3, $4, now()) ON CONFLICT DO NOTHING',
       [newId('mem'), workspace, account.id, 'member'],
     );
   } finally {

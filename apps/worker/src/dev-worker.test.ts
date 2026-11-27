@@ -277,6 +277,8 @@ describe('the worker of development, as a process (FRU-223)', () => {
     const owner = await pair({ name: 'Dev' });
     // The same address again is the same member: no second row, the same notes.
     const anaAgain = await pair({ name: 'Ana', person: 'ana@fruitback.test' });
+    // Calls at the same time for a new address: each one pairs, the row of the member is written once (Kentō #e52d09).
+    const cyd = await Promise.all([1, 2, 3, 4].map(() => pair({ name: 'Cyd', person: 'cyd@fruitback.test' })));
 
     const sent = await fetch(`${worker.origin}/feedback`, {
       method: 'POST',
@@ -298,6 +300,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.deepEqual(await authors(ana), [{ kind: 'you', name: 'Ana' }]);
     assert.deepEqual(await authors(anaAgain), [{ kind: 'you', name: 'Ana' }]);
     assert.deepEqual(await authors(bea), [{ kind: 'member', name: 'Ana' }]);
+    for (const token of cyd) assert.deepEqual(await authors(token), [{ kind: 'member', name: 'Ana' }]);
     assert.deepEqual(await authors(owner), [{ kind: 'member', name: 'Ana' }]);
 
     // Only an address of this machine: never a real one, never something else.
