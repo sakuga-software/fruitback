@@ -46,6 +46,10 @@ export async function signedInTo(
 ): Promise<boolean> {
   if (cloud === undefined) return false;
   const held = await sessions.list();
+  const state = await accountOf(cloud, held, sessions);
+  // Kentō #07eb72: a sign-in that landed during the refresh holds a new session. `ended` forgot only
+  // the one that was refused (`end` in `session-storage.ts`), so a session held now is that new one.
+  if (state === 'ended') return (await sessions.list())[cloud] !== undefined;
 
-  return holdsCloudSession(cloud, held, await accountOf(cloud, held, sessions));
+  return holdsCloudSession(cloud, held, state);
 }

@@ -12,7 +12,12 @@ const GRANT: AccessGrant = { accessToken: 'a_1', expiresAt: 0, identity: ACCOUNT
  * The sessions of this browser, in memory. A refusal forgets the session, as `session.ts` does when
  * Fruitback says it ended. `asked` counts the calls to `ensureAccess`.
  */
-function sessionsOf(held: Record<string, StoredSession>, access: AccessFailure | 'ok' | Error) {
+function sessionsOf(
+  held: Record<string, StoredSession>,
+  access: AccessFailure | 'ok' | Error,
+  /** A sign-in that lands while the refresh is refused: its session is stored after the refusal. */
+  signInMeanwhile?: StoredSession,
+) {
   const state = { ...held };
   const calls = { asked: 0 };
 
@@ -24,6 +29,7 @@ function sessionsOf(held: Record<string, StoredSession>, access: AccessFailure |
       if (access instanceof Error) throw access;
       if (access === 'ok') return { ok: true, grant: GRANT };
       if (access === 'session-revoked-or-expired') delete state[endpoint];
+      if (signInMeanwhile !== undefined) state[endpoint] = signInMeanwhile;
 
       return { ok: false, reason: access };
     },
@@ -72,6 +78,13 @@ describe('signedInTo, what the side panel asks (FRU-735)', () => {
     assert.equal(await signedInTo(CLOUD, sessions), false);
     // Forgotten, as the popup forgets it: the next read says « signed out » with no second refresh.
     assert.equal((await sessions.list())[CLOUD], undefined);
+  });
+
+  it('is true when a sign-in stored a new session while the old one was refused (Kentō #07eb72)', async () => {
+    const fresh: StoredSession = { refreshToken: 'r_3', identity: { subject: 'acct_1' }, account: true };
+    const sessions = sessionsOf({ [CLOUD]: ACCOUNT }, 'session-revoked-or-expired', fresh);
+    assert.equal(await signedInTo(CLOUD, sessions), true);
+    assert.equal(sessions.calls.asked, 1);
   });
 
   it('is true for an account that answers, one Fruitback cannot reach, and a pairing', async () => {
