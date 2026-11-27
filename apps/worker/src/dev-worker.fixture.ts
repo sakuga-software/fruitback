@@ -2,6 +2,7 @@ import { isOneOf } from './one-of.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { VISITOR_NOTE_LIMITS, type Visibility, WRITERS, type Writers } from './accounts.ts';
+import { newId } from './account-rows.ts';
 import { createPairingCommand } from './app.ts';
 import { newAgentKey } from './agent-keys.ts';
 import { digest } from './session.ts';
@@ -39,8 +40,10 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  * - **`POST /__dev/stage`** `{ note, stage }` (FRU-300), which moves a note of the database to a
  *   stage, as a team moves an issue in its tracker, or a note of the Linear in memory (FRU-604). No route of the worker does it: the store is the
  *   tracker's. The specs of « Looks fixed » need a note the team marked done.
- * - **`POST /__dev/pair`**, which answers a pairing code and its link for the workspace. The `pair`
- *   command is another process: it cannot reach a database that lives in this one.
+ * - **`POST /__dev/pair`** `{ name?, endpoint?, person? }`, which answers a pairing code and its link
+ *   for the workspace. The `pair` command is another process: it cannot reach a database that lives
+ *   in this one. The session is the owner's, or with `person` (an address `@fruitback.test`) the one
+ *   of a member of that address, made at its first call (FRU-734).
  * - **`POST /__dev/agent-key`** `{ write?, verifiedOnly? }` (FRU-463): an agent key of the owner on the
  *   site, which it answers once, for `claude mcp add` and the specs of `/mcp`.
  * - **`POST /__dev/writers`** `{ writers, notifyDone? }` (FRU-330), who may leave a note on the site: `members`,
@@ -124,6 +127,35 @@ async function renameSite(database: PgDatabase, from: string, to: string): Promi
   } finally {
     client.release();
   }
+}
+
+/** An address `POST /__dev/pair` takes as `person`: one of this machine, never a real one. */
+const DEV_PERSON = /^[a-z0-9-]{1,64}@fruitback\.test$/;
+
+/**
+ * `person` of `POST /__dev/pair` (FRU-734): the account of this address, a member of the workspace of
+ * the playground, made at its first call. Its notes are its own: a spec that reads the notes of its
+ * reader on the whole site (« To check » of the side panel) counts no note of another spec.
+ */
+async function memberOfDev(database: PgDatabase, workspace: string, person: string, name: string): Promise<string> {
+  const accounts = createPostgresAccountStore(database);
+  const account = await accounts.signIn({ provider: 'email', subject: person, email: person, name });
+  if ((await accounts.role(workspace, account.id)) !== undefined) return account.id;
+  // The row an accepted invitation leaves, as `memberOf` of `console-world.fixture.ts` writes it. Two
+  // first calls at the same time both pass the check above: the unique key of the workspace and the
+  // account keeps one row (Kentō #e52d09).
+  const pool = await database.pool();
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ($1, $2, $3, $4, now()) ON CONFLICT DO NOTHING',
+      [newId('mem'), workspace, account.id, 'member'],
+    );
+  } finally {
+    client.release();
+  }
+
+  return account.id;
 }
 
 /** The owner of the workspace of the site `guards` (FRU-704): another person than `DEV_OWNER`. */
@@ -422,8 +454,16 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
       const asked = await bodyOf(incoming);
       const name = typeof asked.name === 'string' ? asked.name : 'Dev';
       const endpoint = typeof asked.endpoint === 'string' ? asked.endpoint : `http://localhost:${env.PORT}`;
+      if (asked.person !== undefined && (typeof asked.person !== 'string' || !DEV_PERSON.test(asked.person))) {
+        response
+          .writeHead(400, { 'Content-Type': 'application/json' })
+          .end(JSON.stringify({ error: 'invalid-person' }));
+
+        return;
+      }
       const minted = await createPairingCommand(config.config, {
-        subject: seeded.owner,
+        subject:
+          asked.person === undefined ? seeded.owner : await memberOfDev(database, seeded.workspace, asked.person, name),
         name,
         workspace: seeded.workspace,
       });

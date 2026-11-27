@@ -13,6 +13,7 @@ import {
   type ReadProbe,
 } from './read-probe.ts';
 import type { PanelNote } from './protocol.ts';
+import type { SiteNote } from './site-notes.ts';
 import {
   type PanelApis,
   type PanelOptions,
@@ -1374,5 +1375,130 @@ describe('one line for each note (FRU-534)', () => {
   it('shows the whole note in an open row', () => {
     const rule = /\.panel-row\[data-open='true'\] \.panel-row-note \{([^}]*)\}/.exec(sheet)?.[1] ?? '';
     assert.ok(rule.includes('white-space: normal'), 'an open row cuts its note');
+  });
+});
+
+describe('« To check » holds the notes of the other pages of the site (FRU-734)', () => {
+  const ELSEWHERE: SiteNote[] = [
+    {
+      note: 'sd_far_1',
+      excerpt: 'The footer link is broken.',
+      page: { url: 'https://staging.acme.dev/about', path: '/about' },
+      stage: 'done',
+      mine: true,
+      createdAt: '2026-10-18T12:00:00Z',
+    },
+    {
+      note: 'sd_far_2',
+      excerpt: 'The price is wrong.',
+      page: { url: 'https://staging.acme.dev/pricing', path: '/pricing' },
+      stage: 'done',
+      mine: true,
+      createdAt: '2026-10-19T12:00:00Z',
+    },
+  ];
+  const HERE: PanelNote = {
+    id: 'n1',
+    number: 1,
+    stage: 'new',
+    note: 'A note of this page.',
+    createdAt: '2026-10-18T12:00:00Z',
+    updatedAt: '2026-10-18T12:00:00Z',
+    replies: [],
+    canReply: true,
+    placement: 'found',
+  };
+  const options = (notes: PanelNote[], extra: Partial<PanelOptions> = {}) => {
+    const calls: string[] = [];
+    const built: PanelOptions = {
+      state: { kind: 'on', host: 'staging.acme.dev', notes },
+      onClose: () => {},
+      onLeave: () => {},
+      onTab: () => {},
+      onToggle: () => {},
+      onShow: () => {},
+      onReplyOpen: () => {},
+      onReplyInput: () => {},
+      onReplySend: () => {},
+      onReplyCancel: () => {},
+      onRetry: () => {},
+      onReload: () => {},
+      onSettings: () => {},
+      onVerdict: () => {},
+      elsewhere: {
+        notes: ELSEWHERE,
+        onVerdict: (note, verdict) => calls.push(`${note.note}:${verdict}`),
+        onOpen: (note) => calls.push(`open:${note.note}`),
+      },
+      ...extra,
+    };
+
+    return { built, calls };
+  };
+  const rows = (root: Element) =>
+    [...root.querySelectorAll<HTMLElement>('.ready-elsewhere [data-site-note]')].map((row) => row.dataset.siteNote);
+
+  it('opens on « To check », counts them with the notes of the page, and lists their words and page', () => {
+    const { built } = options([HERE]);
+    const root = panelPage(page(), built);
+
+    const tabs = [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim());
+    assert.equal(tabs[0], 'To check · 2');
+    assert.equal(root.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim(), 'To check · 2');
+    assert.deepEqual(rows(root), ['sd_far_1', 'sd_far_2']);
+    assert.equal(root.querySelector('.ready-elsewhere-title')?.textContent, 'On other pages · 2');
+    assert.ok(root.querySelector('[data-site-note="sd_far_1"]')?.textContent?.includes('/about'));
+    // The tab has notes: it does not say it is empty.
+    assert.equal(root.querySelector('.panel-none'), null);
+  });
+
+  it('sends a verdict and opens the page of the note from its buttons', () => {
+    const { built, calls } = options([HERE]);
+    const root = panelPage(page(), built);
+    const row = root.querySelector('[data-site-note="sd_far_2"]');
+    row?.querySelector<HTMLButtonElement>('.ready-fixed')?.click();
+    row?.querySelector<HTMLButtonElement>('.ready-wrong')?.click();
+    row?.querySelector<HTMLButtonElement>('.ready-open')?.click();
+
+    assert.deepEqual(calls, ['sd_far_2:fixed', 'sd_far_2:wrong', 'open:sd_far_2']);
+  });
+
+  it('shows them on a page with no note of its own, above the empty state', () => {
+    const { built } = options([]);
+    const root = panelPage(page(), built);
+
+    assert.deepEqual(rows(root), ['sd_far_1', 'sd_far_2']);
+    assert.ok(root.querySelector('.panel-empty') !== null);
+  });
+
+  it('holds both buttons of the note whose verdict is on its way, and says why one did not go', () => {
+    const sending = panelPage(page(), options([HERE], { checking: { id: 'sd_far_1', sending: 'fixed' } }).built);
+    const buttons = [
+      ...sending.querySelectorAll<HTMLButtonElement>('[data-site-note="sd_far_1"] .ready-actions button'),
+    ];
+    assert.deepEqual(
+      buttons.map((button) => button.disabled),
+      [true, true, false],
+    );
+    const other = [...sending.querySelectorAll<HTMLButtonElement>('[data-site-note="sd_far_2"] .ready-actions button')];
+    assert.ok(other.every((button) => !button.disabled));
+
+    const refused = panelPage(
+      page(),
+      options([HERE], { checking: { id: 'sd_far_1', problem: CHECK_PROBLEM.refused } }).built,
+    );
+    assert.equal(
+      refused.querySelector('[data-site-note="sd_far_1"] [role="alert"]')?.textContent,
+      CHECK_PROBLEM.refused,
+    );
+  });
+
+  it('is the list of before with no note elsewhere: the tab of the page, and its count', () => {
+    const { built } = options([HERE], { elsewhere: { notes: [], onVerdict: () => {}, onOpen: () => {} } });
+    const root = panelPage(page(), built);
+
+    assert.equal(root.querySelector('[role="tab"]')?.textContent?.trim(), 'To check · 0');
+    assert.equal(root.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim(), 'Open · 1');
+    assert.equal(root.querySelector('.ready-elsewhere'), null);
   });
 });

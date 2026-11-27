@@ -679,7 +679,9 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 ### The rules, in short
 
 - **The panel asks the widget of the tab for the notes of the page; it reads no worker for them.**
-  Only « Whole site » of « Search and options » reads one (FRU-307, below). `notes` answers `pageNotes()` of
+  The worker is read for « Whole site » of « Search and options » (FRU-307, below), for the notes
+  to check of the other pages (`check=1`, FRU-734), and for the question of the popup after a read
+  that failed (FRU-729). `notes` answers `pageNotes()` of
   the widget: the notes its pins show, with their numbers, from its last read, and none of a stage
   the reporter hid. One read, the same numbers as the pins, no second model and no cache.
 - **The widget says when to ask again.** `watchNotes` of the widget tells of each read, hidden
@@ -804,6 +806,17 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
   says « Checked by you »; « Still wrong » opens « Open », where the row says « Reopened by you ».
   That last word is kept by the panel while it is open: the store keeps the verdict, not who
   reopened from where.
+- **« To check » holds the notes to check of the other pages of the site too** (FRU-734), under
+  « On other pages · {n} », and its count is the badge's. Before it, the badge said « 5 » for notes
+  that no list of the panel showed, and no control could answer. The panel reads them with
+  `GET /session/notes?check=1`, the rule of `toCheck`, and leaves out those of the list of the page.
+  Each says its words, its page, « Looks fixed », « Still wrong » and « Open on its page ». A page
+  with no note of its own shows them above its empty state.
+- **The verdict of a note of another page goes from the panel**, with the session
+  (`sendSiteVerdict`, `src/site-check.ts`): a read of its page for the id of its issue, then
+  `POST /feedback/<id>/check`, the widget's own two calls. The index keeps the id of the note only.
+  Then the panel reads the list again, and asks the background to count the badge again
+  (`BADGE_REFRESH`, from a page of the extension only).
 
 ## The page of the extension, « Servers and sessions » and « Preferences » (FRU-302)
 
@@ -3082,5 +3095,5 @@ as `framed`, a bridge in each frame, a capture with no move. Not measured in Fir
 - **Asked when the tab changes** (`tabs.onActivated`, a new address or a load in `tabs.onUpdated`,
   `windows.onFocusChanged`), when a site or a session changes, and every 5 minutes for the active tab
   (`fruitback-badge`): a tracker tells the extension nothing. Each tab keeps the answer of its last
-  question only (`createBadge`).
+  question only (`createBadge`), and after a verdict of the side panel (`BADGE_REFRESH`, FRU-734).
 - `src/badge.ts`, held by `badge.test.ts`. No permission: `action` needs none.

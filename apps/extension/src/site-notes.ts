@@ -44,6 +44,23 @@ export type SiteNote = {
 
 export type SitePage = { notes: SiteNote[]; total: number; next?: string };
 
+/** The page a tab shows: the host of its address, then its path and query. */
+export type TabPage = { host: string; path: string };
+
+/**
+ * Whether a note of the site is on the page of the tab: the same host, and the same path and query
+ * (FRU-734). A path alone is not a page: a rule such as `*.acme.dev` holds `a.acme.dev/about` and
+ * `b.acme.dev/about`.
+ */
+export function onTabPage(note: Pick<SiteNote, 'page'>, tab: TabPage | undefined): boolean {
+  if (tab === undefined || note.page.path !== tab.path) return false;
+  try {
+    return new URL(note.page.url).host === tab.host;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * What a read answered. `signed-out`: the session ended, the popup signs in again. `unavailable`: a
  * worker of before FRU-306, or a site the session does not read. `failed`: nothing answered.
@@ -57,7 +74,8 @@ export type SiteNotesSeams = {
   fetcher?: typeof fetch;
 };
 
-export type SiteQuery = { site: string; q?: string; cursor?: string };
+/** `check`: the notes of the reader that wait for their verdict, as the badge counts them (FRU-734). */
+export type SiteQuery = { site: string; q?: string; cursor?: string; check?: true };
 
 /** One page of the notes of `site`, the newest first. Never rejects. */
 export async function readSiteNotes(endpoint: string, query: SiteQuery, seams: SiteNotesSeams): Promise<SiteRead> {
@@ -98,6 +116,7 @@ export function siteNotesUrl(endpoint: string, query: SiteQuery): string {
   const words = query.q?.trim();
   if (words !== undefined && words !== '') params.set('q', words);
   if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  if (query.check === true) params.set('check', '1');
 
   return `${endpoint}${SITE_NOTES_PATH}?${params.toString()}`;
 }

@@ -14,6 +14,7 @@ import {
   statusDrop,
 } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
+import type { SiteNote } from './site-notes.ts';
 import { type MemberRemedy, type ReadProbe, memberRemedy } from './read-probe.ts';
 import { listWord, notePaint } from './note-status.ts';
 import {
@@ -35,9 +36,10 @@ import {
  *
  * **The panel reads no worker for the notes of the page.** The widget of the tab holds the notes it
  * read for its pins; the panel asks it for them (`notes`), and is told when they change. One read, the
- * same numbers as the pins, no second model and no cache. Only « Whole site » of « Search and
- * options » reads the worker (FRU-307, `site-notes.ts`), and the question of the popup after a read
- * that failed (FRU-729, `membersOnlyOf`).
+ * same numbers as the pins, no second model and no cache. The worker is read for « Whole site » of
+ * « Search and options » (FRU-307), for the notes to check of the other pages of the site (FRU-734),
+ * both in `site-notes.ts`, and for the question of the popup after a read that failed (FRU-729,
+ * `membersOnlyOf`).
  *
  * No `browser` here: the APIs come in as arguments, so `side-panel.test.ts` reads every part under
  * `node --test`. `entrypoints/sidepanel/main.ts` holds the state and binds them.
@@ -311,6 +313,15 @@ export type PanelOptions = {
   replying?: { id: string; text: string; sending?: boolean; problem?: string };
   /** The note whose verdict is on its way, or why the last one did not go (FRU-300). */
   checking?: { id: string; sending?: CheckVerdict; problem?: string };
+  /**
+   * The notes of the reader to check on the other pages of the site (FRU-734): the badge counts them
+   * with those of this page. `checking` names one of them by its `note`.
+   */
+  elsewhere?: {
+    notes: readonly SiteNote[];
+    onVerdict: (note: SiteNote, verdict: CheckVerdict) => void;
+    onOpen: (note: SiteNote) => void;
+  };
   /** The notes the reader reopened from this panel, and when: their rows say so (FRU-300). */
   reopened?: Record<string, string>;
   /** Now, for the ages: a test sets it. */
@@ -648,18 +659,21 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
       ),
       helpLink(document, leaveAndFollow()),
     );
+    const others = elsewherePart(document, options);
 
-    return [empty];
+    return others === undefined ? [empty] : [others, empty];
   }
 
   const byTab: Record<NotesTab, PanelNote[]> = { check: [], open: [], done: [] };
   for (const note of [...notes].sort(byNumber)) byTab[tabOf(note)].push(note);
-  const chosen = options.tab ?? firstTab(notes);
+  const elsewhere = options.elsewhere?.notes.length ?? 0;
+  const chosen = options.tab ?? (elsewhere > 0 ? 'check' : firstTab(notes));
   const tabs = segmentedTabs(document, {
     label: t('Notes on this page'),
     size: 'panel',
     tabs: [
-      { id: 'check', label: t('To check · {count}', { count: byTab.check.length }) },
+      // FRU-734: with the notes of the other pages, the count of the badge.
+      { id: 'check', label: t('To check · {count}', { count: byTab.check.length + elsewhere }) },
       // « 99+ » above 99 (FRU-611), but « To check », which is exact: it is what the reader has to do.
       { id: 'open', label: t('Open · {count}', { count: shortCount(byTab.open.length) }) },
       { id: 'done', label: t('Done · {count}', { count: shortCount(byTab.done.length) }) },
@@ -672,6 +686,8 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
   const parts: Node[] = [tabs];
   if (chosen === 'check') {
     parts.push(checkPart(document, options, shown));
+    const others = elsewherePart(document, options);
+    if (others !== undefined) parts.push(others);
   } else {
     const list = make(document, 'ul', 'panel-list');
     list.setAttribute('role', 'tabpanel');
@@ -679,7 +695,9 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     for (const note of shown) list.append(noteRow(document, options, note));
     parts.push(list);
   }
-  if (shown.length === 0) parts.push(make(document, 'p', 'panel-none', t(NONE_IN_TAB[chosen])));
+  if (shown.length === 0 && (chosen !== 'check' || elsewhere === 0)) {
+    parts.push(make(document, 'p', 'panel-none', t(NONE_IN_TAB[chosen])));
+  }
 
   return parts;
 }
@@ -925,6 +943,70 @@ export const CHECK_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
   'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then try again.'),
   refused: msg('This note can no longer be checked here. The list is read again.'),
 };
+
+/**
+ * The notes to check of the other pages of the site (FRU-734), or nothing when there is none: each
+ * with its words, its page, « Looks fixed », « Still wrong », and « Open on its page ».
+ */
+function elsewherePart(document: Document, options: PanelOptions): HTMLElement | undefined {
+  const elsewhere = options.elsewhere;
+  if (elsewhere === undefined || elsewhere.notes.length === 0) return undefined;
+  const block = make(document, 'section', 'ready');
+  block.classList.add('ready-elsewhere');
+  const heading = make(
+    document,
+    'h2',
+    'ready-elsewhere-title',
+    t('On other pages · {count}', { count: elsewhere.notes.length }),
+  );
+  block.setAttribute('aria-label', t('Notes to check on other pages'));
+  const list = make(document, 'ul', 'ready-list');
+  for (const note of elsewhere.notes) {
+    const item = make(document, 'li', 'ready-item');
+    item.dataset.siteNote = note.note;
+    const head = make(document, 'div', 'ready-head');
+    const words = make(document, 'div', 'ready-words');
+    words.append(
+      noteWords(document, 'span', 'ready-note', note.excerpt),
+      make(document, 'span', 'ready-meta', note.page.path),
+    );
+    head.append(statusDrop(document, { stage: 'done' }), words);
+    const checking = options.checking?.id === note.note ? options.checking : undefined;
+    const sending = checking?.sending !== undefined;
+    const actions = make(document, 'div', 'ready-actions');
+    const fixed = make(document, 'button', 'ready-fixed');
+    fixed.type = 'button';
+    fixed.append(tick(document), checking?.sending === 'fixed' ? t('Sending…') : t('Looks fixed'));
+    const wrong = make(
+      document,
+      'button',
+      'ready-wrong',
+      checking?.sending === 'wrong' ? t('Sending…') : t('Still wrong'),
+    );
+    wrong.type = 'button';
+    for (const [button, verdict] of [
+      [fixed, 'fixed'],
+      [wrong, 'wrong'],
+    ] as const) {
+      button.disabled = sending;
+      button.addEventListener('click', () => elsewhere.onVerdict(note, verdict));
+    }
+    const opener = make(document, 'button', 'ready-open', t('Open on its page'));
+    opener.type = 'button';
+    opener.addEventListener('click', () => elsewhere.onOpen(note));
+    actions.append(fixed, wrong, opener);
+    item.append(head, actions);
+    if (checking?.problem !== undefined) {
+      const problem = make(document, 'p', 'ready-problem', t(checking.problem));
+      problem.setAttribute('role', 'alert');
+      item.append(problem);
+    }
+    list.append(item);
+  }
+  block.append(heading, list);
+
+  return block;
+}
 
 /** The field of a reply, under its note, as the thread of the widget has it. */
 function replyForm(

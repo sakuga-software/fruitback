@@ -364,6 +364,15 @@ button.ready-wrong {
   @apply border border-line-control text-text;
 }
 
+/* FRU-734: the notes to check of the other pages of the site, under those of this page. */
+.ready-elsewhere-title {
+  @apply m-0 text-ink-soft text-[12px] font-[650];
+}
+
+.ready-actions button.ready-open {
+  @apply col-span-2 h-[36px] border-0 bg-transparent text-text underline underline-offset-2;
+}
+
 .ready-actions button:disabled {
   @apply opacity-60;
 }

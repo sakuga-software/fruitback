@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AccessResult } from './session.ts';
-import { SITE_PAGE_SIZE, parseSitePage, readSiteNotes, siteNotesUrl } from './site-notes.ts';
+import { SITE_PAGE_SIZE, onTabPage, parseSitePage, readSiteNotes, siteNotesUrl } from './site-notes.ts';
 
 /**
  * The read of the notes of a whole site (FRU-307), from `GET /session/notes` of the worker
@@ -141,5 +141,27 @@ describe('the read of the notes of a whole site (FRU-307)', () => {
       siteNotesUrl(ENDPOINT, { site: 'a', q: '   ' }),
       `${ENDPOINT}/session/notes?site=a&limit=${SITE_PAGE_SIZE}`,
     );
+  });
+
+  it('asks for the notes to check of the reader with `check=1` (FRU-734)', () => {
+    assert.equal(
+      siteNotesUrl(ENDPOINT, { site: 'a', check: true }),
+      `${ENDPOINT}/session/notes?site=a&limit=${SITE_PAGE_SIZE}&check=1`,
+    );
+  });
+});
+
+describe('onTabPage (FRU-734)', () => {
+  const at = (url: string, path: string) => ({ page: { url, path } });
+
+  it('is the same host and the same path and query, never the path alone', () => {
+    const tab = { host: 'b.acme.dev', path: '/about' };
+    assert.equal(onTabPage(at('https://b.acme.dev/about', '/about'), tab), true);
+    // A rule with a wildcard holds both hosts: the same path on the other one is another page.
+    assert.equal(onTabPage(at('https://a.acme.dev/about', '/about'), tab), false);
+    assert.equal(onTabPage(at('https://b.acme.dev/about?x=1', '/about?x=1'), tab), false);
+    assert.equal(onTabPage(at('http://localhost:5177/', '/'), { host: 'localhost:5177', path: '/' }), true);
+    assert.equal(onTabPage(at('not a url', '/about'), tab), false);
+    assert.equal(onTabPage(at('https://b.acme.dev/about', '/about'), undefined), false);
   });
 });

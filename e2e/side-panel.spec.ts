@@ -269,9 +269,12 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   await clickInRow(page, target?.note ?? '', said.show);
   await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText('Answered from the side panel');
 
-  // The panel read no worker: every read went through the widget of the tab.
+  // The panel read no worker for the notes of the page: they went through the widget of the tab. Its
+  // one read of the worker here is the list of the notes to check of the other pages (FRU-734).
   const fetched = await inPanel<string[]>(page, `performance.getEntriesByType('resource').map((entry) => entry.name)`);
-  expect(fetched.filter((url) => !url.startsWith('chrome-extension://'))).toEqual([]);
+  const read = fetched.filter((url) => !url.startsWith('chrome-extension://'));
+  expect(read.filter((url) => new URL(url).searchParams.get('check') !== '1')).toEqual([]);
+  expect(read.every((url) => new URL(url).pathname === '/session/notes')).toBe(true);
 });
 
 test('« To check »: « Looks fixed » sends a note to Done, « Still wrong » reopens one (FRU-300, FRU-606)', async ({
@@ -351,6 +354,78 @@ test('« To check »: « Looks fixed » sends a note to Done, « Still wrong » 
 
   // The pins of the page say the same: the store moved the note, and the widget read it.
   await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="new"]')).not.toHaveCount(0);
+});
+
+test('« To check » lists a note to check of another page, and takes its verdict there (FRU-734)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-elsewhere-a');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await popup.close();
+  await plantOn(page, '[data-testid="card-latte"] .add', 'Far note');
+  const id = await pinFor(page, 'Far note').getAttribute('data-fruitback-pin');
+  const moved = await fetch(`${AUTHENTICATED_WORKER_ORIGIN}/__dev/stage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note: id, stage: 'done' }),
+  });
+  expect(moved.status).toBe(200);
+  // A read of the page writes the stage of now in the index of the worker, once the shared cache of
+  // the read (15 s) has let go of the answer of before.
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+        return page.locator('[data-fruitback-pin][data-fruitback-stage="done"]').count();
+      },
+      { timeout: 40_000, intervals: [3_000] },
+    )
+    .toBe(1);
+
+  // Another page of the site: its widget holds no note, and the panel lists the note of the first.
+  await openBareSite(page, 'side-panel-elsewhere-b');
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  const again = await openPopup(extension, page);
+  await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
+  const elsewhere = () =>
+    inPanel<{ notes: string[]; title: string | null }>(
+      page,
+      `({
+        notes: [...document.querySelectorAll('.ready-elsewhere [data-site-note] .ready-note')].map((each) => each.textContent),
+        title: document.querySelector('.ready-elsewhere-title')?.textContent ?? null,
+      })`,
+    ).catch(() => ({ notes: [] as string[], title: null }));
+  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).toEqual(['Far note']);
+  expect((await elsewhere()).title).toMatch(/ · 1$/);
+
+  // « Looks fixed » from this page: the worker takes it, and the note leaves the list.
+  const clicked = await inPanel<boolean>(
+    page,
+    `(() => {
+      const button = document.querySelector('.ready-elsewhere [data-site-note] .ready-fixed');
+      button?.click();
+      return button !== null;
+    })()`,
+  );
+  expect(clicked).toBe(true);
+  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).toEqual([]);
+  expect(
+    await inPanel<string | null>(page, `document.querySelector('.ready-problem')?.textContent ?? null`),
+  ).toBeNull();
+
+  // The store holds the verdict: the first page shows the note checked, out of « To check ».
+  await openBareSite(page, 'side-panel-elsewhere-a');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await expect
+    .poll(async () => (await readyBlock(page).catch(() => ({ items: [] }))).items.length, { timeout: 20_000 })
+    .toBe(0);
 });
 
 test('a reply on its way holds its field, opened again from another note: no second send (FRU-620)', async ({

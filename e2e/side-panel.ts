@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { type Page, expect } from '@playwright/test';
@@ -16,9 +17,14 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 export const NAME = 'Camille Durand';
 
-/** A session of the workspace of the suite's second worker, through a pairing link. */
+/**
+ * A session of the workspace of the suite's second worker, through a pairing link: the session of a
+ * member of its own, new at each call (FRU-734). « To check » lists the notes of its reader on the
+ * whole site, and the specs all write on the site `playground`: with the owner's session, a note
+ * another spec marked done, or a try before a retry, would be counted here too.
+ */
 export async function paired(extension: LoadedExtension): Promise<void> {
-  const { link } = await mintPairing(NAME);
+  const { link } = await mintPairing(NAME, AUTHENTICATED_WORKER_ORIGIN, `panel-${randomUUID()}@fruitback.test`);
   const worker = await extension.context.newPage();
   await worker.goto(link);
   const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);

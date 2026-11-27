@@ -9,7 +9,7 @@ import type { SessionIdentity } from './session.ts';
  * The notes of one whole site, for the side panel of the extension (FRU-306): the scope « Whole site »
  * of « Search and options » (FRU-307).
  *
- * `GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` reads one page of the index of the notes
+ * `GET /session/notes?site=<id>&stage=&check=&q=&cursor=&limit=` reads one page of the index of the notes
  * (FRU-237), the newest first, with the query of the console's list (FRU-244) and its rules:
  *
  * - **The index only**: an excerpt of 64 characters at most, the page, the stage, the author, the
@@ -27,7 +27,7 @@ import type { SessionIdentity } from './session.ts';
 export const SESSION_NOTES_PATH = '/session/notes';
 
 /** The fields of the query this route reads. Any other one is ignored, never read. */
-const FIELDS = ['site', 'stage', 'q', 'cursor', 'limit'] as const;
+const FIELDS = ['site', 'stage', 'check', 'q', 'cursor', 'limit'] as const;
 
 const ID = /^[A-Za-z0-9_-]+$/;
 

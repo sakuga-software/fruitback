@@ -207,7 +207,11 @@ describe('« Whole site » (FRU-307)', () => {
   });
 
   it('lists the notes of every page, hollow for another page, with the link to the tracker', () => {
-    const { root } = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } });
+    const { root } = draw({
+      scope: 'site',
+      page: { host: 'staging.acme.dev', path: '/' },
+      site: { q: '', notes: SITE, total: 3 },
+    });
 
     assert.deepEqual(rows(root), ['s1', 's2', 's3']);
     const [first, second, third] = [...root.querySelectorAll<HTMLElement>('.site-row')];
@@ -230,7 +234,11 @@ describe('« Whole site » (FRU-307)', () => {
 
   // FRU-434: « Show on the page » on each row, as the table of the notes of the console has it.
   it('links each note to its page: another page in a new tab on the note, the page of the tab by a scroll', () => {
-    const { root, calls } = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } });
+    const { root, calls } = draw({
+      scope: 'site',
+      page: { host: 'staging.acme.dev', path: '/' },
+      site: { q: '', notes: SITE, total: 3 },
+    });
     const [first, second, third] = [...root.querySelectorAll<HTMLElement>('.site-row')];
     const show = (row: HTMLElement | undefined) =>
       [...(row?.querySelectorAll<HTMLElement>('.site-row-ref') ?? [])].find(
@@ -252,7 +260,11 @@ describe('« Whole site » (FRU-307)', () => {
     assert.deepEqual(calls, ['site-note:s2']);
 
     setLanguage('fr');
-    const french = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } }).root;
+    const french = draw({
+      scope: 'site',
+      page: { host: 'staging.acme.dev', path: '/' },
+      site: { q: '', notes: SITE, total: 3 },
+    }).root;
     assert.equal(
       [...french.querySelectorAll('.site-row')][0]?.querySelector('.site-row-ref')?.textContent,
       'Voir sur la page',

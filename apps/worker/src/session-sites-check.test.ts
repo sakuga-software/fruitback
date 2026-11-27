@@ -275,6 +275,61 @@ describe('the fixes to check, in GET /session/sites (FRU-295)', () => {
     assert.equal((await sitesOf(world, bobs))[0]?.toCheck, 1);
   });
 
+  it('lists in GET /session/notes?check=1 the notes it counts, and only them (FRU-734)', async () => {
+    const { world, site, alice, bob } = await acme();
+    const bobs = await sessionOf(world, bob);
+    const alices = await sessionOf(world, alice);
+    const first = await noteOf(world, site.id, 'sd_bob_1', bobs);
+    const second = await noteOf(world, site.id, 'sd_bob_2', bobs);
+    const open = await noteOf(world, site.id, 'sd_bob_open', bobs);
+    const hers = await noteOf(world, site.id, 'sd_alice', alices);
+    for (const id of [first, second, hers]) setMemoryIssueState(id, DONE);
+    setMemoryIssueState(open, { name: 'In Progress', type: 'started' });
+    await readPage(world, site.id, bobs);
+    const listed = async (token: string, query = 'check=1') => {
+      const answer = await callOn(world, 'GET', `/session/notes?site=${site.id}&${query}`, {
+        origin: EXTENSION,
+        token,
+      });
+      assert.equal(answer.status, 200, await answer.clone().text());
+      const { notes, total } = (await answer.json()) as {
+        notes: { note: string; author?: { kind: string } }[];
+        total: number;
+      };
+
+      return {
+        ids: notes.map((each) => each.note).toSorted(),
+        total,
+        mine: notes.every((each) => each.author?.kind === 'you'),
+      };
+    };
+
+    const bobsList = await listed(bobs);
+    assert.deepEqual(bobsList.ids, ['sd_bob_1', 'sd_bob_2']);
+    assert.equal(bobsList.total, (await sitesOf(world, bobs))[0]?.toCheck);
+    assert.ok(bobsList.mine);
+    assert.deepEqual((await listed(alices)).ids, ['sd_alice']);
+    // The control: with no filter, the open note and the note of Alice are in the list of the site.
+    assert.equal((await listed(bobs, 'limit=50')).total, 4);
+
+    const checked = await callOn(world, 'POST', `/feedback/${first}/check?client=${site.id}`, {
+      origin: ORIGIN,
+      token: bobs,
+      body: { url: PAGE, verdict: 'fixed' },
+    });
+    assert.equal(checked.status, 201, await checked.clone().text());
+    assert.deepEqual((await listed(bobs)).ids, ['sd_bob_2']);
+
+    // `check` says the stage already: a stage beside it is refused, as a value other than `1`.
+    for (const query of ['check=1&stage=done', 'check=true']) {
+      const refused = await callOn(world, 'GET', `/session/notes?site=${site.id}&${query}`, {
+        origin: EXTENSION,
+        token: bobs,
+      });
+      assert.equal(refused.status, 400, query);
+    }
+  });
+
   it('counts a note again once the team marks it done after « Still wrong »', async () => {
     const { world, site, bob } = await acme();
     const bobs = await sessionOf(world, bob);

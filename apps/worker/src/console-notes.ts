@@ -268,6 +268,9 @@ export function queryOf(params: URLSearchParams, account: string, options: { con
   if (unresolved !== undefined && (unresolved !== '1' || stage !== undefined)) {
     return { ok: false, error: 'invalid-unresolved' };
   }
+  // FRU-734: the notes of the reader that wait for their verdict, as the badge of the extension counts them.
+  const check = params.get('check') ?? undefined;
+  if (check !== undefined && (check !== '1' || stage !== undefined)) return { ok: false, error: 'invalid-check' };
   const q = params.get('q')?.trim() || undefined;
   if (q !== undefined && q.length > QUERY_LENGTH) return { ok: false, error: 'invalid-q' };
   // FRU-655: the fields of a task. `me` and `none` for the assignee, `none` for the priority.
@@ -314,7 +317,8 @@ export function queryOf(params: URLSearchParams, account: string, options: { con
       ...(site === undefined ? {} : { site }),
       ...(stage === undefined ? {} : { stage: stage as NoteStage }),
       ...(place === undefined ? {} : { place }),
-      ...(mine === undefined ? {} : { author: account }),
+      ...(mine === undefined && check === undefined ? {} : { author: account }),
+      ...(check === undefined ? {} : { toCheck: true as const }),
       ...(archived === undefined ? {} : { archived: true }),
       ...(unresolved === undefined ? {} : { unresolved: true }),
       ...(assignee === undefined ? {} : { assignee: assigneeOf(assignee, account) }),

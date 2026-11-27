@@ -27,7 +27,9 @@ import {
 } from '../../src/side-panel.ts';
 import type { Scope, SearchHandlers, SearchState, StageFilter } from '../../src/search-options.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
-import { type SiteNote, readSiteNotes } from '../../src/site-notes.ts';
+import { type SiteNote, onTabPage, readSiteNotes } from '../../src/site-notes.ts';
+import { type SiteVerdictOutcome, sendSiteVerdict } from '../../src/site-check.ts';
+import { BADGE_REFRESH } from '../../src/badge.ts';
 import { readSite, rememberPreviews } from '../../src/sites.ts';
 import { probeRead } from '../../src/read-probe.ts';
 import { type CloudSeams, offerFor } from '../../src/cloud.ts';
@@ -45,8 +47,8 @@ import type { TabCommand } from '../../src/protocol.ts';
 /**
  * The side panel (FRU-296, FRU-299). It follows the active tab of its window, and asks the widget of
  * the tab for the notes it read (`notes`); the widget tells it when they change, through the bridge.
- * « Whole site » of « Search and options » (FRU-307) is the one read of a worker, with the session of
- * this browser (`site-notes.ts`).
+ * « Whole site » of « Search and options » (FRU-307) and the notes to check of the other pages
+ * (FRU-734) are its two reads of a worker, with the session of this browser (`site-notes.ts`).
  *
  * The address of a tab is given to the extension only for a site it has access to, or after the
  * click on the toolbar icon (`activeTab`). A site that is on has that access: any other tab reads as
@@ -100,6 +102,13 @@ const replyTexts = new Map<string, string>();
 const sendingReplies = new Set<string>();
 /** The verdict on its way, or why the last one did not go (FRU-300). */
 let checking: PanelOptions['checking'];
+/**
+ * The notes of the reader to check on the whole site (FRU-734), as the badge counts them. The panel
+ * shows under « To check » those that the list of this page does not hold.
+ */
+let toCheckOnSite: SiteNote[] = [];
+/** Each read of them counts one: a late answer of another tab draws nothing. */
+let checkReads = 0;
 /** The notes reopened from this panel, and when: « Reopened by you ». Gone with the panel. */
 const reopened: Record<string, string> = {};
 /** Each look at the tab counts one: an older one that answers late does not draw over a newer one. */
@@ -194,10 +203,75 @@ async function look(): Promise<void> {
     if (!pinsShown && before !== undefined) showPinsOf(before);
     pinsShown = true;
   } else if (search !== undefined && followed !== undefined) {
-    search = { ...search, path: followed.path };
+    search = { ...search, page: { host: followed.host, path: followed.path } };
   }
   draw();
+  void readToCheck();
   if (followed !== undefined && followed.siteWidget !== true) await readNotes();
+}
+
+/** The notes of the reader to check on the site of the tab (FRU-734), from the worker. */
+async function readToCheck(): Promise<void> {
+  checkReads += 1;
+  const mine = checkReads;
+  const source = followed?.source;
+  if (source === undefined) {
+    toCheckOnSite = [];
+
+    return;
+  }
+  const read = await readSiteNotes(
+    source.endpoint,
+    { site: source.site, check: true },
+    {
+      ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+      renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+    },
+  );
+  if (mine !== checkReads || followed?.source !== source) return;
+  // A read that failed keeps what the panel showed: the badge says the same count until its next read.
+  if (read.ok) toCheckOnSite = read.page.notes;
+  draw();
+}
+
+/** The notes to check that the list of this page does not hold: those of the other pages. */
+function toCheckElsewhere(): SiteNote[] {
+  const here = Array.isArray(notes) ? new Set(notes.map((note) => note.id)) : new Set<string>();
+
+  return toCheckOnSite.filter((note) => !here.has(note.note) && !onTabPage(note, followed));
+}
+
+/** The badge of the tab counts the notes to check again: a verdict changed them. */
+function refreshBadge(): void {
+  void browser.runtime.sendMessage({ type: BADGE_REFRESH }).catch(() => undefined);
+}
+
+/** The words of a verdict that did not go, as the widget's say them (`CHECK_PROBLEM`). */
+const SITE_VERDICT_PROBLEM: Record<Exclude<SiteVerdictOutcome, 'sent'>, keyof typeof CHECK_PROBLEM> = {
+  refused: 'refused',
+  'signed-out': 'signed-out',
+  failed: 'retry',
+};
+
+/** « Looks fixed » or « Still wrong » on a note of another page (FRU-734), then a read of the list. */
+async function sendElsewhereVerdict(note: SiteNote, verdict: CheckVerdict): Promise<void> {
+  const source = followed?.source;
+  if (source === undefined || checking?.sending !== undefined) return;
+  checking = { id: note.note, sending: verdict };
+  draw();
+  const outcome = await sendSiteVerdict(
+    source.endpoint,
+    { site: source.site, url: note.page.url, note: note.note, verdict },
+    {
+      ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+      renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+    },
+  );
+  checking = outcome === 'sent' ? undefined : { id: note.note, problem: CHECK_PROBLEM[SITE_VERDICT_PROBLEM[outcome]] };
+  if (outcome === 'sent' || outcome === 'refused') {
+    refreshBadge();
+    await readToCheck();
+  } else draw();
 }
 
 /**
@@ -370,6 +444,11 @@ function draw(): void {
       ...(open === undefined ? {} : { open }),
       ...(replying === undefined ? {} : { replying: replyField(replying, sendingReplies) }),
       ...(checking === undefined ? {} : { checking }),
+      elsewhere: {
+        notes: toCheckElsewhere(),
+        onVerdict: (note, verdict) => void sendElsewhereVerdict(note, verdict),
+        onOpen: (note) => void openSiteNote(note),
+      },
       reopened,
       onClose: () => window.close(),
       onLeave: () => void ask('leave-feedback'),
@@ -455,7 +534,7 @@ function toggleSearch(): void {
     q: '',
     stage: 'all',
     pinsShown,
-    ...(followed === undefined ? {} : { path: followed.path }),
+    ...(followed === undefined ? {} : { page: { host: followed.host, path: followed.path } }),
     ...(followed?.source === undefined ? {} : { site: 'reading' as const }),
   };
   draw();
@@ -511,7 +590,7 @@ async function readWholeSite(more = false): Promise<void> {
 /** A note of the site: its thread on this page, or its page in a new tab, where its row opens. */
 async function openSiteNote(note: SiteNote): Promise<void> {
   if (followed === undefined) return;
-  if (note.page.path === followed.path) {
+  if (onTabPage(note, followed)) {
     search = undefined;
     open = note.note;
     const here = Array.isArray(notes) ? notes.find((each) => each.id === note.note) : undefined;
@@ -603,6 +682,8 @@ async function sendVerdict(id: string, verdict: CheckVerdict): Promise<void> {
     open = id;
     // The note is in Done when it looks fixed, back in Open when it is still wrong.
     tab = verdict === 'fixed' ? 'done' : 'open';
+    refreshBadge();
+    void readToCheck();
     await readNotes();
 
     return;
