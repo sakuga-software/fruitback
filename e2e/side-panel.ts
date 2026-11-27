@@ -161,11 +161,24 @@ export async function plantOn(page: Page, selector: string, note: string): Promi
 }
 
 /** What the panel lists: each row with the number of its drop, its note, and whether it is open. */
+/**
+ * The words of the tabs, with the notes of this page only in « To check » (FRU-734). The specs share
+ * one person and one site, and the notes to check that another spec left on another page are in the
+ * count of the tab, in « On other pages ».
+ */
+const PAGE_TABS = `(() => {
+      const list = document.querySelector('.panel-tabs');
+      const elsewhere = Number(list?.dataset.elsewhere ?? 0);
+      return [...document.querySelectorAll('[role="tab"]')].map((tab) =>
+        tab.dataset.tab === 'check' ? tab.textContent.replace(/\\d+$/, (count) => String(Number(count) - elsewhere)) : tab.textContent,
+      );
+    })()`;
+
 export function panelRows(page: Page) {
   return inPanel<{ tabs: string[]; rows: { number: string; note: string; open: boolean }[] }>(
     page,
     `({
-      tabs: [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+      tabs: ${PAGE_TABS},
       rows: [...document.querySelectorAll('li[data-note]')].map((row) => ({
         number: row.querySelector('.kit-drop-number')?.textContent ?? '',
         note: row.querySelector('.panel-row-note')?.textContent ?? '',
@@ -194,19 +207,31 @@ export function clickInRow(page: Page, note: string, label: string): Promise<unk
   );
 }
 
-/** What « To check » shows: the words of its tab, and each note with the line of who fixed it. */
+/**
+ * What « To check » shows of this page: the words of its tab, and each note with the line of who
+ * fixed it. The notes of the other pages (FRU-734) are left out, of the count and of the items.
+ */
 export function readyBlock(page: Page) {
   return inPanel<{ title: string | null; items: { note: string; meta: string }[]; problem: string | null }>(
     page,
     `({
-      title: document.querySelector('[role="tab"][data-tab="check"]')?.textContent ?? null,
-      items: [...document.querySelectorAll('.ready-item')].map((item) => ({
+      title: document.querySelector('[role="tab"][data-tab="check"]') === null ? null : ${PAGE_TABS}[0],
+      items: [...document.querySelectorAll('.ready-item')].filter((item) => item.closest('.ready-elsewhere') === null).map((item) => ({
         note: item.querySelector('.ready-note')?.textContent ?? '',
         meta: item.querySelector('.ready-meta')?.textContent ?? '',
       })),
       problem: document.querySelector('.ready-problem')?.textContent ?? null,
     })`,
   );
+}
+
+/**
+ * « Open », once the panel drew its tabs. The specs share one person and one site: a note to check
+ * that another spec left on another page opens the panel on « To check » (FRU-606, FRU-734).
+ */
+export async function showOpenTab(page: Page): Promise<void> {
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [] }))).tabs.length).toBe(3);
+  await chooseTab(page, 'open');
 }
 
 /** A click on a tab of the list: `check`, `open` or `done` (FRU-606). */

@@ -22,6 +22,7 @@ import {
   panelRows,
   clickInRow,
   chooseTab,
+  showOpenTab,
   readyBlock,
   verdict,
   rowMeta,
@@ -201,6 +202,9 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   );
   const open = pins.filter((pin) => !pin.done);
   const done = pins.filter((pin) => pin.done);
+  // Another spec can leave a note to check on another page: the panel then opens on « To check ».
+  await chooseTab(page, 'open');
+  await expect.poll(async () => (await panelRows(page)).rows.length).toBe(open.length);
   const listed = await panelRows(page);
   const said = await words(page);
   expect(listed.tabs).toEqual([`${said.ready} · 0`, `${said.open} · ${open.length}`, `${said.done} · ${done.length}`]);
@@ -367,8 +371,10 @@ test('« To check » lists a note to check of another page, and takes its verdic
   await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
   await popup.close();
-  await plantOn(page, '[data-testid="card-latte"] .add', 'Far note');
-  const id = await pinFor(page, 'Far note').getAttribute('data-fruitback-pin');
+  // The specs share one person: another spec can leave notes to check on other pages too.
+  const far = `Far note ${Date.now()}`;
+  await plantOn(page, '[data-testid="card-latte"] .add', far);
+  const id = await pinFor(page, far).getAttribute('data-fruitback-pin');
   const moved = await fetch(`${AUTHENTICATED_WORKER_ORIGIN}/__dev/stage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -402,20 +408,20 @@ test('« To check » lists a note to check of another page, and takes its verdic
         title: document.querySelector('.ready-elsewhere-title')?.textContent ?? null,
       })`,
     ).catch(() => ({ notes: [] as string[], title: null }));
-  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).toEqual(['Far note']);
-  expect((await elsewhere()).title).toMatch(/ · 1$/);
+  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).toContain(far);
 
   // « Looks fixed » from this page: the worker takes it, and the note leaves the list.
   const clicked = await inPanel<boolean>(
     page,
     `(() => {
-      const button = document.querySelector('.ready-elsewhere [data-site-note] .ready-fixed');
+      const row = [...document.querySelectorAll('.ready-elsewhere [data-site-note]')].find((each) => each.querySelector('.ready-note')?.textContent === ${JSON.stringify(far)});
+      const button = row?.querySelector('.ready-fixed') ?? null;
       button?.click();
       return button !== null;
     })()`,
   );
   expect(clicked).toBe(true);
-  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).toEqual([]);
+  await expect.poll(async () => (await elsewhere()).notes, { timeout: 20_000 }).not.toContain(far);
   expect(
     await inPanel<string | null>(page, `document.querySelector('.ready-problem')?.textContent ?? null`),
   ).toBeNull();
@@ -460,6 +466,7 @@ test('a reply on its way holds its field, opened again from another note: no sec
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
+  await showOpenTab(page);
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
   const said = await words(page);
   const field = () =>
@@ -606,6 +613,7 @@ test('a row of the panel wears the colour and the name of the status its pin wea
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
+  await showOpenTab(page);
   const drawn = () =>
     inPanel<{ word: string; fill: string; text: string; stage: string }[]>(
       page,
