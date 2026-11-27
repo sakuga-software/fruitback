@@ -192,6 +192,7 @@ const SITE_WITH_DESTINATION = {
   hold_visitor_notes: sites.hold_visitor_notes,
   keep_note_versions: sites.keep_note_versions,
   deleted_notes_keep_days: sites.deleted_notes_keep_days,
+  bot_check: sites.bot_check,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1742,6 +1743,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         holdVisitorNotes,
         keepNoteVersions,
         deletedNotesKeepDays,
+        botCheck,
       },
     ) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
@@ -1767,6 +1769,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               // FRU-704: on unless the caller says, as the mockup draws it.
               keep_note_versions: keepNoteVersions ?? true,
               deleted_notes_keep_days: deletedNotesKeepDays ?? DEFAULT_DELETED_NOTE_KEEP,
+              // FRU-704: on unless the caller says, as the mockup draws it.
+              bot_check: botCheck ?? true,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1783,6 +1787,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 ...(holdVisitorNotes === undefined ? {} : { hold_visitor_notes: holdVisitorNotes }),
                 ...(keepNoteVersions === undefined ? {} : { keep_note_versions: keepNoteVersions }),
                 ...(deletedNotesKeepDays === undefined ? {} : { deleted_notes_keep_days: deletedNotesKeepDays }),
+                ...(botCheck === undefined ? {} : { bot_check: botCheck }),
               },
             })
             .returning({
@@ -1798,6 +1803,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               hold_visitor_notes: sites.hold_visitor_notes,
               keep_note_versions: sites.keep_note_versions,
               deleted_notes_keep_days: sites.deleted_notes_keep_days,
+              bot_check: sites.bot_check,
             }),
         );
 
@@ -1816,6 +1822,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             hold_visitor_notes: site.hold_visitor_notes,
             keep_note_versions: site.keep_note_versions,
             deleted_notes_keep_days: site.deleted_notes_keep_days,
+            bot_check: site.bot_check,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

@@ -81,6 +81,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
@@ -106,6 +107,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
@@ -136,6 +138,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
@@ -158,6 +161,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 10 }).visitorNotesPerHour, 10);
     // « No limit » is no field: the route counts nothing.
@@ -179,6 +183,7 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 10 as const,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', holdVisitorNotes: true }).holdVisitorNotes, true);
     assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'anyone', holdVisitorNotes: false }), false);
@@ -198,10 +203,31 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 10 as const,
       holdVisitorNotes: false,
       deletedNotesKeepDays: 30 as const,
+      botCheck: false,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', keepNoteVersions: true }).keepNoteVersions, true);
     assert.equal('keepNoteVersions' in clientOf({ ...site, writers: 'anyone', keepNoteVersions: false }), false);
     assert.equal('keepNoteVersions' in clientOf({ ...site, writers: 'members', keepNoteVersions: true }), false);
+  });
+
+  it('tells the routes to ask for the bot check only where a visitor writes and the site asks for it (FRU-704)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visibility: 'everyone' as const,
+      visitorEdit: 'while-open' as const,
+      visitorDelete: 'while-open' as const,
+      visitorNotesPerHour: 10 as const,
+      holdVisitorNotes: false,
+      keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
+    };
+    assert.equal(clientOf({ ...site, writers: 'anyone', botCheck: true }).botCheck, true);
+    assert.equal('botCheck' in clientOf({ ...site, writers: 'anyone', botCheck: false }), false);
+    assert.equal('botCheck' in clientOf({ ...site, writers: 'members', botCheck: true }), false);
   });
 });
 

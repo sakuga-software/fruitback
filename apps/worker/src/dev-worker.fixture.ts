@@ -15,6 +15,7 @@ import { seal } from './secrets.ts';
 import { startServer } from './server.ts';
 import type { MailMessage } from './mail.ts';
 import { provideDevDoneMailer } from './worker-stores.ts';
+import { TURNSTILE_TEST_KEYS } from './bot-check.ts';
 import { setMemoryNoteStage } from './linear-memory.ts';
 
 /**
@@ -46,11 +47,13 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  * - **`POST /__dev/writers`** `{ writers, notifyDone? }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
- * - **`POST /__dev/guards`** `{ visitorNotesPerHour?, holdVisitorNotes?, keepNoteVersions? }` (FRU-704): the site `guards`, made at the first
+ * - **`POST /__dev/guards`** `{ visitorNotesPerHour?, holdVisitorNotes?, keepNoteVersions?, botCheck? }` (FRU-704): the site `guards`, made at the first
  *   call, and the safeguards of the card « Safeguards » set on it. Its own workspace, of its own
  *   owner, at the origin of the playground: a spec of a safeguard mounts the widget with this id, and
  *   the other specs, which share the site `playground`, are never counted by it. The site `playground`
- *   says « No limit »: the suite sends many notes from one address.
+ *   says « No limit »: the suite sends many notes from one address. Neither asks for the bot check
+ *   until a spec says `botCheck: true`; the worker has the keys of test of Cloudflare, and checks a
+ *   token with `verifyTestTurnstile` (FRU-704), which calls nobody.
  * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
  *   oldest first. The worker of development has no provider: it keeps them in this process. Only
  *   these messages: the sign-in by link stays off.
@@ -92,6 +95,10 @@ export function devEnvironment(given: WorkerEnv): WorkerEnv {
     FRUITBACK_SIGN_UP: 'anyone',
     // The address the console and a sign-in link call this worker at: its own port, on this machine.
     FRUITBACK_PUBLIC_URL: `http://localhost:${port}`,
+    // FRU-704: the keys of test of Cloudflare, public, that always pass. `turnstileVerifierFor` checks
+    // the token of this worker with `verifyTestTurnstile`, which calls nobody.
+    FRUITBACK_TURNSTILE_SECRET: TURNSTILE_TEST_KEYS.secretPasses,
+    FRUITBACK_TURNSTILE_SITE_KEY: TURNSTILE_TEST_KEYS.siteKeyPasses,
     ...given,
     FRUITBACK_DEV_DATABASE: DEV_DATABASE,
   };
@@ -105,8 +112,9 @@ export async function seedDevWorkspace(
   const accounts = createPostgresAccountStore(database);
   const owner = await accounts.signIn({ provider: 'email', subject: DEV_OWNER, email: DEV_OWNER, name: 'Dev' });
   const workspace = await accounts.createWorkspace('Playground', owner.id);
-  // FRU-704: « No limit ». Every spec of the suite sends its notes to this site, from one address.
-  const made = await accounts.addSite(workspace.id, { ...site, visitorNotesPerHour: 0 });
+  // FRU-704: « No limit », and no bot check. Every spec of the suite sends its notes to this site, from
+  // one address, and only the specs of the safeguards draw the check.
+  const made = await accounts.addSite(workspace.id, { ...site, visitorNotesPerHour: 0, botCheck: false });
   await renameSite(database, made.id, DEV_SITE);
 
   return { workspace: workspace.id, owner: owner.id };
@@ -161,6 +169,11 @@ async function setGuards(
 
     return;
   }
+  if (asked.botCheck !== undefined && typeof asked.botCheck !== 'boolean') {
+    response.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'invalid-bot-check' }));
+
+    return;
+  }
   const accounts = createPostgresAccountStore(database);
   // One workspace for the life of the process, whichever call comes first.
   made.workspace ??= (async () => {
@@ -171,10 +184,12 @@ async function setGuards(
       name: 'Guards',
     });
     const workspace = await accounts.createWorkspace('Guards', owner.id);
+    // FRU-704: no bot check until a spec asks for it: a spec of another safeguard draws none.
     const site = await accounts.addSite(workspace.id, {
       origin: DEV_PLAYGROUND,
       visibility: 'everyone',
       writers: 'anyone',
+      botCheck: false,
     });
     await renameSite(database, site.id, DEV_GUARDS_SITE);
 
@@ -189,6 +204,7 @@ async function setGuards(
       : { visitorNotesPerHour: asked.visitorNotesPerHour as (typeof VISITOR_NOTE_LIMITS)[number] }),
     ...(asked.holdVisitorNotes === undefined ? {} : { holdVisitorNotes: asked.holdVisitorNotes as boolean }),
     ...(asked.keepNoteVersions === undefined ? {} : { keepNoteVersions: asked.keepNoteVersions as boolean }),
+    ...(asked.botCheck === undefined ? {} : { botCheck: asked.botCheck as boolean }),
   });
   response.writeHead(200, { 'Content-Type': 'application/json' }).end(
     JSON.stringify({
@@ -196,6 +212,7 @@ async function setGuards(
       visitorNotesPerHour: site.visitorNotesPerHour,
       holdVisitorNotes: site.holdVisitorNotes,
       keepNoteVersions: site.keepNoteVersions,
+      botCheck: site.botCheck,
     }),
   );
 }

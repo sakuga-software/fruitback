@@ -27,6 +27,9 @@ const SITES = [
     keepNoteVersions: true,
     // FRU-704: « Deleted notes », 30 days for a new site.
     deletedNotesKeepDays: 30,
+    // FRU-704: « Bot check », on for a new site, on an instance with the keys of Turnstile.
+    botCheck: true,
+    botCheckReady: true,
   },
 ];
 
@@ -216,6 +219,8 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
       keepNoteVersions: false,
       // Nor « Deleted notes »: it kept a deleted note as long as the note, read as the longest choice.
       deletedNotesKeepDays: 90,
+      // Nor « Bot check »: off, what it did (it asked nobody).
+      botCheck: false,
     },
   ]);
 
@@ -405,6 +410,48 @@ test('« Deleted notes » keeps 30 days by default, is sent where anybody writes
   expect(worker.posted.at(-1)).not.toHaveProperty('deletedNotesKeepDays');
 });
 
+test('« Bot check » is on for a new site, sent where anybody writes, said « n/a » where only members do, and off where the instance has no key (FRU-704)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
+  const safeguards = card(page, 'Safeguards');
+  const check = safeguards.getByRole('switch', { name: /Bot check/ });
+  await expect(check).toBeChecked();
+  await expect(check).toBeEnabled();
+  await expect(safeguards).toContainText('Cloudflare Turnstile before the first note');
+  // The second line, as the mockup draws it.
+  await expect(safeguards.getByText(/^(Notes per visitor|Bot check|Hold new visitor notes)$/)).toHaveText([
+    'Notes per visitor',
+    'Bot check',
+    'Hold new visitor notes',
+  ]);
+
+  await safeguards.getByText('Bot check', { exact: true }).click();
+  await expect(check).not.toBeChecked();
+  // A safeguard is no level: the table still says « Contribute ».
+  await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).toMatchObject({ writers: 'anyone', botCheck: false });
+
+  await levels(page).getByText('Read only', { exact: true }).click();
+  await expect(safeguards.getByRole('switch', { name: /Bot check/ })).toHaveCount(0);
+  await expect(safeguards.getByText('Bot check', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).not.toHaveProperty('botCheck');
+
+  // An instance with no key of Turnstile: the switch is off and cannot change, and the line says why.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1/access`);
+  const off = card(page, 'Safeguards').getByRole('switch', { name: /Bot check/ });
+  await expect(off).not.toBeChecked();
+  await expect(off).toBeDisabled();
+  await expect(card(page, 'Safeguards')).toContainText('Off on this instance: no Turnstile key');
+  await expect(card(page, 'Safeguards')).not.toContainText('Cloudflare Turnstile before the first note');
+  await expectNoViolation(page, 'the card « Safeguards » with « Bot check » off on the instance');
+});
+
 test('a refusal says why and keeps what was chosen, and a member reads the tab with nothing to change', async ({
   page,
 }) => {
@@ -448,8 +495,8 @@ test('a refusal says why and keeps what was chosen, and a member reads the tab w
   await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
   await expect(card(page, 'After a note').getByRole('switch')).toBeDisabled();
   await expect(card(page, 'Safeguards').getByRole('button', { name: /Notes per visitor/ })).toBeDisabled();
-  // FRU-704: both switches, « Hold new visitor notes » and « Keep every version ».
-  await expect(card(page, 'Safeguards').getByRole('switch')).toHaveCount(2);
+  // FRU-704: the three switches, « Bot check », « Hold new visitor notes » and « Keep every version ».
+  await expect(card(page, 'Safeguards').getByRole('switch')).toHaveCount(3);
   for (const each of await card(page, 'Safeguards').getByRole('switch').all()) await expect(each).toBeDisabled();
   // The overview shows no way to change it either: its one « Change » leads to « Install » (FRU-689).
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);

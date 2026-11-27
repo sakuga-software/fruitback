@@ -1,6 +1,7 @@
 import type { MountOptions } from './embed.ts';
 import { type FruitbackTransport, type TransportRequest, type TransportResponse, fetchTransport } from './transport.ts';
 import { VISITOR_HEADER } from './visitor-key.ts';
+import { TURNSTILE_HEADER } from './bot-check.ts';
 
 /**
  * The calls of the widget to the worker (FRU-509): the transport, the token and the headers, written
@@ -23,9 +24,14 @@ function transportFor(options: WorkerOptions): FruitbackTransport {
 
 /**
  * A call: its address, its method, and its body. `contentType` goes with a body. `asAuthor`: the call
- * sends a note, so the key of the browser is made first when there is none (FRU-700).
+ * sends a note, so the key of the browser is made first when there is none (FRU-700). `turnstile`: the
+ * token of the check the worker asked for (FRU-704), on the note sent again.
  */
-export type WorkerRequest = Omit<TransportRequest, 'headers'> & { contentType?: string; asAuthor?: true };
+export type WorkerRequest = Omit<TransportRequest, 'headers'> & {
+  contentType?: string;
+  asAuthor?: true;
+  turnstile?: string;
+};
 
 /**
  * Sends one call, with the token of the host when it gives one, and the key of a visitor's browser
@@ -45,7 +51,7 @@ export function callWorker(
 ): Promise<TransportResponse | undefined>;
 export async function callWorker(
   options: WorkerOptions,
-  { contentType, asAuthor, ...request }: WorkerRequest,
+  { contentType, asAuthor, turnstile, ...request }: WorkerRequest,
   stillWanted: () => boolean = () => true,
 ): Promise<TransportResponse | undefined> {
   const token = await options.identityToken?.();
@@ -60,6 +66,7 @@ export async function callWorker(
       ...(contentType === undefined ? {} : { 'Content-Type': contentType }),
       ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
       ...(visitor === undefined ? {} : { [VISITOR_HEADER]: visitor }),
+      ...(turnstile === undefined ? {} : { [TURNSTILE_HEADER]: turnstile }),
     },
   });
 }

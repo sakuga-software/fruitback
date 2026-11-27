@@ -1543,6 +1543,11 @@ describe('why a send failed', () => {
     assert.equal(failureOf(answer(429)), 'wait');
   });
 
+  it('says the bot check did not pass on a 403 bot-check that no check answered (FRU-704)', () => {
+    assert.equal(failureOf(answer(403, 'bot-check')), 'bot-check');
+    assert.equal(failureOf(answer(403, 'origin-not-allowed')), 'refused');
+  });
+
   it('says to wait longer on the notes of the hour of a visitor (FRU-704)', () => {
     assert.equal(
       failureOf({ status: 429, body: JSON.stringify({ error: 'visitor-limit', perHour: 10 }) }),

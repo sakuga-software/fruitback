@@ -1883,6 +1883,30 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
   from one address. `POST /__dev/guards` makes a site `guards` in a workspace of its own, at the same
   origin, for the specs of the safeguards.
 
+## The bot check before the first note of a visitor (FRU-704)
+
+- **`bot_check` of `sites`, on by default** (the mockup draws it on), the line « Bot check » of the
+  card « Safeguards ». `0062` adds it on for the sites of before too. `clientOf` gives `botCheck` to
+  the routes only where `writers` is `anyone`.
+- **The keys are the instance's**: `FRUITBACK_TURNSTILE_SECRET` and `FRUITBACK_TURNSTILE_SITE_KEY`,
+  both or neither (`env.ts`, `config.turnstile`). Without them the guard asks nobody, and the console
+  API says `botCheckReady: false` on each site, so the tab says why.
+- **`POST /feedback` asks in two steps** (`botCheckAsk` and `botCheckPassed` of `feedback-routes.ts`):
+  a visitor with no token is refused `403 bot-check` with the site key before the count of the hour,
+  so the try that only fetches the check spends no note; the token goes to `siteverify` after the
+  count and before anything is held or written. A batch does the same, and gives its holds back.
+- **One call to Cloudflare per first note** (`createTurnstileVerifier` of `bot-check.ts`): a form of
+  `secret`, `response` and `remoteip`, 5 s at most, `success: true` only. A silence, a status other than
+  `200` or a body that is not JSON is `503 bot-check-unavailable`, never a pass.
+- **The mark of a browser that passed** is a row of `kv`, `fruitback:bot-check:[site, digest]`, for
+  30 days (`BOT_CHECK_MARK_MS`). Reading it is one `kv.get` of the note of a visitor on such a site. A
+  visitor with no key gets none, and is asked at each note.
+- **The verifier is the seam `verifyTurnstile` of `RequestContext`**: no test calls Cloudflare. The
+  worker of development has the keys of test of Cloudflare (« Testing » of its documentation) and
+  `turnstileVerifierFor` gives it `verifyTestTurnstile`, which takes the dummy token with the secret
+  that always passes and calls nobody. Its sites `playground` and `guards` ask nobody until a spec
+  sends `botCheck: true` to `POST /__dev/guards`.
+
 ## The notes their visitors deleted (FRU-704)
 
 - **`deleted_notes_keep_days` of `sites`, 30 by default** (7, 30 or 90, `DELETED_NOTE_KEEPS`), the line

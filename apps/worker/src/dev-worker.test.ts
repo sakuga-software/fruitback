@@ -17,6 +17,7 @@ import { migrate } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { StoreError } from './store.ts';
 import { VISITOR_HEADER } from './visitor-key.ts';
+import { TURNSTILE_HEADER, TURNSTILE_TEST_KEYS } from './bot-check.ts';
 
 /**
  * The database of development (FRU-223): the switch `FRUITBACK_DEV_DATABASE`, which production
@@ -292,6 +293,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
       visitorNotesPerHour: 5,
       holdVisitorNotes: false,
       keepNoteVersions: true,
+      botCheck: false,
     });
     const answers: number[] = [];
     for (let index = 0; index < 6; index += 1) answers.push((await send(DEV_GUARDS_SITE, `g_${index}`)).status);
@@ -305,6 +307,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
       visitorNotesPerHour: 0,
       holdVisitorNotes: false,
       keepNoteVersions: true,
+      botCheck: false,
     });
     assert.equal((await send(DEV_GUARDS_SITE, 'g_after')).status, 201);
     // FRU-704: « Hold new visitor notes »: the next note of a visitor waits for a member.
@@ -320,6 +323,41 @@ describe('the worker of development, as a process (FRU-223)', () => {
       false,
     );
     assert.equal((await set({ keepNoteVersions: 'no' })).status, 400);
+  });
+
+  it('asks a visitor of the site of the safeguards for the bot check with the keys of test, and calls nobody (FRU-704)', async () => {
+    const worker = await start({});
+    await ready(worker.origin, worker.said);
+    const set = (body: unknown) =>
+      fetch(`${worker.origin}/__dev/guards`, { method: 'POST', body: JSON.stringify(body) });
+    const send = (site: string, id: string, more: Record<string, string> = {}) =>
+      fetch(`${worker.origin}/feedback`, {
+        method: 'POST',
+        headers: {
+          Origin: DEV_PLAYGROUND,
+          'Content-Type': 'application/json',
+          [VISITOR_HEADER]: 'G'.repeat(43),
+          ...more,
+        },
+        body: JSON.stringify({ ...noteFixture({ id, page: { url: PAGE, path: '/pricing' } }), client: { id: site } }),
+      });
+
+    // Off for the site as made, so the specs of the other safeguards draw no check, and off on the playground.
+    assert.equal(((await (await set({})).json()) as { botCheck: boolean }).botCheck, false);
+    assert.equal((await send(DEV_GUARDS_SITE, 'g_before')).status, 201);
+    assert.equal((await send(DEV_SITE, 'p_bot')).status, 201);
+    assert.equal(((await (await set({ botCheck: true })).json()) as { botCheck: boolean }).botCheck, true);
+    assert.equal((await set({ botCheck: 'yes' })).status, 400);
+    // The keys of test of Cloudflare, checked by no call: the dummy token passes, then the browser is known.
+    const asked = await send(DEV_GUARDS_SITE, 'g_bot');
+    assert.equal(asked.status, 403);
+    assert.deepEqual(await asked.json(), { error: 'bot-check', siteKey: TURNSTILE_TEST_KEYS.siteKeyPasses });
+    assert.equal((await send(DEV_GUARDS_SITE, 'g_bot', { [TURNSTILE_HEADER]: 'not-the-dummy-token' })).status, 403);
+    assert.equal(
+      (await send(DEV_GUARDS_SITE, 'g_bot', { [TURNSTILE_HEADER]: TURNSTILE_TEST_KEYS.dummyToken })).status,
+      201,
+    );
+    assert.equal((await send(DEV_GUARDS_SITE, 'g_bot_2')).status, 201);
   });
 
   it('does not start under NODE_ENV=production', async () => {

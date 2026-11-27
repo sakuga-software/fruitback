@@ -2247,3 +2247,34 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   right to left, so the sheet puts « … » at the start.
 - `e2e/narrow-volumes.spec.ts` holds the four, with 1440 px as the control of the sheet; each case
   fails on the widget of before.
+
+## « Bot check » in the composer (FRU-704)
+
+### The rules, in short
+
+- **Drawn only when the worker asks.** A note answered `403 bot-check` with a `siteKey` is not a
+  failure yet: `plant` hands the site key to its seam `botCheck`, the composer draws the check in its
+  own part above the foot (`challenge` of `composer.ts`), and the same note, with the same id, goes
+  again with the token in `X-Fruitback-Turnstile`. A second `403 bot-check` is said, never drawn again.
+- **The text stays, in every case.** The field is read-only while the check waits, as for any send. A
+  check that fails or expires is `bot-check` (« did not pass… Try again »); a script that does not load
+  is `bot-check-unavailable` (« did not load… tell the site’s team »). Closing the composer takes the
+  check out, and the send says nothing after it.
+- **The script is loaded then, never at the mount**, from `turnstileScript` of `init`, or
+  `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` (`TURNSTILE_SCRIPT` of
+  `bot-check.ts`), once a document; a load that failed is tried again at the next check. Nothing mounts
+  the widget a second time.
+- **A host with a Content-Security-Policy allows `https://challenges.cloudflare.com` in `script-src`
+  and `frame-src`** (Cloudflare, « Content Security Policy » of Turnstile). Without it the browser
+  refuses the script, and the composer says the check did not load; a nonce on the page is not passed
+  to the script the widget adds.
+- `bot-check.test.ts` holds the seam and the composer with a fake `window.turnstile`: happy-dom loads
+  no script, so no case reaches Cloudflare. `e2e/public-guards.spec.ts` serves a fake `api.js` through
+  `page.route`, and the dev worker takes its dummy token with the secret of test.
+
+### The reasons, and the history
+
+- **The widget knows no worker**: the `403` is read in `plant`, which already reads every answer of a
+  note, and Turnstile is a module of its own behind a seam the composer hands a part of its markup.
+- **Not measured**: the real script of Turnstile inside the Shadow root of the widget. The ticket
+  allows no call to Cloudflare from this repository; the fake of the spec draws in the same slot.

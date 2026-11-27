@@ -201,6 +201,8 @@ for (const { label, open, skip } of DATABASES) {
           keepNoteVersions: true,
           // FRU-704: a site of before keeps a deleted note 30 days.
           deletedNotesKeepDays: 30,
+          // FRU-704: a site of before asks for the bot check, as a new one does.
+          botCheck: true,
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);

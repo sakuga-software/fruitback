@@ -38,6 +38,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
+import { type BotCheckOutcome, solveTurnstile } from './bot-check.ts';
 import { type FruitbackNotes, NOTES_ENDPOINT, notesTransport } from './notes.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import type { StatusAnswer, StatusFailure } from './thread-status.ts';
@@ -273,6 +274,14 @@ type WidgetOptions = {
    * wants it on screen turns it on here, or later with `showSelectors`.
    */
   showSelectors?: boolean;
+  /**
+   * Where the widget loads Cloudflare Turnstile (FRU-704), when the worker asks a visitor to pass
+   * « Bot check » before their first note: `api.js` of Cloudflare with `render=explicit` by default
+   * (`TURNSTILE_SCRIPT`). Loaded only then, never at the mount. A page with a Content-Security-Policy
+   * allows `https://challenges.cloudflare.com` in `script-src` and `frame-src`, or the composer says the
+   * check did not load and keeps the text.
+   */
+  turnstileScript?: string;
   /**
    * Whether the head of the composer writes the short selector of the element, « button.add ·
    * <AddToCart> » (FRU-411). `with-selectors`, the default since FRU-607: only while `showSelectors`
@@ -1243,6 +1252,16 @@ export function init(given: FruitbackOptions): Fruitback {
       options,
       onNote: (id) => (noteId = id),
       onPlaceHelp: (help) => (placeHelp = help),
+      // FRU-704: « Bot check », drawn in the composer while the note waits, then sent again with its token.
+      botCheck: (siteKey) =>
+        composer.challenge(
+          (slot, signal) =>
+            solveTurnstile(slot, siteKey, {
+              ...(options.turnstileScript === undefined ? {} : { src: options.turnstileScript }),
+              signal,
+            }),
+          'failed' as BotCheckOutcome,
+        ),
     });
     if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
     // FRU-704: kept for a member. No read: the page has no pin of it until a member approves it.
@@ -1782,6 +1801,7 @@ export async function plant({
   onNotify,
   onPlaceHelp,
   attachments = [],
+  botCheck,
 }: {
   note: string;
   target: CaptureTarget | null;
@@ -1800,22 +1820,39 @@ export async function plant({
   onNotify?: (token: string) => void;
   /** What to do about a place that is gone (FRU-640), told at each answer that failed. */
   onPlaceHelp?: (help: PlaceHelp | undefined) => void;
+  /**
+   * Draws « Bot check » for the site key the worker named (FRU-704), and answers its token. Absent, a
+   * note the worker asks a check for is `bot-check`, with its text kept.
+   */
+  botCheck?: (siteKey: string) => Promise<BotCheckOutcome>;
 }): Promise<true | SentWithoutPicture | SentHeld | SendFailure> {
   const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
   const { note: built, missedPicture } = made;
   onNote?.(built.id);
 
-  const response = await callWorker(options, {
-    // The choice is in the query and nowhere else. The body stays the note, and the relay of the
-    // extension carries a query, and no header but the type and the token.
-    url: feedbackUrl(options, destination, attachments),
-    method: 'POST',
-    contentType: 'application/json',
-    body: JSON.stringify(built),
-    // FRU-700: the key of this browser, made now at the first note, so that the worker knows it.
-    asAuthor: true,
-  });
+  const sendNote = (turnstile?: string) =>
+    callWorker(options, {
+      // The choice is in the query and nowhere else. The body stays the note, and the relay of the
+      // extension carries a query, and no header but the type and the token.
+      url: feedbackUrl(options, destination, attachments),
+      method: 'POST',
+      contentType: 'application/json',
+      body: JSON.stringify(built),
+      // FRU-700: the key of this browser, made now at the first note, so that the worker knows it.
+      asAuthor: true,
+      ...(turnstile === undefined ? {} : { turnstile }),
+    });
+  let response = await sendNote();
+  // FRU-704: « Bot check ». The same note, with the same id, goes again once the check passed; a
+  // second refusal is said, and never drawn again in a loop.
+  const siteKey = botCheckKeyOf(response);
+  if (siteKey !== undefined) {
+    const outcome = botCheck === undefined ? 'failed' : await botCheck(siteKey);
+    if (outcome === 'unavailable') return 'bot-check-unavailable';
+    if (outcome === 'failed') return 'bot-check';
+    response = await sendNote(outcome.token);
+  }
 
   if (!response.ok) {
     onPlaceHelp?.(placeHelpOf(response.body));
@@ -1828,6 +1865,20 @@ export async function plant({
   if (heldIn(response.body)) return missedPicture ? { held: true, picture: 'missed' } : { held: true };
 
   return missedPicture ? { picture: 'missed' } : true;
+}
+
+/** The site key of a `403 bot-check` (FRU-704), or `undefined` for any other answer. */
+function botCheckKeyOf(response: { status: number; body: string }): string | undefined {
+  if (response.status !== 403) return undefined;
+  try {
+    const body = JSON.parse(response.body) as { error?: unknown; siteKey?: unknown } | null;
+
+    return body?.error === 'bot-check' && typeof body.siteKey === 'string' && body.siteKey !== ''
+      ? body.siteKey
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Whether the worker kept the note for a member to approve (FRU-704): `202` with `held: true`. */
@@ -2453,6 +2504,8 @@ export function failureOf(response: { status: number; body: string }): SendFailu
   // Not « try again »: a host that mints a bad token mints it again at the next send (FRU-193).
   if (response.status === 401) return membersOnly(response.body) ? 'members-only' : 'signed-out';
   if (response.status === 403) {
+    // FRU-704: a check the worker asks again, as in a batch, which draws none: a note sent alone does.
+    if (errorOf(response.body) === 'bot-check') return 'bot-check';
     return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
   }
   // FRU-640: the tracker no longer has the place of the site. A try again at once is refused the same way.

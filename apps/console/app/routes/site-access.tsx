@@ -75,7 +75,8 @@ export default function SiteAccessPage() {
       (body.visitorNotesPerHour !== undefined && data.visitorNotesPerHour !== body.visitorNotesPerHour) ||
       (body.holdVisitorNotes !== undefined && data.holdVisitorNotes !== body.holdVisitorNotes) ||
       (body.keepNoteVersions !== undefined && data.keepNoteVersions !== body.keepNoteVersions) ||
-      (body.deletedNotesKeepDays !== undefined && data.deletedNotesKeepDays !== body.deletedNotesKeepDays)
+      (body.deletedNotesKeepDays !== undefined && data.deletedNotesKeepDays !== body.deletedNotesKeepDays) ||
+      (body.botCheck !== undefined && data.botCheck !== body.botCheck)
     ) {
       return setProblem(ACCESS_NOT_CHANGED);
     }
@@ -120,7 +121,12 @@ export default function SiteAccessPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-[16px]">
           <VisitorPreview access={draft} />
-          <Safeguards access={draft} disabled={!manages || busy} onChange={change} />
+          <Safeguards
+            access={draft}
+            botCheckReady={site.botCheckReady === true}
+            disabled={!manages || busy}
+            onChange={change}
+          />
           <DoneNotice access={draft} disabled={!manages || busy} onChange={change} />
         </div>
       </div>

@@ -736,7 +736,16 @@ describe('every word the widget shows', () => {
     await settle();
     snapshots.push(...shown(host.root));
     // Each cause of a failed send has its own sentence (FRU-156).
-    for (const failure of ['wait', 'visitor-limit', 'refused', 'signed-out', 'members-only', 'too-large'] as const) {
+    for (const failure of [
+      'wait',
+      'visitor-limit',
+      'refused',
+      'signed-out',
+      'members-only',
+      'too-large',
+      'bot-check',
+      'bot-check-unavailable',
+    ] as const) {
       send.click();
       answer(failure);
       await settle();

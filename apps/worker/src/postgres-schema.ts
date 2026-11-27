@@ -137,6 +137,10 @@ export const sites = pgTable(
     // for good (`deleted-notes.ts`): 7, 30 or 90. 30 by default, as the mockup draws it, those of
     // before included.
     deleted_notes_keep_days: integer('deleted_notes_keep_days').notNull().default(30),
+    // FRU-704: « Bot check », Cloudflare Turnstile before the first note of a visitor (`bot-check.ts`).
+    // On by default, as the mockup draws it: `0062` adds it on for every site, those of before included.
+    // It does nothing on an instance with no key of Turnstile.
+    bot_check: boolean('bot_check').notNull().default(true),
   },
   (table) => [
     foreignKey({

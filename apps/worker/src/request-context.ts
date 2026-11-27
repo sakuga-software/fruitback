@@ -22,6 +22,7 @@ import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
 import type { ReplyAuthor, NoteStore } from './store.ts';
 import type { VisitorAction } from './visitor-key.ts';
+import type { VerifyTurnstile } from './bot-check.ts';
 
 /**
  * What one request of `app.ts` reads, out of `app.ts` so that each module of routes names it
@@ -78,6 +79,11 @@ export type RequestContext = {
   noteVersions?: NoteVersions;
   /** « Deleted notes » (FRU-704). A suite hands over one on PGlite. */
   deletedNotes?: DeletedNotes;
+  /**
+   * What checks a token of Turnstile (FRU-704): `bot-check.ts`. Absent, the one of the instance
+   * (`turnstileVerifierFor`). A suite hands over one that calls nobody.
+   */
+  verifyTurnstile?: VerifyTurnstile;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
   /**

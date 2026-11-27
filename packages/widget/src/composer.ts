@@ -149,6 +149,11 @@ export type NotifyOffer = {
  *   file is removed, or sent again.
  * - `no-tracker`: the place of the note takes no file (`409`). It goes without its files, or to
  *   another place.
+ * - `bot-check`: the site asks a visitor to pass Cloudflare Turnstile before their first note (`403
+ *   bot-check`, FRU-704), and the check did not pass, or the worker refused its token. A try again
+ *   draws a new check.
+ * - `bot-check-unavailable`: the check did not load (a page that blocks its script, a network that
+ *   does not reach it). The team of the site can allow it.
  */
 export type SendFailure =
   | 'retry'
@@ -160,7 +165,9 @@ export type SendFailure =
   | 'too-large'
   | 'attachment-gone'
   | 'no-tracker'
-  | 'place-gone';
+  | 'place-gone'
+  | 'bot-check'
+  | 'bot-check-unavailable';
 
 export type ComposerOptions = {
   document?: Document;
@@ -398,6 +405,13 @@ export type Composer = {
    * no file, when the host captures nothing, or when the note holds as many files as it can.
    */
   captureArea(): boolean;
+  /**
+   * Draws a check in the composer while a note is on its way (FRU-704): « Bot check », which the
+   * worker asked for. `run` draws it in `slot` and answers; `signal` aborts when the composer closes,
+   * and `abandoned` is then the answer. The text stays in the field, read-only, as for any send.
+   * Outside a send, `abandoned` at once.
+   */
+  challenge<T>(run: (slot: HTMLElement, signal: AbortSignal) => Promise<T>, abandoned: T): Promise<T>;
   /** The popover's own root, for tests and for whoever needs to measure it. */
   element: HTMLElement;
   destroy(): void;
@@ -509,6 +523,12 @@ export function createComposer(options: ComposerOptions): Composer {
   let mustSignIn = false;
   const signIn = part<HTMLButtonElement>('[data-fruitback-sign-in]');
   const status = part('[data-fruitback-status]');
+  // FRU-704: where « Bot check » is drawn, above the foot, while the note waits for it.
+  const challengeBox = part('[data-fruitback-challenge]');
+  const challengeSlot = part('[data-fruitback-challenge-slot]');
+  part('[data-fruitback-challenge-text]').textContent = t.text('composer.challenge');
+  /** Ends the check drawn now, when the composer closes under it. */
+  let challengeAbort: AbortController | undefined;
   const who = part('[data-fruitback-who]');
   const name = part<HTMLInputElement>('[data-fruitback-name]');
   const rememberLabel = part<HTMLLabelElement>('[data-fruitback-remember-label]');
@@ -1802,6 +1822,8 @@ export function createComposer(options: ComposerOptions): Composer {
       closing = 0;
     }
     session += 1;
+    // FRU-704: a check drawn for the note goes with the composer; the send says nothing after it.
+    challengeAbort?.abort();
     root.hidden = true;
     following = null;
     stopSettling();
@@ -2052,8 +2074,30 @@ export function createComposer(options: ComposerOptions): Composer {
 
       return true;
     },
+    async challenge(run, abandoned) {
+      if (root.hidden || state !== 'sending' || challengeAbort !== undefined) return abandoned;
+      const abort = new AbortController();
+      challengeAbort = abort;
+      challengeBox.hidden = false;
+      status.textContent = t.text('composer.challenge');
+      try {
+        const aborted = new Promise<typeof abandoned>((resolve) =>
+          abort.signal.addEventListener('abort', () => resolve(abandoned), { once: true }),
+        );
+
+        return await Promise.race([run(challengeSlot, abort.signal), aborted]);
+      } catch {
+        return abandoned;
+      } finally {
+        challengeAbort = undefined;
+        challengeBox.hidden = true;
+        challengeSlot.replaceChildren();
+        if (state === 'sending') status.textContent = t.text(STATUS.sending);
+      }
+    },
     element: root,
     destroy() {
+      challengeAbort?.abort();
       if (closing !== 0) view?.clearTimeout(closing);
       document.removeEventListener('click', onDocumentClick, true);
       document.removeEventListener('click', onMenuOutside, true);
@@ -2249,6 +2293,8 @@ const FAILURES = {
   'attachment-gone': 'composer.failedAttachmentGone',
   'no-tracker': 'composer.failedNoTracker',
   'place-gone': 'composer.failedPlaceGone',
+  'bot-check': 'composer.failedBotCheck',
+  'bot-check-unavailable': 'composer.failedBotCheckUnavailable',
 } as const satisfies Record<SendFailure, MessageKey>;
 
 /** Why a file did not go, under its name (FRU-332). */
@@ -2485,6 +2531,15 @@ const TEMPLATE: readonly Markup[] = [
   ],
   // Why « Send » waits for a sign-in (FRU-609): above the foot, where a failure says why.
   ['p', { 'data-fruitback-sign-needed': '', class: 'fruitback-composer-sign-needed', role: 'status', hidden: '' }],
+  // « Bot check » (FRU-704): Cloudflare Turnstile draws its check in the slot, above the foot.
+  [
+    'div',
+    { 'data-fruitback-challenge': '', class: 'fruitback-composer-challenge', hidden: '' },
+    [
+      ['p', { 'data-fruitback-challenge-text': '', class: 'fruitback-composer-challenge-text' }],
+      ['div', { 'data-fruitback-challenge-slot': '', class: 'fruitback-composer-challenge-slot' }],
+    ],
+  ],
   [
     'div',
     { 'data-fruitback-failed': '', class: 'fruitback-composer-failed', role: 'alert', hidden: '' },

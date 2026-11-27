@@ -1707,16 +1707,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
-- **« Deleted notes » is the fourth line of « Safeguards » (FRU-704)**: 7, 30 or 90 days, 30 by
+- **« Bot check » is the second line of « Safeguards » (FRU-704)**, as the mockup orders them: a
+  switch, on by default, « Cloudflare Turnstile before the first note », sent where anybody writes,
+  « n/a » elsewhere. On an instance with no key of Turnstile (`botCheckReady: false` of the site, or a
+  worker of before) the switch is off and disabled, and its line says « Off on this instance: no
+  Turnstile key »; the stored value is sent back as it is.
+- **« Deleted notes » is the fifth line of « Safeguards » (FRU-704)**: 7, 30 or 90 days, 30 by
   default, sent where anybody writes, « n/a » elsewhere; a worker of before reads as 90. The panel of a
   note its visitor deleted says when, and when Fruitback erases it, with « Restore » (its pin shows
   again, closed); a refusal says why. A deleted note stays in the list as before, closed.
-- **« Keep every version » is the third line of « Safeguards » (FRU-704)**, a switch, on by default as
+- **« Keep every version » is the fourth line of « Safeguards » (FRU-704)**, a switch, on by default as
   the mockup draws it, sent where anybody writes, « n/a » elsewhere. The panel of a note shows its
   versions under « Activity » in a section « History », oldest first: who edited or deleted it, when,
   and the text of before. Only a role that sees the tracker gets them; the section is not drawn for a
   note with none.
-- **« Hold new visitor notes » is the second line of « Safeguards » (FRU-704)**, a switch, sent where
+- **« Hold new visitor notes » is the third line of « Safeguards » (FRU-704)**, a switch, sent where
   anybody writes, « n/a » elsewhere. Its notes wait in the screen « To approve » (`/w/<id>/approve`),
   an entry of « Views » in the bar for a role that sees the tracker, shown while notes wait or while
   it is on screen: the bar reads `…/held/count` once by workspace, and the screen tells it each new

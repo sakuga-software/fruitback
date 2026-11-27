@@ -68,13 +68,15 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
  * - `X-Fruitback-Visitor`, the key of a visitor's browser (FRU-700, `visitor-key.ts`), for the same
  *   reason: the widget sends it on the reads and the writes of a visitor who sent a note, and a
  *   preflight that does not list it refuses those calls.
+ * - `X-Fruitback-Turnstile`, the token of Cloudflare Turnstile (FRU-704, `bot-check.ts`), for the same
+ *   reason: the widget sends it on the note it sends again after a `403 bot-check`.
  */
 function allowOrigin(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Fruitback-Visitor',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Fruitback-Visitor, X-Fruitback-Turnstile',
     'Access-Control-Max-Age': '86400',
   };
 }

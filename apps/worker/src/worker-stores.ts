@@ -14,6 +14,7 @@ import type { HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
 import type { DeletedNotes } from './deleted-notes.ts';
 import { DEV_DATABASE_URL } from './postgres.ts';
+import { type VerifyTurnstile, createTurnstileVerifier, verifyTestTurnstile } from './bot-check.ts';
 import {
   postgresAccountStore,
   postgresConnectStore,
@@ -116,6 +117,16 @@ export function provideDevDoneMailer(mailer: Mailer): void {
 export function doneMailerFor(config: WorkerConfig): Mailer | undefined {
   return mailerFor(config) ?? (config.databaseUrl === DEV_DATABASE_URL ? devDoneMailer : undefined);
 }
+
+/**
+ * What checks a token of Turnstile (FRU-704): `siteverify` of Cloudflare, or, on the worker of
+ * development, `verifyTestTurnstile`, which takes the dummy token of the keys of test and calls nobody.
+ */
+export function turnstileVerifierFor(config: WorkerConfig): VerifyTurnstile {
+  return config.databaseUrl === DEV_DATABASE_URL ? verifyTestTurnstile : productionTurnstile;
+}
+
+const productionTurnstile = createTurnstileVerifier();
 
 /** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */
 export function mailerFor(config: WorkerConfig): Mailer | undefined {

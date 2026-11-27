@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import type { Note } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
-import { type handleRequest as realHandle, handleRequest } from './app.ts';
+import { type RequestContext, type handleRequest as realHandle, handleRequest } from './app.ts';
+import { TURNSTILE_HEADER } from './bot-check.ts';
+import type { WorkerEnv } from './env.ts';
 import { WORKER, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -27,8 +29,11 @@ export const PAGE = 'https://acme.dev/pricing';
 export const KEY_A = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 export const KEY_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 
-/** Who calls: the key of a browser, a session of the extension, or both. */
-export type Who = { key?: string; token?: string };
+/**
+ * Who calls: the key of a browser, a session of the extension, or both. `turnstile`: the token of
+ * Cloudflare Turnstile the widget sends after a `403 bot-check` (FRU-704).
+ */
+export type Who = { key?: string; token?: string; turnstile?: string };
 
 export type Answer = { status: number; body: Record<string, any> };
 
@@ -52,10 +57,14 @@ export async function aVisitorSite(
     storeOf?: (world: World) => NoteStore;
     /** The index of the notes of the world, or another in its place (FRU-702: one that fails). */
     indexOf?: (index: NoteIndex) => NoteIndex;
+    /** More of the environment of the worker (FRU-704: the keys of Turnstile). */
+    env?: Partial<WorkerEnv>;
+    /** More of what `handleRequest` is handed (FRU-704: the verifier of Turnstile). */
+    context?: Partial<RequestContext>;
   } = {},
 ) {
   const handle = options.handle ?? handleRequest;
-  const world = await open();
+  const world = await open(options.env === undefined ? {} : { env: options.env });
   const store = (options.storeOf ?? ((each: World) => createPostgresNoteStore(each.database)))(world);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
@@ -76,6 +85,7 @@ export async function aVisitorSite(
           Origin: ORIGIN,
           ...(who.key === undefined ? {} : { [VISITOR_HEADER]: who.key }),
           ...(who.token === undefined ? {} : { Authorization: `Bearer ${who.token}` }),
+          ...(who.turnstile === undefined ? {} : { [TURNSTILE_HEADER]: who.turnstile }),
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -84,6 +94,7 @@ export async function aVisitorSite(
       {
         clientIp: '198.18.2.1',
         ...world.context,
+        ...options.context,
         store,
         ...(options.indexOf === undefined || world.context.noteIndex === undefined
           ? {}

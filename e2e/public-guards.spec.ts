@@ -47,7 +47,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.afterAll(async () => {
   // The site goes back to « No limit » and holds nothing, so a spec run after this one starts clean.
-  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, keepNoteVersions: true });
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, keepNoteVersions: true, botCheck: false });
 });
 
 test('a visitor leaves the notes of the hour, then the widget asks them to wait, with their text kept (FRU-704)', async ({
@@ -146,4 +146,88 @@ test('a visitor who edits their note on a site that keeps every version is told 
   await expect(again.getByRole('textbox', { name: 'Your note' })).toBeVisible();
   await expect(again.getByText(KEPT)).toHaveCount(0);
   await guards({ keepNoteVersions: true });
+});
+
+/**
+ * A fake of Cloudflare's `api.js` (FRU-704): no call leaves this machine. It draws a box with a button
+ * in the slot the widget gives, and a press gives the dummy token of the keys of test of Cloudflare,
+ * which the dev worker takes with its secret of test (`verifyTestTurnstile`).
+ */
+const FAKE_TURNSTILE = `
+window.turnstile = {
+  render(slot, options) {
+    const box = document.createElement('div');
+    box.setAttribute('data-fake-turnstile', options.sitekey);
+    box.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #d4d4d8;border-radius:4px;font:13px system-ui;background:#fafafa;color:#18181b';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Verify you are human';
+    button.addEventListener('click', () => options.callback('XXXX.DUMMY.TOKEN.XXXX'));
+    box.append(button, document.createTextNode('Fake Turnstile (test)'));
+    slot.append(box);
+    return 'fake-1';
+  },
+  remove() {},
+};
+`;
+const TURNSTILE_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+test('a visitor passes the bot check in the composer before their first note, and their next note asks nothing (FRU-704)', async ({
+  page,
+}) => {
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, botCheck: true });
+  const loaded: string[] = [];
+  await page.route('https://challenges.cloudflare.com/**', (route) => {
+    loaded.push(route.request().url());
+
+    return route.fulfill({ contentType: 'text/javascript', body: FAKE_TURNSTILE });
+  });
+  const posts: { status: number; token: string | null }[] = [];
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname !== '/feedback' || response.request().method() !== 'POST') return;
+    posts.push({ status: response.status(), token: response.request().headers()['x-fruitback-turnstile'] ?? null });
+  });
+  await mount(page, `/?widget=off&case=${caseOf('visitor-bot-check')}`);
+  // Nothing of Cloudflare at the mount.
+  expect(loaded).toEqual([]);
+
+  await write(page, 'Une première note, après la vérification');
+
+  const composer = page.locator('[data-fruitback-composer]');
+  await expect(
+    composer.getByText('This site checks that a person sends this note. Your note goes once the check passes.'),
+  ).toBeVisible();
+  await expect(composer.locator('[data-fake-turnstile="1x00000000000000000000AA"]')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une première note, après la vérification');
+  await composer.getByRole('button', { name: 'Verify you are human' }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  expect(loaded).toEqual([TURNSTILE_URL]);
+  expect(posts).toEqual([
+    { status: 403, token: null },
+    { status: 201, token: 'XXXX.DUMMY.TOKEN.XXXX' },
+  ]);
+
+  // The next note of this browser goes at once: the worker keeps that it passed.
+  await write(page, 'Une deuxième note, sans vérification');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
+  expect(posts.at(-1)).toEqual({ status: 201, token: null });
+  await guards({ botCheck: false });
+});
+
+test('a check that does not load says so, and keeps the text of the visitor (FRU-704)', async ({ page }) => {
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, botCheck: true });
+  // A page that blocks challenges.cloudflare.com, as a strict CSP or an extension does.
+  await page.route('https://challenges.cloudflare.com/**', (route) => route.abort('blockedbyclient'));
+  await mount(page, `/?widget=off&case=${caseOf('visitor-bot-check-blocked')}`);
+
+  await write(page, 'Une note que la vérification bloque');
+
+  await expect(
+    page.getByText(
+      'The check that a person sends this note did not load. Your text is still here. Try again, or tell the site’s team.',
+    ),
+  ).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une note que la vérification bloque');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+  await guards({ botCheck: false });
 });

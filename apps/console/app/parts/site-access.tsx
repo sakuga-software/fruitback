@@ -572,13 +572,18 @@ function Safeguard({
  * « Keep every version »: an edit or a deletion of a note keeps the version of before, which the page
  * of the note shows to the members; the same where only members write. « Deleted notes »: how many
  * days a note its visitor deleted is kept, while a member may restore it, before the worker erases it.
+ * « Bot check »: Cloudflare Turnstile before the first note of a visitor. On an instance with no key of
+ * Turnstile (`botCheckReady` false) it asks nobody: the switch is off and disabled, and the line says
+ * why; the stored value is sent as it is.
  */
 export function Safeguards({
   access,
+  botCheckReady,
   disabled,
   onChange,
 }: {
   access: Access;
+  botCheckReady: boolean;
   disabled: boolean;
   onChange: (access: Access) => void;
 }) {
@@ -605,6 +610,31 @@ export function Safeguards({
           <Fixed>{t('n/a')}</Fixed>
         )}
       </Safeguard>
+      {/* FRU-704: « Bot check », a switch drawn as the ones below. Off and said where the instance has no key. */}
+      {writes ? (
+        <div className="flex items-center gap-[12px] border-t border-line px-[16px] py-[10px]">
+          <span className="text-ink-soft">
+            <Icon name="shield" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <Toggle
+              label={t('Bot check')}
+              hint={
+                botCheckReady
+                  ? t('Cloudflare Turnstile before the first note')
+                  : t('Off on this instance: no Turnstile key')
+              }
+              value={botCheckReady && access.botCheck}
+              disabled={disabled || !botCheckReady}
+              onChange={(botCheck) => onChange({ ...access, botCheck })}
+            />
+          </span>
+        </div>
+      ) : (
+        <Safeguard icon="shield" title={t('Bot check')} hint={t('Cloudflare Turnstile before the first note')}>
+          <Fixed>{t('n/a')}</Fixed>
+        </Safeguard>
+      )}
       {/* FRU-704: the switch is the whole line, as « After a note » draws one. Where only members write, said. */}
       {writes ? (
         <div className="flex items-center gap-[12px] border-t border-line px-[16px] py-[10px]">

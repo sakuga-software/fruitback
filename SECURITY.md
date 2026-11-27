@@ -2855,6 +2855,49 @@ the widget says « Send it again later » with the text kept.
 - The guard is taken out of a copy of `feedback-routes.ts`, and the 11th note goes:
   test:`fails without the count of the route (planted violation)`.
 
+### The bot check before the first note of a visitor (FRU-704)
+
+The line « Bot check » of the card « Safeguards » asks a visitor with no account to pass Cloudflare
+Turnstile before their first note on the site. On by default, as the mockup draws it, and for the
+sites of before. It does nothing on an instance with no keys of Turnstile (`FRUITBACK_TURNSTILE_SECRET`
+and `FRUITBACK_TURNSTILE_SITE_KEY`, both or neither): the console then says « Off on this instance: no
+Turnstile key ».
+
+- Who is asked. A caller with no token, on a site that takes the notes of anybody and asks for the
+  check, on an instance with the keys: `POST /feedback` answers `403 bot-check` with the site key, and
+  writes, holds and counts nothing. A session of a member, a token that the site signs, a site of its
+  members only and an instance with no keys ask nobody.
+  test:`asks a visitor for the check before their first note, then sends it with the token, and asks that browser no more`,
+  test:`never asks a member, a site that does not ask, or an instance with no key of Turnstile`.
+- What is checked. The widget draws Turnstile and sends the same note again with its token in
+  `X-Fruitback-Turnstile`. The worker sends the token, the secret and the address of the visitor to
+  `https://challenges.cloudflare.com/turnstile/v0/siteverify`, once, after the count of the hour and
+  before anything is held or written: only `success: true` passes. A token that fails is `403
+  bot-check` again; a token longer than 2,048 characters is not sent. A Cloudflare that does not answer
+  in 5 s, or answers anything but `200` and JSON, is `503 bot-check-unavailable`, and nothing is
+  written; the widget keeps the text.
+  test:`refuses a token Cloudflare fails, and keeps nothing when Cloudflare does not answer`,
+  test:`fails a token Cloudflare refuses, and is unavailable for a status, a body or a silence it cannot read`,
+  test:`asks before a note is held for a member, and holds it once the check passed`,
+  test:`asks a batch of a visitor too, and gives back its notes when the check fails`.
+- The count of the hour. A try with no token is refused before the count, so it spends no note of the
+  hour; a token goes to Cloudflare only for a note within the limit.
+  test:`spends no note of the hour on the try with no token, and checks a token only within the limit`.
+- Before the first note, then not again for 30 days. A browser that passed, known by the digest of the
+  key of its browser on the site (`visitorDigestOf`), gets a mark in the table `kv`: the site and that
+  digest, for 30 days. Its next notes on the site are not asked. A visitor with no key is asked at each
+  note. A `kv` that does not answer keeps no mark, and the browser is asked again.
+  test:`asks a visitor with no key of their browser at each note`,
+  test:`keeps the mark 30 days under the site and the digest, and keeps none when the Kv does not answer`.
+- What it is not. Turnstile tells a person from a script; it says nothing of who the person is. A key
+  of a browser that passed can be copied with the storage of the page, as every key of a browser:
+  the mark opens the notes of that browser on that site for 30 days, and nothing more. The
+  limit of the hour still holds under it.
+- No call leaves a test: the verifier is a seam (`verifyTurnstile`). The worker of development has the
+  keys of test of Cloudflare and checks the dummy token with no call.
+- The guard is taken out of a copy of `feedback-routes.ts`, and the note goes with no check:
+  test:`fails without the check of the route (planted violation)`.
+
 ### The notes of visitors that wait for a member (FRU-704)
 
 The line « Hold new visitor notes » of the card « Safeguards » keeps a note of a visitor out of the

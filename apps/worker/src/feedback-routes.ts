@@ -42,7 +42,8 @@ import {
   takesReplies,
   takesStatuses,
 } from './store.ts';
-import { attachmentStoreFor, heldNotesFor } from './worker-stores.ts';
+import { attachmentStoreFor, heldNotesFor, turnstileVerifierFor } from './worker-stores.ts';
+import { type TurnstileKeys, passedBefore, rememberPassed, turnstileTokenOf } from './bot-check.ts';
 import { OWN_SOURCE, type SiteStatus, envelopeStatuses, withoutTrackerStatus } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
 import type { StageExceptions } from './linear.ts';
@@ -545,11 +546,19 @@ export async function postFeedback(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+  // FRU-704: « Bot check ». A visitor the check asks and who sent no token is refused before the count,
+  // so the try that only fetches the check spends no note of the hour.
+  const asked = identity.visitor ? await botCheckAsk(request, config, kv, route.client, clientId, checks) : undefined;
+  if (asked?.token === undefined && asked !== undefined) return botCheckRefusal(asked.keys, corsHeaders);
   // FRU-704: counted once the note is one the worker would take, before anything is written.
   const limited = identity.visitor
     ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders)
     : undefined;
   if (limited !== undefined) return limited;
+  // FRU-704: the token goes to Cloudflare after the count, and before anything is held or written.
+  const unchecked =
+    asked === undefined ? undefined : await botCheckPassed(asked, config, kv, clientIp, context, corsHeaders);
+  if (unchecked !== undefined) return unchecked;
   // FRU-704: « Hold new visitor notes ». The note of a visitor waits for a member, and goes nowhere yet.
   // A visitor sends no file (`takeFiles` needs a session): a note that names one goes the way below,
   // which refuses it.
@@ -685,6 +694,64 @@ async function visitorLimit(
   }
 
   return json(429, { error: 'visitor-limit', perHour }, corsHeaders);
+}
+
+/** What « Bot check » asks of a request (FRU-704): the site, the digest of the browser, the token sent. */
+type BotCheckAsk = { site: string; visitor: string | undefined; token: string | undefined; keys: TurnstileKeys };
+
+/**
+ * Whether « Bot check » asks this visitor for Turnstile (FRU-704), or `undefined` when it asks nothing:
+ * an instance with no keys (`FRUITBACK_TURNSTILE_SECRET`), a site that does not ask (`botCheck` of the
+ * client, which `clientOf` gives only where anybody writes), or a browser that passed on the site in
+ * the last 30 days (`passedBefore`). The route calls it for a visitor only, as `visitorLimit`: a member
+ * and a page that signs its reporter are never asked.
+ */
+async function botCheckAsk(
+  request: Request,
+  config: Served,
+  kv: Kv,
+  client: ClientConfig | undefined,
+  clientId: string | undefined,
+  checks: CallerChecks,
+): Promise<BotCheckAsk | undefined> {
+  const keys = config.turnstile;
+  if (keys === undefined || client?.botCheck !== true || clientId === undefined) return undefined;
+  const visitor = checks.visitorOf(request, clientId);
+  if (await passedBefore(kv, clientId, visitor)) return undefined;
+
+  return { site: clientId, visitor, token: turnstileTokenOf(request), keys };
+}
+
+/** `403 bot-check` with the site key: the widget draws the check with it, and sends the note again. */
+function botCheckRefusal(keys: TurnstileKeys, corsHeaders: Record<string, string>): Response {
+  return json(403, { error: 'bot-check', siteKey: keys.siteKey }, corsHeaders);
+}
+
+/**
+ * Sends the token of the request to Cloudflare (FRU-704), and `undefined` when it passed: the browser
+ * is then not asked again on the site for 30 days. A token that fails is `403 bot-check` again; a
+ * Cloudflare that does not answer is `503 bot-check-unavailable`, and the widget keeps the text.
+ */
+async function botCheckPassed(
+  asked: BotCheckAsk,
+  config: Served,
+  kv: Kv,
+  clientIp: string,
+  context: RequestContext | undefined,
+  corsHeaders: Record<string, string>,
+): Promise<Response | undefined> {
+  if (asked.token === undefined) return botCheckRefusal(asked.keys, corsHeaders);
+  const verify = context?.verifyTurnstile ?? turnstileVerifierFor(config);
+  const verdict = await verify({ secret: asked.keys.secret, token: asked.token, remoteIp: clientIp });
+  if (verdict === 'unavailable') {
+    console.error(`[fruitback] the bot check of site ${asked.site} did not answer`);
+
+    return json(503, { error: 'bot-check-unavailable' }, corsHeaders);
+  }
+  if (verdict === 'failed') return botCheckRefusal(asked.keys, corsHeaders);
+  await rememberPassed(kv, asked.site, asked.visitor);
+
+  return undefined;
 }
 
 /**
@@ -823,6 +890,9 @@ async function postBatch(
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+  // FRU-704: « Bot check », as for one note: with no token, refused before anything is held or counted.
+  const asked = visitor ? await botCheckAsk(request, config, kv, route.client, clientId, checks) : undefined;
+  if (asked?.token === undefined && asked !== undefined) return botCheckRefusal(asked.keys, corsHeaders);
   // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
   const known = await Promise.all(
     attributed.map(async (note) => {
@@ -853,6 +923,14 @@ async function postBatch(
     await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
 
     return limited;
+  }
+  // FRU-704: the token goes to Cloudflare after the count. Refused, the holds are given back at once.
+  const unchecked =
+    asked === undefined ? undefined : await botCheckPassed(asked, config, kv, clientIp, context, corsHeaders);
+  if (unchecked !== undefined) {
+    await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
+
+    return unchecked;
   }
   // FRU-704: a batch of a visitor on a site that holds their notes waits for a member, whole. A note
   // held already is not held twice: its site and its id are the key. The locks of the Kv go at once.

@@ -190,6 +190,14 @@ export const ENGLISH = {
   // A `429 visitor-limit`: the visitor sent the notes the site takes from one visitor in an hour (FRU-704).
   'composer.failedVisitorLimit':
     'You sent as many notes as this site takes in an hour. Your text is still here. Send it again later.',
+  // « Bot check » (FRU-704): the line above the check of Cloudflare Turnstile, drawn in the composer.
+  'composer.challenge': 'This site checks that a person sends this note. Your note goes once the check passes.',
+  // The check did not pass, or the worker refused its token (FRU-704).
+  'composer.failedBotCheck':
+    'The check that a person sends this note did not pass. Your text is still here. Try again.',
+  // The check did not load: a page that blocks challenges.cloudflare.com, or no network to it (FRU-704).
+  'composer.failedBotCheckUnavailable':
+    'The check that a person sends this note did not load. Your text is still here. Try again, or tell the site’s team.',
   'composer.failedRefused':
     'This site refused the note from this address. Your text is still here. Tell the site’s team.',
   // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).

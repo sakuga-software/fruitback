@@ -329,6 +329,18 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks:
+      'asks a visitor of a new site for the bot check, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'asks no visitor of a new site',
+    replace: { from: 'bot_check: botCheck ?? true,', to: 'bot_check: botCheck ?? false,' },
+  },
+  {
+    breaks:
+      'asks a visitor of a new site for the bot check, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
+    by: 'never changes the switch of the bot check of a site that exists',
+    replace: { from: '...(botCheck === undefined ? {} : { bot_check: botCheck }),', to: '' },
+  },
+  {
     breaks: 'keeps a deleted note of a new site 30 days, and keeps the value on a site added again (FRU-704)',
     by: 'keeps a deleted note of a new site 7 days',
     replace: {

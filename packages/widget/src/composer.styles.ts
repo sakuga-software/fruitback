@@ -474,6 +474,17 @@ export const STYLES = `
   background: var(--fruitback-color-surface);
 }
 .fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+/* « Bot check » (FRU-704): the check of Cloudflare, drawn in its slot while the note waits. */
+.fruitback-composer-challenge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-composer-challenge[hidden] { display: none; }
+.fruitback-composer-challenge-text { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-challenge-slot { min-height: 65px; max-width: 100%; overflow: hidden; }
 /* « Not sent », and what to do (FRU-305). The text stays in the field above. */
 .fruitback-composer-failed {
   display: flex;

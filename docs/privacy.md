@@ -307,6 +307,18 @@ The table `done_notices` keeps one row for each note that waits:
   account by the digest of the key of their browser and by their address, on that site, over
   windows of one hour, and keeps a window for two. They are rows of the same table `kv`, and the
   digest is never the key. A site that says « No limit » keeps neither.
+- That a browser passed the bot check, for 30 days, on a site whose « Bot check » is on, on an
+  instance with the keys of Cloudflare Turnstile. A row of the same table `kv` holds the id
+  of the site and the digest of the key of the browser, never the key, and the value `1`: no address,
+  no token, no answer of Cloudflare. Its next notes on that site are not asked again until the row
+  expires. A visitor with no key of their browser leaves no row, and is asked at each note.
+- What goes to Cloudflare for the bot check. At the first note of a visitor on such a site,
+  the widget loads Turnstile from `challenges.cloudflare.com`, and Cloudflare sees that browser as it
+  sees any page that loads its script. The worker then sends Cloudflare the token of the check, the
+  secret of the instance and the address of the visitor, once, to `siteverify`: the address helps
+  Cloudflare tell a person from a script, as its documentation asks. Nothing of the note goes to
+  Cloudflare, and the worker keeps nothing of its answer but the mark above. A member, a page that
+  signs its reporter, a site that turns « Bot check » off and an instance with no keys send nothing.
 - The answer to a read, for 15 seconds, in the same table. The read
   cache keeps a page's notes so a burst of visitors costs one call to the store.
 - The address a sign-in link or an invitation was sent to, for the time of its limit, in the same

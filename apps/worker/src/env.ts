@@ -19,6 +19,7 @@ import { DEFAULT_LIMIT } from './rate-limit.ts';
 import { DEFAULT_STORE_PROVIDER, type StoreConfig, storeProviderFor } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
 import { SIGN_UP_MODES, SIGN_UP_REFUSED, readSignUp } from './sign-up.ts';
+import type { TurnstileKeys } from './bot-check.ts';
 
 /**
  * The worker of before FRU-225, for the tests of its code alone: no database, and the sites in
@@ -206,6 +207,14 @@ export type WorkerEnv = {
    */
   FRUITBACK_SIGN_UP?: string;
   /**
+   * The secret key of the Cloudflare Turnstile widget of this instance (FRU-704): what the worker sends
+   * to `siteverify` with the token of a visitor (`bot-check.ts`). It goes with the next variable, never
+   * alone. Absent, « Bot check » asks nobody, and the console says so.
+   */
+  FRUITBACK_TURNSTILE_SECRET?: string;
+  /** The site key of that Turnstile widget (FRU-704): public, the widget draws the check with it. */
+  FRUITBACK_TURNSTILE_SITE_KEY?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -317,6 +326,11 @@ const configSchema = z.object({
   authTrackIp: z.boolean(),
   /** Who may create an account (FRU-278). FRU-261 and FRU-262 read it to show it. */
   signUp: z.enum(SIGN_UP_MODES),
+  /**
+   * The keys of Cloudflare Turnstile of this instance (FRU-704), or absent: « Bot check » then asks
+   * nobody. `bot-check.ts` reads them.
+   */
+  turnstile: z.custom<TurnstileKeys | undefined>().optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -444,8 +458,14 @@ function postgresRefusals(env: WorkerEnv): string[] {
   ];
 }
 
-/** The three secrets of the worker, each a value of the environment that nothing else reads. */
-const SECRETS = ['FRUITBACK_IDENTITY_SECRET', 'FRUITBACK_SECRETS_KEY', 'FRUITBACK_AUTH_SECRET'] as const;
+/** The secrets of the worker, each a value of the environment that nothing else reads. */
+const SECRETS = [
+  'FRUITBACK_IDENTITY_SECRET',
+  'FRUITBACK_SECRETS_KEY',
+  'FRUITBACK_AUTH_SECRET',
+  // FRU-704: a key copied with a space would fail every check, and every visitor would be refused.
+  'FRUITBACK_TURNSTILE_SECRET',
+] as const;
 
 /** What the worker says of a secret with white space around it. It never quotes the value. */
 const EDGED =
@@ -535,6 +555,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     githubConnector: readGithubConnector(env),
     trackerApps: readTrackerApps(env),
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
+    turnstile: readTurnstile(env),
   };
 
   const result = configSchema.safeParse(candidate);
@@ -666,6 +687,17 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return {
       ok: false,
       missing: [`FRUITBACK_CONSOLE_URL (FRUITBACK_DATABASE_URL is set, and a sign-in opens the console)`],
+    };
+  }
+
+  // FRU-704. Both or neither: a secret with no site key draws no check, and a site key with no secret
+  // verifies nothing. Each alone would leave « Bot check » on in the console and off in fact.
+  if (Boolean(env.FRUITBACK_TURNSTILE_SECRET?.trim()) !== Boolean(env.FRUITBACK_TURNSTILE_SITE_KEY?.trim())) {
+    return {
+      ok: false,
+      missing: [
+        'FRUITBACK_TURNSTILE_SECRET and FRUITBACK_TURNSTILE_SITE_KEY (both, the two keys of one Turnstile widget, or neither)',
+      ],
     };
   }
 
@@ -892,6 +924,14 @@ function githubConnectorRefusal(env: WorkerEnv, config: WorkerConfig, accounts: 
  */
 function readTasks(value: string | undefined): string {
   return value === undefined || value.trim() === '' ? 'on' : value.trim();
+}
+
+/** The keys of Turnstile (FRU-704), when both are there. Each alone is refused above, with its sentence. */
+function readTurnstile(env: WorkerEnv): TurnstileKeys | undefined {
+  const secret = env.FRUITBACK_TURNSTILE_SECRET?.trim();
+  const siteKey = env.FRUITBACK_TURNSTILE_SITE_KEY?.trim();
+
+  return secret && siteKey ? { secret, siteKey } : undefined;
 }
 
 function readAccess(value: string | undefined): string {

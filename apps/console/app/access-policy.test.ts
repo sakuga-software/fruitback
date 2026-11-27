@@ -21,6 +21,7 @@ const CONTRIBUTE: Access = {
   holdVisitorNotes: false,
   keepNoteVersions: false,
   deletedNotesKeepDays: 30,
+  botCheck: false,
 };
 
 describe('the access of a site, in the tab « Access » (FRU-703)', () => {
@@ -36,6 +37,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 90,
+      botCheck: false,
     });
     assert.equal(accessOf({ ...SITE, visibility: 'members' }).writers, 'members');
     assert.deepEqual(
@@ -50,6 +52,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
         holdVisitorNotes: false,
         keepNoteVersions: false,
         deletedNotesKeepDays: 90,
+        botCheck: false,
       },
     );
     assert.equal(accessOf({ ...SITE, visitorNotesPerHour: 20 }).visitorNotesPerHour, 20);
@@ -79,6 +82,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30,
+      botCheck: false,
     });
   });
 
@@ -94,6 +98,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30,
+      botCheck: false,
     });
     // Where only members write, the table says « Never », and that is what is stored (#ca9e30): a
     // site opened again later brings back no right that nobody saw.
@@ -130,6 +135,12 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
     assert.equal(sameAccess({ ...closed, deletedNotesKeepDays: 7 }, closed), true);
     assert.equal(accessOf({ ...SITE, deletedNotesKeepDays: 7 }).deletedNotesKeepDays, 7);
     assert.equal(accessBody('https://acme.dev', { ...CONTRIBUTE, deletedNotesKeepDays: 90 }).deletedNotesKeepDays, 90);
+    assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, botCheck: true }), false);
+    assert.equal(sameAccess({ ...closed, botCheck: true }, closed), true);
+    assert.equal(accessOf({ ...SITE, botCheck: true }).botCheck, true);
+    assert.equal(accessOf(SITE).botCheck, false);
+    assert.equal(accessBody('https://acme.dev', { ...CONTRIBUTE, botCheck: true }).botCheck, true);
+    assert.equal('botCheck' in accessBody('https://acme.dev', { ...closed, botCheck: true }), false);
   });
 
   it('lets a visitor reply where everyone reads and anybody writes, as the worker does', () => {

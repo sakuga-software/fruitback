@@ -162,6 +162,12 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * site of a workspace where anybody writes says it. Absent: none is kept.
    */
   keepNoteVersions?: true;
+  /**
+   * FRU-704: a visitor with no account passes Cloudflare Turnstile before their first note on the site
+   * (`bot-check.ts`), when the instance has a key. Only a site of a workspace where anybody writes says
+   * it. Absent: nobody is asked.
+   */
+  botCheck?: true;
 };
 export type ClientMap = Record<string, ClientConfig>;
 

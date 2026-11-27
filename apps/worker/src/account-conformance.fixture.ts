@@ -273,6 +273,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       keepNoteVersions: true,
       // FRU-704: a note its visitor deleted is kept 30 days, the value of the mockup.
       deletedNotesKeepDays: 30,
+      // FRU-704: « Bot check » is on for a new site, as the mockup draws it.
+      botCheck: true,
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -287,6 +289,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
         keepNoteVersions: true,
+        botCheck: true,
       },
     });
   });
@@ -493,6 +496,31 @@ export function accountCases(it: Declare<AccountStore>): void {
     );
   });
 
+  it('asks a visitor of a new site for the bot check, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.botCheck, true);
+    assert.equal((await store.client(made.id))?.botCheck, true);
+    assert.equal(
+      (await store.addSite(workspace.id, { origin, visibility: 'everyone', botCheck: false })).botCheck,
+      false,
+    );
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).botCheck, false);
+    assert.equal((await store.client(made.id))?.botCheck, undefined);
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', botCheck: true });
+    assert.equal((await store.client(made.id))?.botCheck, true);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => site.botCheck),
+      [true],
+    );
+    // A site of its members only asks nobody: the card says « n/a ».
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    assert.equal((await store.clientMap())[made.id]?.botCheck, undefined);
+  });
+
   it('keeps one address apart in two workspaces', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);
@@ -514,6 +542,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
         keepNoteVersions: true,
+        botCheck: true,
       },
     });
   });

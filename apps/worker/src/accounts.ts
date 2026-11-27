@@ -429,6 +429,11 @@ export type Site = {
   /** The days a note its visitor deleted is kept, then erased for good (FRU-704): `deleted-notes.ts`. */
   deletedNotesKeepDays: DeletedNoteKeep;
   /**
+   * Whether a visitor with no account passes Cloudflare Turnstile before their first note (FRU-704):
+   * `bot-check.ts`. Of no effect on an instance with no key of Turnstile.
+   */
+  botCheck: boolean;
+  /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
    */
@@ -822,7 +827,7 @@ export type AccountStore = {
    * caller that does not know the field opens nothing and closes nothing. The same for
    * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
    * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`, and `holdVisitorNotes`, off, and
-   * `keepNoteVersions`, on, and `deletedNotesKeepDays`, with `DEFAULT_DELETED_NOTE_KEEP`.
+   * `keepNoteVersions`, on, and `deletedNotesKeepDays`, with `DEFAULT_DELETED_NOTE_KEEP`, and `botCheck`, on.
    */
   addSite(
     workspace: string,
@@ -837,6 +842,7 @@ export type AccountStore = {
       holdVisitorNotes?: boolean;
       keepNoteVersions?: boolean;
       deletedNotesKeepDays?: DeletedNoteKeep;
+      botCheck?: boolean;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
@@ -1349,6 +1355,8 @@ export function clientOf(site: Site): ClientMap[string] {
           ...(site.holdVisitorNotes ? { holdVisitorNotes: true as const } : {}),
           // FRU-704: an edit or a deletion keeps the version of before. Absent: none is kept.
           ...(site.keepNoteVersions ? { keepNoteVersions: true as const } : {}),
+          // FRU-704: a visitor passes Turnstile before their first note. Absent: nobody is asked.
+          ...(site.botCheck ? { botCheck: true as const } : {}),
         }
       : {}),
     // The first place is where the client routes, as when a site had one destination.

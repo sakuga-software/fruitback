@@ -13,6 +13,8 @@ import type { DeletedNoteKeep, Site, Visibility, VisitorNoteLimit, VisitorRight,
  * - `holdVisitorNotes`: a note of a visitor waits for a member before it goes on (FRU-704), the same.
  * - `keepNoteVersions`: an edit or a deletion of a note keeps the version of before (FRU-704), the same.
  * - `deletedNotesKeepDays`: the days a note its visitor deleted is kept, then erased (FRU-704), the same.
+ * - `botCheck`: a visitor passes Cloudflare Turnstile before their first note (FRU-704), the same. It
+ *   asks nobody on an instance with no key of Turnstile (`botCheckReady` of the site).
  */
 export type Access = {
   visibility: Visibility;
@@ -24,6 +26,7 @@ export type Access = {
   holdVisitorNotes: boolean;
   keepNoteVersions: boolean;
   deletedNotesKeepDays: DeletedNoteKeep;
+  botCheck: boolean;
 };
 
 /**
@@ -40,7 +43,12 @@ export const LEVEL_ACCESS: Readonly<
     ChosenLevel,
     Omit<
       Access,
-      'notifyDone' | 'visitorNotesPerHour' | 'holdVisitorNotes' | 'keepNoteVersions' | 'deletedNotesKeepDays'
+      | 'notifyDone'
+      | 'visitorNotesPerHour'
+      | 'holdVisitorNotes'
+      | 'keepNoteVersions'
+      | 'deletedNotesKeepDays'
+      | 'botCheck'
     >
   >
 > = {
@@ -66,6 +74,8 @@ export function accessOf(site: Site): Access {
     keepNoteVersions: site.keepNoteVersions === true,
     // A worker of before kept a deleted note as long as the note: the longest of the list stands for it.
     deletedNotesKeepDays: site.deletedNotesKeepDays ?? 90,
+    // A worker of before asked nobody.
+    botCheck: site.botCheck === true,
   };
 }
 
@@ -110,7 +120,8 @@ export function sameAccess(draft: Access, stored: Access): boolean {
         draft.visitorNotesPerHour === stored.visitorNotesPerHour &&
         draft.holdVisitorNotes === stored.holdVisitorNotes &&
         draft.keepNoteVersions === stored.keepNoteVersions &&
-        draft.deletedNotesKeepDays === stored.deletedNotesKeepDays))
+        draft.deletedNotesKeepDays === stored.deletedNotesKeepDays &&
+        draft.botCheck === stored.botCheck))
   );
 }
 
@@ -149,6 +160,7 @@ export function accessBody(origin: string, access: Access): Record<string, unkno
           holdVisitorNotes: access.holdVisitorNotes,
           keepNoteVersions: access.keepNoteVersions,
           deletedNotesKeepDays: access.deletedNotesKeepDays,
+          botCheck: access.botCheck,
         }
       : {}),
   };

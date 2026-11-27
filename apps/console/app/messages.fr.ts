@@ -769,6 +769,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Reject the note of {who}': 'Rejeter la note de {who}',
   Approve: 'Approuver',
   Reject: 'Rejeter',
+  // FRU-704: « Bot check ».
+  'Bot check': 'Vérification anti-robot',
+  'Cloudflare Turnstile before the first note': 'Cloudflare Turnstile avant la première note',
+  'Off on this instance: no Turnstile key': 'Désactivée sur cette instance : aucune clé Turnstile',
   'Hold new visitor notes': 'Retenir les nouvelles notes des visiteurs',
   'A member approves before they are sent': 'Un membre les approuve avant leur envoi',
   // FRU-704: « Keep every version », and the history of a note in its panel.

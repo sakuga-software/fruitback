@@ -241,6 +241,8 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
         kv,
         tasks: served.tasks,
+        // FRU-704: « Bot check » asks somebody only on an instance with a key of Turnstile.
+        botCheckReady: served.turnstile !== undefined,
         ...(readNote === undefined ? {} : { readNote }),
         ...(replyToNote === undefined ? {} : { replyToNote }),
         ...(noteIndex === undefined ? {} : { noteIndex }),

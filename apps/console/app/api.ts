@@ -106,6 +106,13 @@ export type Site = {
   keepNoteVersions?: boolean;
   /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept. A worker of before sends nothing. */
   deletedNotesKeepDays?: DeletedNoteKeep;
+  /** FRU-704: « Bot check », Cloudflare Turnstile before the first note. A worker of before sends nothing: off. */
+  botCheck?: boolean;
+  /**
+   * FRU-704: whether the instance has a key of Turnstile. Without one « Bot check » asks nobody, and
+   * the tab says so. A worker of before sends nothing: no key.
+   */
+  botCheckReady?: boolean;
   destination?: Destination;
   destinations?: Destination[];
   /**

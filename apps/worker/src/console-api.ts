@@ -108,6 +108,8 @@ export type ConsoleApiContext = {
   noteIndex?: NoteIndex;
   /** Whether this worker keeps tasks (FRU-651). Absent: `on`. */
   tasks?: 'on' | 'off';
+  /** FRU-704: whether this instance has a key of Turnstile, so that « Bot check » asks anybody. Absent: no. */
+  botCheckReady?: boolean;
   /** FRU-653: one note as its page reads it. Absent: the page of a task is not read. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
   /** FRU-712: writes a reply under a note of a page. Absent: the console writes no reply. */
@@ -257,6 +259,13 @@ type SiteView = {
   keepNoteVersions: boolean;
   /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept, as it is stored. */
   deletedNotesKeepDays: DeletedNoteKeep;
+  /** FRU-704: « Bot check », as it is stored. */
+  botCheck: boolean;
+  /**
+   * FRU-704: whether this instance has a key of Turnstile (`FRUITBACK_TURNSTILE_SECRET`). Without one
+   * the bot check asks nobody, whatever `botCheck` says, and the console says so.
+   */
+  botCheckReady: boolean;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -267,7 +276,7 @@ type SiteView = {
  * `destination` is the first of `destinations`: where a note goes when nobody chose. It stays for a
  * console that knows one destination for a site.
  */
-function siteView(site: Site, seesTracker: boolean): SiteView {
+function siteView(site: Site, seesTracker: boolean, botCheckReady: boolean): SiteView {
   const [first] = site.destinations;
 
   return {
@@ -282,6 +291,8 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     holdVisitorNotes: site.holdVisitorNotes,
     keepNoteVersions: site.keepNoteVersions,
     deletedNotesKeepDays: site.deletedNotesKeepDays,
+    botCheck: site.botCheck,
+    botCheckReady,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -912,7 +923,7 @@ export async function handleConsoleApi(
         : [undefined, undefined];
 
     return sites.map((site) => ({
-      ...siteView(site, seesTracker),
+      ...siteView(site, seesTracker, context.botCheckReady === true),
       ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
       ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
     }));
@@ -1002,6 +1013,11 @@ export async function handleConsoleApi(
     if (body?.deletedNotesKeepDays !== undefined && deletedNotesKeepDays === undefined) {
       return json(400, { error: 'invalid-deleted-notes-keep-days' }, headers);
     }
+    // FRU-704: absent, a new site asks for the bot check and a site that exists keeps what it had.
+    const botCheck = body?.botCheck;
+    if (botCheck !== undefined && typeof botCheck !== 'boolean') {
+      return json(400, { error: 'invalid-bot-check' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -1014,13 +1030,14 @@ export async function handleConsoleApi(
       ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
       ...(keepNoteVersions === undefined ? {} : { keepNoteVersions }),
       ...(deletedNotesKeepDays === undefined ? {} : { deletedNotesKeepDays }),
+      ...(botCheck === undefined ? {} : { botCheck }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.
     return json(
       201,
       {
-        ...siteView(site, allowed('see-tracker')),
+        ...siteView(site, allowed('see-tracker'), context.botCheckReady === true),
         ...(context.noteIndex === undefined ? {} : noNotes()),
         ...(context.noteIndex !== undefined && allowed('see-tracker') ? { undelivered: 0 } : {}),
       },

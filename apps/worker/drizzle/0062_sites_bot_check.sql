@@ -1,0 +1,1 @@
+ALTER TABLE "sites" ADD COLUMN "bot_check" boolean DEFAULT true NOT NULL;
