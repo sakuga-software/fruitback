@@ -28,7 +28,9 @@ export function appended(list: NotesAnswer, chunk: Chunk): NotesAnswer {
   const read = new Set(chunk.notes.map((note) => note.id));
   const { next: _next, statuses: _statuses, ...rest } = list;
   const statuses =
-    list.statuses === undefined && chunk.statuses === undefined ? undefined : { ...list.statuses, ...chunk.statuses };
+    list.statuses === undefined && chunk.statuses === undefined
+      ? undefined
+      : { ...list.statuses, ...sameKept(list.statuses, chunk.statuses) };
 
   return {
     ...rest,
@@ -36,6 +38,22 @@ export function appended(list: NotesAnswer, chunk: Chunk): NotesAnswer {
     ...(chunk.next === undefined ? {} : { next: chunk.next }),
     ...(statuses === undefined ? {} : { statuses }),
   };
+}
+
+/**
+ * The statuses of the sites of a chunk, each one the list holds the same already kept as it is: the
+ * rows of that site are drawn again only when its statuses change (FRU-731). A chunk reads them again.
+ */
+function sameKept(kept: NotesAnswer['statuses'], read: NotesAnswer['statuses']): NotesAnswer['statuses'] {
+  if (kept === undefined || read === undefined) return read;
+
+  return Object.fromEntries(
+    Object.entries(read).map(([site, statuses]) => {
+      const before = kept[site];
+
+      return [site, before !== undefined && JSON.stringify(before) === JSON.stringify(statuses) ? before : statuses];
+    }),
+  );
 }
 
 /** Whether the list has next notes the screen may read: a cursor, and fewer notes than it keeps. */

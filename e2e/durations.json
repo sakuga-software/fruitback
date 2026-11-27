@@ -50,6 +50,7 @@
   "console-notes-board.spec.ts": 24.8,
   "console-notes-pages.spec.ts": 20.5,
   "console-notes-pinned.spec.ts": 40.9,
+  "console-notes-rows.spec.ts": 3.0,
   "console-notes.spec.ts": 48.5,
   "console-oauth-worker.spec.ts": 14,
   "console-setup.spec.ts": 80.6,
