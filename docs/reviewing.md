@@ -177,6 +177,8 @@ site, it says `You are a member of this site. Turn it on with your account to se
 and « Turn on with my account » turns the site of your workspace on in place of the extension-mode
 rule. Signed in with an account that is not a member, it says
 `Only the members of this site see its notes, and your account is not one of them. Ask its team to invite you.`
+The side panel says the same line in place of its list, with « Open Fruitback », which opens the
+popup where the button is. Where the site takes no note, it offers no « Leave a note ».
 Extension mode stays available on the Cloud, for a site that says « Anyone on the page ».
 
 A team-mode endpoint must be `https`, or loopback for the dev loop: a session is a bearer

@@ -2278,12 +2278,22 @@ workspace of the account lists the origin (`offerFor`, asked only when signed in
 
 A worker run by somebody else keeps the sentences of FRU-66 and FRU-330, with the guide.
 
+**The side panel says the same line (FRU-729).** The widget gives its host `failed` for a read
+refused « members only » (`notesState` in `embed.ts`), so the panel said « could not be read », with
+« Try again » and a « Leave a note » that led nowhere. After a failed read of an extension-mode
+rule on the Fruitback of the build, the panel asks the worker the question of the popup
+(`probeRead`), and says the line of `memberRemedy` (`membersOnlyOf` in `side-panel.ts`). Its one
+button is « Open Fruitback » (FRU-532): the sign-in and « Turn on with my account » stay in the
+popup. A `401` that says `canWrite: false` takes « Leave a note » away. **Not taken: a value
+`members-only` in `NOTES_READINGS`.** It would tell the panel without a second read, but it changes
+the protocol between the widget and the extension. The second read is one `GET`, only after a read
+that failed, and only on the Cloud of the build.
+
 **Not taken: refuse extension mode on the Cloud** (FRU-643, cancelled on 2026-11-22). Extension mode
 is the first path of a person who finds Fruitback, and a site that says « Anyone on the page » takes
 their notes. **Not taken: a button in the widget.** The widget of extension mode has no `onSignIn`,
 and giving it one would turn every refusal into « Your session has ended » (`forThisHost` in
-`embed.ts`). The sign-in lives in the popup, and the side panel already says to sign in from the
-extension. Nothing typed is on the screen of a rule, so neither button can lose a draft (review of
+`embed.ts`). The sign-in lives in the popup, and the side panel opens it (FRU-729). Nothing typed is on the screen of a rule, so neither button can lose a draft (review of
 #897).
 
 ## The team mode, and the call the page cannot make (FRU-57)
