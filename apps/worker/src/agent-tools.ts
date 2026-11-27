@@ -672,7 +672,7 @@ function replyToNote(context: AgentToolsContext, args: Record<string, unknown>):
       if (!(await takesReplies(context.store, target))) return { ok: false, error: 'This note takes no reply.' };
       if (!(await chargeKey(context))) return { ok: false, error: LIMITED };
       const comment = await context.store.reply?.(
-        { issue: issue.id, clientId: site.id },
+        { issue: issue.id, clientId: site.id, identifier: issue.identifier },
         { body, author: { kind: 'agent', name: context.grant.name } },
         target,
         site.policy,

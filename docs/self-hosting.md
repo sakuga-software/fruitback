@@ -384,7 +384,7 @@ as « In progress », `done` as « Done » and `closed` as « Closed ».
 | ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
 | `postgres` | `new`, `todo`, `progress`, `done`, `closed` | The status a member sets in the console or the extension. A fix found wrong goes back to `new`. | The newest 20 rows of the `note_comments` table, which replies and verdicts write. | yes                |
 | `linear`   | `new`, `todo`, `progress`, `done`, `closed` | The workflow state of the issue.                                                                | The newest 20 comments on the issue.                                               | yes                |
-| `github`   | `new`, `done`, `closed`                     | Closing the issue, and the reason for the close.                                                | The newest 20 comments on the issue.                                               | yes                |
+| `github`   | `new`, `done`, `closed`                     | Closing the issue, and the reason for the close. A fix found wrong reopens it.                  | The newest 20 comments on the issue.                                               | yes                |
 | `memory`   | `new`, `todo`, `progress`, `done`, `closed` | Nothing. Each note gets the next state in a fixed list.                                         | Two canned replies, on every third note.                                           | no                 |
 
 ## The console

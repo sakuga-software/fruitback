@@ -14,7 +14,8 @@ import {
   signAppJwt,
   stageForGithubIssue,
 } from './github.ts';
-import { StoreError } from './store.ts';
+import { checkText, editText, moveText, replyText, withdrawText } from './reply-text.ts';
+import { StoreError, takesChecks, takesEdits, takesReplies, takesWithdrawals } from './store.ts';
 
 /**
  * The GitHub store against a fake GitHub (FRU-32). No test writes to a real repository.
@@ -835,6 +836,307 @@ describe('findForPage', () => {
       assert.equal(error.message, 'GitHub responded 403');
 
       return true;
+    });
+  });
+});
+
+describe('the writes of a person under a note (FRU-628)', () => {
+  /** The issue of `row()`, as GitHub answers it by its number, in the state `state` gives. */
+  type IssueState = { state: string; state_reason: string | null; closed_at: string | null };
+  const OPEN: IssueState = { state: 'open', state_reason: null, closed_at: null };
+  const DONE: IssueState = { state: 'closed', state_reason: 'completed', closed_at: '2026-09-14T11:00:00Z' };
+  const TARGET = { issue: '9001', clientId: 'acme', identifier: '#12' };
+  const MEMBER = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+  const NOTE = noteFixture();
+
+  /**
+   * GitHub with one issue, `#12` of id 9001. `states` are the states it answers, one read after the
+   * other, the last one for every read after; a `PATCH` sets the state. Comments get ids from 700.
+   */
+  function issueGithub(states: IssueState[], routes: Record<string, Route> = {}) {
+    let reads = 0;
+    let patched: IssueState | undefined;
+    let comments = 0;
+    const issue = (): Record<string, unknown> =>
+      row({ ...(patched ?? states[Math.min(reads++, states.length - 1)] ?? OPEN) });
+    const calls = fakeGithub({
+      ...installation(),
+      'GET /repos/acme/site/issues/12': () => json(200, issue()),
+      'PATCH /repos/acme/site/issues/12': (call) => {
+        const body = call.body as { state: string; state_reason: string };
+        patched = {
+          state: body.state,
+          state_reason: body.state_reason,
+          closed_at: body.state === 'closed' ? '2026-09-14T12:30:00Z' : null,
+        };
+
+        return json(200, row({ ...patched }));
+      },
+      'POST /repos/acme/site/issues/12/comments': (call) =>
+        json(201, {
+          id: 700 + comments++,
+          body: (call.body as { body: string }).body,
+          created_at: '2026-09-14T12:00:00Z',
+          user: { login: 'fruitback-app[bot]' },
+        }),
+      'DELETE /repos/acme/site/issues/comments/700': () => new Response(null, { status: 204 }),
+      ...routes,
+    });
+
+    return { calls, store: createGithubStore(CONFIG, { now: () => NOW }) };
+  }
+
+  /** The calls to the issue and its comments, as `METHOD /path`. */
+  function writes(calls: Call[]): string[] {
+    return apiCalls(calls).map((call) => `${call.method} ${call.path.replace('/repos/acme/site', '')}`);
+  }
+
+  it('says it takes a reply, a verdict, an edit and a withdrawal, and no edit where the replies are hidden', async () => {
+    const store = createGithubStore(CONFIG);
+
+    assert.equal(await takesReplies(store, undefined), true);
+    assert.equal(await takesChecks(store, undefined), true);
+    assert.equal(await takesEdits(store, undefined, POLICY), true);
+    assert.equal(await takesEdits(store, undefined, { showComments: false }), false);
+    assert.equal(await takesWithdrawals(store, undefined), true);
+    assert.equal(typeof store.move, 'function');
+  });
+
+  describe('reply', () => {
+    const REPLY = { body: 'Seen on the phone too.', author: { kind: 'visitor' as const, name: 'Ann' } };
+
+    it('writes a comment under the issue of that number, as replyText, and answers it as a read shows it', async () => {
+      const { calls, store } = issueGithub([OPEN]);
+
+      const comment = await store.reply?.(TARGET, REPLY, undefined, POLICY);
+
+      assert.deepEqual(writes(calls), ['GET /issues/12', 'POST /issues/12/comments']);
+      assert.deepEqual(apiCalls(calls)[1]?.body, { body: replyText(REPLY, 'en') });
+      assert.deepEqual(comment, {
+        id: '700',
+        body: replyText(REPLY, 'en'),
+        createdAt: '2026-09-14T12:00:00Z',
+        author: 'fruitback-app[bot]',
+      });
+    });
+
+    it('writes nothing when the issue of that number is another issue, or a pull request', async () => {
+      for (const other of [{ id: 9002 }, { pull_request: { url: 'x' } }]) {
+        const calls = fakeGithub({
+          ...installation(),
+          'GET /repos/acme/site/issues/12': () => json(200, row(other)),
+        });
+        const store = createGithubStore(CONFIG, { now: () => NOW });
+
+        assert.equal(await store.reply?.(TARGET, REPLY, undefined, POLICY), undefined);
+        assert.deepEqual(writes(calls), ['GET /issues/12']);
+        vi.restoreAllMocks();
+      }
+    });
+
+    it('says no such note when GitHub deleted the issue (410)', async () => {
+      const { calls, store } = issueGithub([OPEN], {
+        'GET /repos/acme/site/issues/12': () => json(410, { message: 'This issue was deleted' }),
+      });
+
+      assert.equal(await store.reply?.(TARGET, REPLY, undefined, POLICY), undefined);
+      assert.deepEqual(writes(calls), ['GET /issues/12']);
+    });
+
+    it('fails with no call when the caller gives no number', async () => {
+      const { calls, store } = issueGithub([OPEN]);
+
+      await assert.rejects(store.reply!({ issue: '9001', clientId: 'acme' }, REPLY, undefined, POLICY), StoreError);
+      assert.deepEqual(writes(calls), []);
+    });
+  });
+
+  describe('check', () => {
+    it('keeps the issue closed on « fixed », and writes the marked comment', async () => {
+      const { calls, store } = issueGithub([DONE]);
+      const check = { verdict: 'fixed' as const, author: MEMBER };
+
+      const answer = await store.check?.(TARGET, check, undefined, POLICY);
+
+      assert.deepEqual(writes(calls), ['GET /issues/12', 'POST /issues/12/comments']);
+      assert.equal(answer?.stage, 'done');
+      assert.equal(answer?.comment.body, checkText(check, 'en'));
+    });
+
+    it('reopens the issue on « Still wrong », after the comment, and answers the stage GitHub gives', async () => {
+      const { calls, store } = issueGithub([DONE]);
+      const check = { verdict: 'wrong' as const, author: MEMBER, body: 'Still grey.' };
+
+      const answer = await store.check?.(TARGET, check, undefined, POLICY);
+
+      assert.deepEqual(writes(calls), ['GET /issues/12', 'POST /issues/12/comments', 'PATCH /issues/12']);
+      assert.deepEqual(apiCalls(calls)[2]?.body, { state: 'open', state_reason: 'reopened' });
+      assert.equal(answer?.stage, 'new');
+      assert.equal(answer?.comment.body, checkText(check, 'en'));
+    });
+  });
+
+  describe('edit', () => {
+    const EDIT = { text: 'Le bouton est trop petit, et gris.', author: MEMBER, note: NOTE, identifier: '#12' };
+    const NO_NUMBER = { issue: '9001', clientId: 'acme' };
+
+    it('writes « Edited the note » with the new text, and never writes the body of the issue', async () => {
+      const { calls, store } = issueGithub([OPEN]);
+
+      const answer = await store.edit?.(NO_NUMBER, EDIT, undefined, POLICY);
+
+      assert.deepEqual(writes(calls), ['GET /issues/12', 'POST /issues/12/comments', 'GET /issues/12']);
+      assert.deepEqual(apiCalls(calls)[1]?.body, { body: editText(EDIT, 'en', true) });
+      assert.ok(typeof answer === 'object');
+      assert.equal(answer.note.text, EDIT.text);
+      assert.equal(answer.comment.body, editText(EDIT, 'en', true));
+    });
+
+    it('writes nothing on an issue already closed, and says not-open', async () => {
+      const { calls, store } = issueGithub([DONE]);
+
+      assert.equal(await store.edit?.(NO_NUMBER, EDIT, undefined, POLICY), 'not-open');
+      assert.deepEqual(writes(calls), ['GET /issues/12']);
+    });
+
+    it('deletes its comment when the issue is closed once the comment is written, and says not-open', async () => {
+      const { calls, store } = issueGithub([OPEN, DONE]);
+
+      assert.equal(await store.edit?.(NO_NUMBER, EDIT, undefined, POLICY), 'not-open');
+      assert.deepEqual(writes(calls), [
+        'GET /issues/12',
+        'POST /issues/12/comments',
+        'GET /issues/12',
+        'DELETE /issues/comments/700',
+      ]);
+    });
+
+    it('writes the comment again with no text when GitHub refuses to delete it, and fails when both are refused', async () => {
+      const refused = () => json(403, { message: 'Resource not accessible by integration' });
+      let bared: unknown;
+      const bare = issueGithub([OPEN, DONE], {
+        'DELETE /repos/acme/site/issues/comments/700': refused,
+        'PATCH /repos/acme/site/issues/comments/700': (call) => {
+          bared = call.body;
+
+          return json(200, {});
+        },
+      });
+
+      assert.equal(await bare.store.edit?.(NO_NUMBER, EDIT, undefined, POLICY), 'not-open');
+      assert.deepEqual(bared, { body: editText(EDIT, 'en') });
+      vi.restoreAllMocks();
+
+      const both = issueGithub([OPEN, DONE], { 'DELETE /repos/acme/site/issues/comments/700': refused });
+      await assert.rejects(both.store.edit!(NO_NUMBER, EDIT, undefined, POLICY), StoreError);
+    });
+
+    it('reads the text of the newest edit written before the issue was closed, and keeps the body', async () => {
+      const comment = (id: number, text: string, at: string) => ({
+        id,
+        body: editText({ text, author: MEMBER }, 'en', true),
+        created_at: at,
+        user: { login: 'fruitback-app[bot]' },
+      });
+      const read = async (closedAt: string | null) => {
+        fakeGithub({
+          ...installation(),
+          'GET /repos/acme/site/issues': () =>
+            json(200, [row({ comments: 2, ...(closedAt === null ? OPEN : { ...DONE, closed_at: closedAt }) })]),
+          'GET /repos/acme/site/issues/12/comments': () =>
+            json(200, [
+              comment(1, 'Première version.', '2026-09-14T10:00:00Z'),
+              comment(2, 'Seconde version.', '2026-09-14T11:30:00Z'),
+            ]),
+        });
+        const [issue] = await createGithubStore(CONFIG, { now: () => NOW }).findForPage(
+          { url: PAGE, clientId: 'acme' },
+          undefined,
+          POLICY,
+        );
+        vi.restoreAllMocks();
+
+        return issue?.note.text;
+      };
+
+      assert.equal(await read(null), 'Seconde version.');
+      // Closed at 11:00: the edit of 11:30 crossed the close, and is a reply, not the text.
+      assert.equal(await read('2026-09-14T11:00:00Z'), 'Première version.');
+    });
+  });
+
+  describe('move', () => {
+    const ANCHOR = { selector: 'main > h1', tag: 'h1', bounds: { xPct: 0, yPct: 0, wPct: 100, hPct: 8 } };
+    const VIEWPORT = { width: 390, height: 844 };
+    const MOVE = { author: MEMBER, anchor: ANCHOR, viewport: VIEWPORT, note: NOTE, identifier: '#12' };
+
+    it('writes « Moved the note » with the new place, and a read takes the place from it', async () => {
+      const { calls, store } = issueGithub([OPEN]);
+
+      const answer = await store.move?.({ issue: '9001', clientId: 'acme' }, MOVE, undefined, POLICY);
+
+      assert.deepEqual(apiCalls(calls)[1]?.body, { body: moveText(MOVE, 'en', true) });
+      assert.ok(typeof answer === 'object');
+      assert.deepEqual(answer.note.anchor, ANCHOR);
+      vi.restoreAllMocks();
+
+      fakeGithub({
+        ...installation(),
+        'GET /repos/acme/site/issues': () => json(200, [row({ comments: 1 })]),
+        'GET /repos/acme/site/issues/12/comments': () =>
+          json(200, [
+            { id: 1, body: moveText(MOVE, 'en', true), created_at: '2026-09-14T10:00:00Z', user: { login: 'app' } },
+          ]),
+      });
+      const [issue] = await createGithubStore(CONFIG, { now: () => NOW }).findForPage(
+        { url: PAGE, clientId: 'acme' },
+        undefined,
+        POLICY,
+      );
+      assert.deepEqual(issue?.note.anchor, ANCHOR);
+      assert.deepEqual(issue?.note.viewport, VIEWPORT);
+    });
+  });
+
+  describe('withdraw', () => {
+    const WITHDRAWAL = { author: MEMBER, note: NOTE, identifier: '#12' };
+    const NO_NUMBER = { issue: '9001', clientId: 'acme' };
+
+    it('writes the comment, then closes the issue as not planned, and answers closed', async () => {
+      const { calls, store } = issueGithub([OPEN]);
+
+      const answer = await store.withdraw?.(NO_NUMBER, WITHDRAWAL, undefined, POLICY);
+
+      assert.deepEqual(writes(calls), [
+        'GET /issues/12',
+        'POST /issues/12/comments',
+        'GET /issues/12',
+        'PATCH /issues/12',
+      ]);
+      assert.deepEqual(apiCalls(calls)[1]?.body, { body: withdrawText(WITHDRAWAL, 'en') });
+      assert.deepEqual(apiCalls(calls)[3]?.body, { state: 'closed', state_reason: 'not_planned' });
+      assert.ok(typeof answer === 'object');
+      assert.equal(answer.stage, 'closed');
+    });
+
+    it('deletes its comment and closes nothing when the team closed the issue meanwhile', async () => {
+      const { calls, store } = issueGithub([OPEN, DONE]);
+
+      assert.equal(await store.withdraw?.(NO_NUMBER, WITHDRAWAL, undefined, POLICY), 'not-open');
+      assert.deepEqual(writes(calls).slice(-1), ['DELETE /issues/comments/700']);
+      assert.equal(
+        calls.some((call) => call.method === 'PATCH'),
+        false,
+      );
+    });
+
+    it('deletes its comment when GitHub refuses to close the issue, so a new try writes one comment', async () => {
+      const { calls, store } = issueGithub([OPEN], {
+        'PATCH /repos/acme/site/issues/12': () => json(422, { message: 'Validation Failed' }),
+      });
+
+      await assert.rejects(store.withdraw!(NO_NUMBER, WITHDRAWAL, undefined, POLICY), StoreError);
+      assert.deepEqual(writes(calls).slice(-1), ['DELETE /issues/comments/700']);
     });
   });
 });

@@ -432,3 +432,25 @@ describe('how many verdicts (FRU-294)', () => {
     }
   });
 });
+
+describe('the note a verdict goes under (FRU-628)', () => {
+  it('names the issue by its id and by the identifier the read gave it, for a store that writes by number', async () => {
+    const { world, site, member, note } = await aDoneNote();
+    const [read0] = await read(world, site.id, member);
+    const memory = createMemoryStore();
+    const targets: unknown[] = [];
+    const spy: NoteStore = {
+      ...memory,
+      check: async (target, ...rest) => {
+        targets.push(target);
+        return memory.check?.(target, ...rest);
+      },
+    };
+
+    const written = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: spy });
+
+    assert.equal(written.status, 201, JSON.stringify(written.body));
+    assert.ok(typeof read0?.identifier === 'string' && read0.identifier !== '');
+    assert.deepEqual(targets, [{ issue: note.id, clientId: site.id, identifier: read0.identifier }]);
+  });
+});

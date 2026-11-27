@@ -267,7 +267,12 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           const created = await store.create(noteAt('sd_answered', PAGE, 'acme'), undefined, POLICY);
           const reply = { body: 'Seen on the phone too.', author: { kind: 'visitor' as const, name: 'Bob' } };
 
-          const written = await store.reply({ issue: created.id, clientId: 'acme' }, reply, undefined, POLICY);
+          const written = await store.reply(
+            { issue: created.id, clientId: 'acme', identifier: created.identifier },
+            reply,
+            undefined,
+            POLICY,
+          );
 
           const text = replyText(reply, POLICY.locale);
           assert.equal(written?.body, text);
@@ -294,7 +299,12 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           if (typeof subject.markDone === 'function') await subject.markDone(created);
           const check = { verdict: 'fixed' as const, author: CHECKER };
 
-          const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
+          const written = await store.check(
+            { issue: created.id, clientId: 'acme', identifier: created.identifier },
+            check,
+            undefined,
+            POLICY,
+          );
 
           assert.equal(written?.stage, 'done');
           assert.equal(written?.comment.body, checkText(check, POLICY.locale));
@@ -316,7 +326,12 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           if (typeof subject.markDone === 'function') await subject.markDone(created);
           const check = { verdict: 'wrong' as const, author: CHECKER, body: 'Still grey.' };
 
-          const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
+          const written = await store.check(
+            { issue: created.id, clientId: 'acme', identifier: created.identifier },
+            check,
+            undefined,
+            POLICY,
+          );
 
           assert.equal(written?.stage, 'new');
           const [found] = await find(PAGE, 'acme');
