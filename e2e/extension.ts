@@ -312,11 +312,12 @@ export async function mintPairingCode(name: string): Promise<string> {
 export async function mintPairing(
   name: string,
   endpoint = AUTHENTICATED_WORKER_ORIGIN,
+  person?: string,
 ): Promise<{ code: string; link: string }> {
   const answer = await fetch(`${endpoint}/__dev/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, endpoint }),
+    body: JSON.stringify({ name, endpoint, ...(person === undefined ? {} : { person }) }),
   });
   if (!answer.ok) throw new Error(`the worker minted no pairing code: ${answer.status} ${await answer.text()}`);
 

@@ -253,6 +253,64 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.equal((await read(worker.origin, { Authorization: `Bearer ${accessToken}` })).status, 200);
   });
 
+  it('pairs a member of its own for each `person`, whose notes are no one else’s (FRU-734)', async () => {
+    const worker = await start({ FRUITBACK_DEV_VISIBILITY: 'members', FRUITBACK_STORE: 'postgres' });
+    await ready(worker.origin, worker.said);
+    const pair = async (body: Record<string, unknown>): Promise<string> => {
+      const minted = await fetch(`${worker.origin}/__dev/pair`, {
+        method: 'POST',
+        body: JSON.stringify({ endpoint: worker.origin, ...body }),
+      });
+      assert.equal(minted.status, 200, await minted.clone().text());
+      const { code } = (await minted.json()) as { code: string };
+      const paired = await fetch(`${worker.origin}/session/pair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      assert.equal(paired.status, 200, await paired.clone().text());
+
+      return ((await paired.json()) as { accessToken: string }).accessToken;
+    };
+    const ana = await pair({ name: 'Ana', person: 'ana@fruitback.test' });
+    const bea = await pair({ name: 'Bea', person: 'bea@fruitback.test' });
+    const owner = await pair({ name: 'Dev' });
+    // The same address again is the same member: no second row, the same notes.
+    const anaAgain = await pair({ name: 'Ana', person: 'ana@fruitback.test' });
+
+    const sent = await fetch(`${worker.origin}/feedback`, {
+      method: 'POST',
+      headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json', Authorization: `Bearer ${ana}` },
+      body: JSON.stringify({
+        ...noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } }),
+        client: { id: DEV_SITE },
+      }),
+    });
+    assert.equal(sent.status, 201, await sent.clone().text());
+    const authors = async (token: string): Promise<unknown[]> => {
+      const listed = await fetch(`${worker.origin}/session/notes?site=${DEV_SITE}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(listed.status, 200, await listed.clone().text());
+
+      return ((await listed.json()) as { notes: { author: unknown }[] }).notes.map((note) => note.author);
+    };
+    assert.deepEqual(await authors(ana), [{ kind: 'you', name: 'Ana' }]);
+    assert.deepEqual(await authors(anaAgain), [{ kind: 'you', name: 'Ana' }]);
+    assert.deepEqual(await authors(bea), [{ kind: 'member', name: 'Ana' }]);
+    assert.deepEqual(await authors(owner), [{ kind: 'member', name: 'Ana' }]);
+
+    // Only an address of this machine: never a real one, never something else.
+    for (const person of ['ana@example.com', 'Ana@fruitback.test', 42]) {
+      const refused = await fetch(`${worker.origin}/__dev/pair`, {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Ana', endpoint: worker.origin, person }),
+      });
+      assert.equal(refused.status, 400, String(person));
+      assert.deepEqual(await refused.json(), { error: 'invalid-person' });
+    }
+  });
+
   it('sets who may leave a note on its site for members, as a spec asks (FRU-330)', async () => {
     const worker = await start({ FRUITBACK_DEV_VISIBILITY: 'members' });
     await ready(worker.origin, worker.said);

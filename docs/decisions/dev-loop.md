@@ -43,7 +43,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   validates it_ ([worker.md](worker.md)).
 - **`POST /__dev/pair` answers a pairing code for the workspace**, with its link. The `pair`
   command is another process, and cannot write in a database that lives in the worker. The route is
-  in the fixture, not in the worker. **The fixture listens on `127.0.0.1`** unless `HOST` says
+  in the fixture, not in the worker. The session is the owner's, or with **`person`** (an address
+  `@fruitback.test`) the one of a member of that address, made at its first call (FRU-734). The specs
+  of the side panel pair a new member each time (`paired` of `e2e/side-panel.ts`): « To check » lists
+  the notes of its reader on the whole site, and every spec writes on the site `playground`, so with
+  the owner's session it would count the notes another spec, or a try before a retry, marked done. **The fixture listens on `127.0.0.1`** unless `HOST` says
   otherwise: that route gives a session to whoever can reach it (raised in review). `FRUITBACK_DEV_VISIBILITY=members` makes the site one that
   only a session of the workspace reads. Such a site is « Members only », the default of a site
   since FRU-330; **`POST /__dev/writers` `{ writers }`** sets who may leave a note on it, and a spec
