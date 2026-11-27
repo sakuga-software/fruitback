@@ -705,6 +705,20 @@ export function createIssueStore({
     return noteCommentOf(created.data);
   }
 
+  /**
+   * Takes back a comment that must not stay (review of #996): deleted, or else said in the log with
+   * the issue and the comment, so that a person finds it. A new try of the author writes one more.
+   */
+  async function takeBack(
+    repository: string,
+    number: number,
+    id: string,
+    retract: () => Promise<boolean>,
+  ): Promise<void> {
+    if (await retract()) return;
+    console.error(`[fruitback] GitHub kept comment ${id} of ${repository}#${number}, which should have gone`);
+  }
+
   /** Deletes a comment. `false`: GitHub refused, and the comment stays. */
   async function deleteComment(repository: string, id: string): Promise<boolean> {
     try {
@@ -753,7 +767,7 @@ export function createIssueStore({
       if (!now.success) throw new StoreError('GitHub returned no issue after the comment');
       open = EDITABLE_STAGES.has(stageOf(now.data));
     } catch (error) {
-      await retract(repository, comment.id, bare);
+      await takeBack(repository, issue.number, comment.id, () => retract(repository, comment.id, bare));
       throw error instanceof StoreError ? error : new StoreError('GitHub did not say the state after the comment');
     }
     if (!open) {
@@ -920,7 +934,7 @@ export function createIssueStore({
       try {
         stage = await setState(repository, issue.number, { state: 'closed', state_reason: 'not_planned' });
       } catch (error) {
-        await deleteComment(repository, comment.id);
+        await takeBack(repository, issue.number, comment.id, () => deleteComment(repository, comment.id));
         throw error instanceof StoreError ? error : new StoreError('GitHub did not close the issue');
       }
 

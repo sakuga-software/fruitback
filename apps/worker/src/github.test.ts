@@ -1138,6 +1138,32 @@ describe('the writes of a person under a note (FRU-628)', () => {
       await assert.rejects(store.withdraw!(NO_NUMBER, WITHDRAWAL, undefined, POLICY), StoreError);
       assert.deepEqual(writes(calls).slice(-1), ['DELETE /issues/comments/700']);
     });
+
+    it('says in the log a comment that GitHub kept when it refused both the close and the delete (review of #996)', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const refused = () => json(403, { message: 'Resource not accessible by integration' });
+      const { store } = issueGithub([OPEN], {
+        'PATCH /repos/acme/site/issues/12': () => json(422, { message: 'Validation Failed' }),
+        'DELETE /repos/acme/site/issues/comments/700': refused,
+      });
+
+      await assert.rejects(store.withdraw!(NO_NUMBER, WITHDRAWAL, undefined, POLICY), StoreError);
+      assert.match(String(logged.mock.calls[0]?.[0]), /GitHub kept comment 700 of acme\/site#12/);
+    });
+
+    it('says in the log an edit that GitHub kept when the read after it failed and the delete was refused', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let reads = 0;
+      const { store } = issueGithub([OPEN], {
+        'GET /repos/acme/site/issues/12': () => (reads++ === 0 ? json(200, row()) : json(500, { message: 'down' })),
+        'DELETE /repos/acme/site/issues/comments/700': () => json(403, {}),
+        'PATCH /repos/acme/site/issues/comments/700': () => json(403, {}),
+      });
+      const EDIT = { text: 'Nouveau.', author: MEMBER, note: NOTE, identifier: '#12' };
+
+      await assert.rejects(store.edit!(NO_NUMBER, EDIT, undefined, POLICY), StoreError);
+      assert.match(String(logged.mock.calls[0]?.[0]), /GitHub kept comment 700 of acme\/site#12/);
+    });
   });
 });
 
