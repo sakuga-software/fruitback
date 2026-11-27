@@ -160,9 +160,9 @@ export default function WorkspaceFrame() {
   const [failing, setFailing] = useState<{ workspace: string; count: number } | undefined>();
   // FRU-697: the counts of the views, from that read, then as the Notes screen last read their filters.
   const [viewCounts, setViewCounts] = useState<{ workspace: string; counts: Partial<Record<ViewId, number>> }>();
-  // What a screen of this workspace said since the read of the bar was asked: `failing`, or the id of
-  // a view. Its answer does not write over them, as a screen read them at the same time or later, and
-  // a count a screen dropped after a write must stay dropped.
+  // What a screen of this workspace said since the read of the bar was asked: `failing`, `approve`, or
+  // the id of a view. Its answer does not write over them, as a screen read them at the same time or
+  // later, and a count a screen dropped after a write must stay dropped.
   const told = useRef<{ workspace: string | undefined; what: Set<string> }>({ workspace: undefined, what: new Set() });
   // FRU-704: the notes of visitors that wait for a member, read once by workspace and again by the
   // screen « To approve ». A guest is refused the read, and the bar shows the entry to nobody else
@@ -181,7 +181,9 @@ export default function WorkspaceFrame() {
     // FRU-704: the notes of visitors that wait for a member. A guest is refused it, quietly.
     void call<{ count: number }>('GET', `/console/workspaces/${id}/held/count`, undefined, { quiet: true }).then(
       (answer) => {
-        if (current && answer.ok && typeof answer.data?.count === 'number') {
+        // FRU-733: the screen « To approve » can count the queue before this answer comes. Its count is
+        // the newer one: a late answer must not set an older count again.
+        if (current && answer.ok && typeof answer.data?.count === 'number' && !told.current.what.has('approve')) {
           setToApprove({ workspace: id, count: answer.data.count });
         }
       },
@@ -290,7 +292,10 @@ export default function WorkspaceFrame() {
       if (told.current.workspace === context.workspace.id) told.current.what.add('failing');
       setFailing({ workspace: context.workspace.id, count });
     },
-    approveCounted: (count) => setToApprove({ workspace: context.workspace.id, count }),
+    approveCounted: (count) => {
+      if (told.current.workspace === context.workspace.id) told.current.what.add('approve');
+      setToApprove({ workspace: context.workspace.id, count });
+    },
     viewCounted: (view, count) => {
       const workspace = context.workspace.id;
       if (told.current.workspace === workspace) told.current.what.add(view);
