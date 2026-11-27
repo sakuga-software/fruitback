@@ -177,10 +177,11 @@ A note done or closed cannot be edited. Where the note goes decides what is kept
 - On a note sent to an address, the same happens in the worker, and the address receives a
   `note.edited` event that holds identifiers only, never a text. The address keeps the note it was
   first sent.
-- On a note sent to Linear, the issue keeps its description, with the text of before: it is the
-  team's, and they may have changed it. A comment under the issue says who edited the note, with the
-  new text. Taking out a text from Linear is done in Linear, by the team. A site whose replies are
-  hidden takes no edit. A note sent to GitHub cannot be edited.
+- On a note sent to Linear or GitHub, the issue keeps its description, with the text of before: it
+  is the team's, and they may have changed it. A comment under the issue says who edited the note,
+  with the new text. Taking out a text from Linear or GitHub is done there, by the team. A site whose
+  replies are hidden takes no edit. On a public GitHub repository, the new text is public too, as
+  the note is.
 
 The excerpt of the index of the notes is written again from the new text.
 
@@ -208,15 +209,16 @@ The person who left a note can move it to another element of its page while it i
 keeps the new place (the element, as the widget reads it, and the size of the window) in place of
 the old one. On a note sent to Linear, the issue keeps the place in its description, and a comment
 says who moved the note and to which element, with the new place in it. An address receives a
-`note.moved` event that holds identifiers only. A note sent to GitHub cannot be moved.
+`note.moved` event that holds identifiers only. A note sent to GitHub is moved as on Linear.
 
 ### A note withdrawn by its author
 
 The person who left a note can withdraw it while it is open. **Nothing is deleted**: the note is
 closed, and a reply under it says who withdrew it and when. On a note sent to an address, the address
 receives a `note.withdrawn` event that holds identifiers only. On a note sent to Linear, the issue
-gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
-GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
+gets the same reply as a comment, and moves to the first canceled state of its team. On a note sent
+to GitHub, the issue gets the same comment, and is closed as « not planned ». To have a note
+deleted, ask the team of the site.
 
 ### The changes of a task, told to an address
 

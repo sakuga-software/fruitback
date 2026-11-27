@@ -223,7 +223,7 @@ export type NoteStore = {
    *   from the reply (`withEditedText`). The stage is the one the route read: a tracker has no lock.
    *
    * The answer is the note as a read will show it. `undefined`: this store holds no such note for
-   * this client. Absent: this store takes no edit (GitHub, which takes no reply either).
+   * this client. Absent: this store takes no edit.
    */
   edit?(
     target: ReplyTarget,
@@ -236,8 +236,9 @@ export type NoteStore = {
    * (`withdrawText`), and nothing is deleted. The worker's own store does both in one transaction,
    * under the lock of the row: `not-open` when the note was done or closed since the caller read it.
    * Linear writes the reply, then moves the issue to the first state of type `canceled` of its team.
+   * GitHub writes the reply, then closes the issue as `not_planned` (FRU-628).
    * The answer is the reply and the stage of the note now. `undefined`: this store holds no such
-   * note for this client. Absent: this store takes no withdrawal (GitHub, FRU-628).
+   * note for this client. Absent: this store takes no withdrawal.
    */
   withdraw?(
     target: ReplyTarget,
@@ -308,8 +309,14 @@ export type ReplyAuthor =
   /** An AI agent, by the name of its key (FRU-464). The member who made the key is not named. */
   | { kind: 'agent'; name: string };
 
-/** The note a reply goes under: the `id` of its issue, and the client whose note it must be. */
-export type ReplyTarget = { issue: string; clientId: string | undefined };
+/**
+ * The note a reply goes under: the `id` of its issue, and the client whose note it must be.
+ *
+ * `identifier`: the identifier that the read gave the issue (FRU-628). GitHub writes under the number
+ * of an issue (`#12`), and its REST API finds no issue by its `id`. The GitHub store checks that the
+ * issue of that number has this `id` before it writes.
+ */
+export type ReplyTarget = { issue: string; clientId: string | undefined; identifier?: string };
 
 /**
  * A new text for a note (FRU-475). Only its author gives one: the route refuses everybody else.

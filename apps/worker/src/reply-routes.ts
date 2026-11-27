@@ -143,7 +143,13 @@ export async function writeReply(
     if (found === undefined) continue;
     if (!(await takesReplies(store, target))) return { ok: false, error: 'replies-not-taken' };
     if (!(await admit())) return { ok: false, error: 'rate-limited' };
-    const comment = await store.reply?.({ issue: found.id, clientId: lookup.clientId }, reply, target, policy);
+    const comment = await store.reply?.(
+      // FRU-628: GitHub writes under the number of the issue, which the read gives as its identifier.
+      { issue: found.id, clientId: lookup.clientId, identifier: found.identifier },
+      reply,
+      target,
+      policy,
+    );
     if (comment === undefined) break;
     await invalidatePages(kv, [lookup.url]);
 
@@ -307,7 +313,7 @@ export async function postCheck(
         }
         const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
         const answer = await store.check?.(
-          { issue: found.id, clientId },
+          { issue: found.id, clientId, identifier: found.identifier },
           {
             verdict: verdict as CheckVerdict,
             author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
