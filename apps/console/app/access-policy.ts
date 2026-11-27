@@ -1,4 +1,4 @@
-import type { Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from './api.ts';
+import type { DeletedNoteKeep, Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from './api.ts';
 
 /**
  * What a visitor with no account may do on a site (FRU-703), as the tab « Access » sets it. The worker
@@ -12,6 +12,7 @@ import type { Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from '
  *   of the card « Safeguards ». It counts where anybody writes; a level does not change it.
  * - `holdVisitorNotes`: a note of a visitor waits for a member before it goes on (FRU-704), the same.
  * - `keepNoteVersions`: an edit or a deletion of a note keeps the version of before (FRU-704), the same.
+ * - `deletedNotesKeepDays`: the days a note its visitor deleted is kept, then erased (FRU-704), the same.
  */
 export type Access = {
   visibility: Visibility;
@@ -22,6 +23,7 @@ export type Access = {
   visitorNotesPerHour: VisitorNoteLimit;
   holdVisitorNotes: boolean;
   keepNoteVersions: boolean;
+  deletedNotesKeepDays: DeletedNoteKeep;
 };
 
 /**
@@ -34,7 +36,13 @@ export type ChosenLevel = Exclude<Level, 'collaborate'>;
 
 /** What each level that can be chosen sets: the table of the mockup. */
 export const LEVEL_ACCESS: Readonly<
-  Record<ChosenLevel, Omit<Access, 'notifyDone' | 'visitorNotesPerHour' | 'holdVisitorNotes' | 'keepNoteVersions'>>
+  Record<
+    ChosenLevel,
+    Omit<
+      Access,
+      'notifyDone' | 'visitorNotesPerHour' | 'holdVisitorNotes' | 'keepNoteVersions' | 'deletedNotesKeepDays'
+    >
+  >
 > = {
   closed: { visibility: 'members', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
   'read-only': { visibility: 'everyone', writers: 'members', visitorEdit: 'never', visitorDelete: 'never' },
@@ -56,6 +64,8 @@ export function accessOf(site: Site): Access {
     visitorNotesPerHour: site.visitorNotesPerHour ?? 0,
     holdVisitorNotes: site.holdVisitorNotes === true,
     keepNoteVersions: site.keepNoteVersions === true,
+    // A worker of before kept a deleted note as long as the note: the longest of the list stands for it.
+    deletedNotesKeepDays: site.deletedNotesKeepDays ?? 90,
   };
 }
 
@@ -99,7 +109,8 @@ export function sameAccess(draft: Access, stored: Access): boolean {
       (draft.notifyDone === stored.notifyDone &&
         draft.visitorNotesPerHour === stored.visitorNotesPerHour &&
         draft.holdVisitorNotes === stored.holdVisitorNotes &&
-        draft.keepNoteVersions === stored.keepNoteVersions))
+        draft.keepNoteVersions === stored.keepNoteVersions &&
+        draft.deletedNotesKeepDays === stored.deletedNotesKeepDays))
   );
 }
 
@@ -137,6 +148,7 @@ export function accessBody(origin: string, access: Access): Record<string, unkno
           visitorNotesPerHour: access.visitorNotesPerHour,
           holdVisitorNotes: access.holdVisitorNotes,
           keepNoteVersions: access.keepNoteVersions,
+          deletedNotesKeepDays: access.deletedNotesKeepDays,
         }
       : {}),
   };

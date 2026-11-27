@@ -428,6 +428,13 @@
       "when": 1795770297438,
       "tag": "0060_keep_note_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1795771984215,
+      "tag": "0061_deleted_notes_keep_days",
+      "breakpoints": true
     }
   ]
 }

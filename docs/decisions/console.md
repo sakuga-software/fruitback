@@ -1707,6 +1707,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   takes (`visitorNotesPerHour`). Sent where anybody writes, as the e-mail; « n/a » and kept where only
   members write. A level does not change it. A worker that answers without it did not keep it: « Save »
   says the access did not change. A worker of before sends nothing, read as « No limit », what it did.
+- **« Deleted notes » is the fourth line of « Safeguards » (FRU-704)**: 7, 30 or 90 days, 30 by
+  default, sent where anybody writes, « n/a » elsewhere; a worker of before reads as 90. The panel of a
+  note its visitor deleted says when, and when Fruitback erases it, with « Restore » (its pin shows
+  again, closed); a refusal says why. A deleted note stays in the list as before, closed.
 - **« Keep every version » is the third line of « Safeguards » (FRU-704)**, a switch, on by default as
   the mockup draws it, sent where anybody writes, « n/a » elsewhere. The panel of a note shows its
   versions under « Activity » in a section « History », oldest first: who edited or deleted it, when,

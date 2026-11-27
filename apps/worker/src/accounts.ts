@@ -353,6 +353,15 @@ export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
 export const DEFAULT_VISITOR_NOTES_PER_HOUR: VisitorNoteLimit = 10;
 
 /**
+ * How many days a note its visitor deleted is kept before it is erased for good (FRU-704), as the line
+ * « Deleted notes » of the card « Safeguards » offers them: `deleted-notes.ts`. A member restores it
+ * meanwhile. 30 by default, the value of the mockup, for the sites of before too.
+ */
+export const DELETED_NOTE_KEEPS = [7, 30, 90] as const;
+export type DeletedNoteKeep = (typeof DELETED_NOTE_KEEPS)[number];
+export const DEFAULT_DELETED_NOTE_KEEP: DeletedNoteKeep = 30;
+
+/**
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
  * places, so `teamId` is required for one. An address that only receives has none (FRU-122).
  *
@@ -417,6 +426,8 @@ export type Site = {
   holdVisitorNotes: boolean;
   /** Whether an edit or a deletion of a note keeps the version of before (FRU-704): `note-versions.ts`. */
   keepNoteVersions: boolean;
+  /** The days a note its visitor deleted is kept, then erased for good (FRU-704): `deleted-notes.ts`. */
+  deletedNotesKeepDays: DeletedNoteKeep;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -811,7 +822,7 @@ export type AccountStore = {
    * caller that does not know the field opens nothing and closes nothing. The same for
    * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
    * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`, and `holdVisitorNotes`, off, and
-   * `keepNoteVersions`, on.
+   * `keepNoteVersions`, on, and `deletedNotesKeepDays`, with `DEFAULT_DELETED_NOTE_KEEP`.
    */
   addSite(
     workspace: string,
@@ -825,6 +836,7 @@ export type AccountStore = {
       visitorNotesPerHour?: VisitorNoteLimit;
       holdVisitorNotes?: boolean;
       keepNoteVersions?: boolean;
+      deletedNotesKeepDays?: DeletedNoteKeep;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;

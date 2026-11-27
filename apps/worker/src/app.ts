@@ -70,6 +70,7 @@ export {
   deliverPending,
   sweepDoneNotices,
   sweepHeldNotes,
+  sweepDeletedNotes,
   heldNotesFor,
   instanceAdminFor,
   kvFor,

@@ -2,7 +2,7 @@ import { type NoteComment, type NoteIssue, type TaskIssue, anchorSelectorPath } 
 import { composes, elementsOf, typedInField } from '../keys';
 import { type FormEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
-import { ago } from '../ago';
+import { ago, agoInSentence, dayOf } from '../ago';
 import { ConnectorMark } from '../connector-marks';
 import { t } from '../i18n';
 import { NoteIcon } from '../note-icons';
@@ -87,7 +87,14 @@ export function TaskPanel({
   // Each answer names the note it is of: a panel opened on another note shows no answer of the one before.
   // FRU-704: and the versions of a note of a page, which the worker answers to a member only.
   const [answer, setAnswer] = useState<
-    { of: string; value: NoteIssue | TaskIssue | 'failed' | 'gone'; versions?: NoteVersion[] } | undefined
+    | {
+        of: string;
+        value: NoteIssue | TaskIssue | 'failed' | 'gone';
+        versions?: NoteVersion[];
+        // FRU-704: a note its visitor deleted, and until when its site keeps it.
+        deleted?: { at: string; until: string };
+      }
+    | undefined
   >();
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
@@ -101,10 +108,9 @@ export function TaskPanel({
     setAnswer(undefined);
     setProblem(undefined);
     // FRU-657: a task written by hand reads as `{ task }`, a note of a page as `{ note }`.
-    void call<{ note: NoteIssue; versions?: NoteVersion[] } | { task: TaskIssue }>(
-      'GET',
-      `${base}/notes/${encodeURIComponent(id)}`,
-    ).then((got) => {
+    void call<
+      { note: NoteIssue; versions?: NoteVersion[]; deleted?: { at: string; until: string } } | { task: TaskIssue }
+    >('GET', `${base}/notes/${encodeURIComponent(id)}`).then((got) => {
       if (!current) return;
       if (!got.ok) setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
       else if ('task' in got.data) setAnswer({ of: id, value: got.data.task });
@@ -113,6 +119,7 @@ export function TaskPanel({
           of: id,
           value: got.data.note,
           ...(got.data.versions === undefined ? {} : { versions: got.data.versions }),
+          ...(got.data.deleted === undefined ? {} : { deleted: got.data.deleted }),
         });
     });
 
@@ -176,6 +183,7 @@ export function TaskPanel({
 
   const read = answer !== undefined && answer.of === id ? answer.value : 'loading';
   const versions = answer !== undefined && answer.of === id ? answer.versions : undefined;
+  const deleted = answer !== undefined && answer.of === id ? answer.deleted : undefined;
   const written = typeof read === 'object' && 'task' in read ? read : undefined;
   const issue = typeof read === 'object' && 'note' in read ? read : undefined;
   const replies = (written ?? issue)?.comments;
@@ -280,6 +288,21 @@ export function TaskPanel({
             onRetry={() => setAttempt((count) => count + 1)}
           />
         ) : null}
+        {deleted === undefined ? null : (
+          <Deleted
+            key={id}
+            deleted={deleted}
+            to={`${base}/notes/${encodeURIComponent(id)}/restore`}
+            onRestored={() =>
+              setAnswer((now) => {
+                if (now?.of !== id) return now;
+                const { deleted: _gone, ...rest } = now;
+
+                return rest;
+              })
+            }
+          />
+        )}
         {written === undefined ? null : <TaskText text={written.task.text} />}
         {issue === undefined || more === '' ? null : (
           <p className="text-body whitespace-pre-wrap [overflow-wrap:anywhere] text-ink" data-task-text="">
@@ -619,6 +642,58 @@ function Activity({ comments, synced }: { comments: NoteIssue['comments']; synce
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * A note its visitor deleted (FRU-704): when, until when its site keeps it, and « Restore », which
+ * shows its pin on its page again. A refusal says why, and the note stays as it is.
+ */
+function Deleted({
+  deleted,
+  to,
+  onRestored,
+}: {
+  deleted: { at: string; until: string };
+  to: string;
+  onRestored: () => void;
+}) {
+  useLocale();
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | undefined>();
+
+  async function restore() {
+    setBusy(true);
+    setSaid(undefined);
+    const answer = await call('POST', to);
+    setBusy(false);
+    if (answer.ok) {
+      onRestored();
+      return;
+    }
+    setSaid(
+      answer.status === 404
+        ? t('This note can no longer be restored: its days ran out.')
+        : t('The note was not restored. Try again in a moment.'),
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-[8px] rounded-card border border-line bg-surface p-[12px]" data-task-deleted="">
+      <p className="text-small text-ink">
+        {t('Its visitor deleted this note {when}. Fruitback erases it for good on {day}.', {
+          when: agoInSentence(deleted.at),
+          day: dayOf(deleted.until),
+        })}
+      </p>
+      <span className="flex items-center gap-[8px]">
+        <Button tone="outline" size="panel" disabled={busy} onClick={() => void restore()}>
+          {t('Restore')}
+        </Button>
+        <span className="text-hint text-muted">{t('Its pin shows on its page again, closed.')}</span>
+      </span>
+      {said === undefined ? null : <Problem>{said}</Problem>}
+    </div>
   );
 }
 

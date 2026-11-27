@@ -371,6 +371,7 @@ describe('SECURITY.md states what the code does', () => {
         visitorNotesPerHour: 0,
         holdVisitorNotes: false,
         keepNoteVersions: false,
+        deletedNotesKeepDays: 30 as const,
         destinations: [],
       }).read,
       'authenticated',
@@ -388,6 +389,7 @@ describe('SECURITY.md states what the code does', () => {
         visitorNotesPerHour: 0,
         holdVisitorNotes: false,
         keepNoteVersions: false,
+        deletedNotesKeepDays: 30 as const,
         destinations: [],
       }).read,
       'public',
@@ -428,6 +430,7 @@ describe('SECURITY.md states what the code does', () => {
       visitorNotesPerHour: 0 as const,
       holdVisitorNotes: false,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     assert.equal(clientOf({ ...site, writers: 'members' }).write, 'authenticated');
     assert.equal(clientOf({ ...site, writers: 'anyone' }).write, 'public');

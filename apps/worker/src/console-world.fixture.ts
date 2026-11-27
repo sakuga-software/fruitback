@@ -8,6 +8,7 @@ import type { WorkerEnv } from './env.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { createPostgresHeldNotes } from './held-notes-postgres.ts';
 import { createPostgresNoteVersions } from './note-versions-postgres.ts';
+import { createPostgresDeletedNotes } from './deleted-notes-postgres.ts';
 import { createMigratedPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 
 /**
@@ -64,6 +65,8 @@ export function worlds(): (more?: { env?: Partial<WorkerEnv> }) => Promise<World
         heldNotes: createPostgresHeldNotes(worker.database),
         // FRU-704: the versions of the notes, on the same database.
         noteVersions: createPostgresNoteVersions(worker.database),
+        // FRU-704: « Deleted notes », on the same database.
+        deletedNotes: createPostgresDeletedNotes(worker.database),
       },
     };
   };

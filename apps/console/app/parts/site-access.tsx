@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react';
 import { type Access, type Level, LEVELS, levelOf, visitorReplies, withLevel } from '../access-policy';
-import { VISITOR_NOTE_LIMITS, type Visibility, type VisitorNoteLimit, type VisitorRight, type Writers } from '../api';
+import {
+  DELETED_NOTE_KEEPS,
+  type DeletedNoteKeep,
+  VISITOR_NOTE_LIMITS,
+  type Visibility,
+  type VisitorNoteLimit,
+  type VisitorRight,
+  type Writers,
+} from '../api';
 import { msg, t } from '../i18n';
 import { Choice, PickCards, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
@@ -562,7 +570,8 @@ function Safeguard({
  * leaves on the site in an hour, by the key of their browser and by their address; then the widget asks
  * them to wait. Where only members write, no visitor is counted: the value is said, not changed.
  * « Keep every version »: an edit or a deletion of a note keeps the version of before, which the page
- * of the note shows to the members; the same where only members write.
+ * of the note shows to the members; the same where only members write. « Deleted notes »: how many
+ * days a note its visitor deleted is kept, while a member may restore it, before the worker erases it.
  */
 export function Safeguards({
   access,
@@ -638,6 +647,26 @@ export function Safeguards({
           <Fixed>{t('n/a')}</Fixed>
         </Safeguard>
       )}
+      {/* FRU-704: « Deleted notes », how long a note its visitor deleted is kept before it is erased. */}
+      <Safeguard icon="trash" title={t('Deleted notes')} hint={t('Kept, then gone for good')}>
+        {writes ? (
+          <Choice
+            compact
+            labelHidden
+            label={t('Deleted notes')}
+            value={String(access.deletedNotesKeepDays)}
+            disabled={disabled}
+            options={DELETED_NOTE_KEEPS.map((days) => ({
+              value: String(days),
+              label: t('{count} days', { count: String(days) }),
+            }))}
+            onChange={(value) => onChange({ ...access, deletedNotesKeepDays: Number(value) as DeletedNoteKeep })}
+          />
+        ) : (
+          // Members only: no visitor deletes a note.
+          <Fixed>{t('n/a')}</Fixed>
+        )}
+      </Safeguard>
     </AccessCard>
   );
 }

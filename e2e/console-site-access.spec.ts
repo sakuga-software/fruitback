@@ -25,6 +25,8 @@ const SITES = [
     visitorNotesPerHour: 10,
     // FRU-704: « Keep every version », on for a new site.
     keepNoteVersions: true,
+    // FRU-704: « Deleted notes », 30 days for a new site.
+    deletedNotesKeepDays: 30,
   },
 ];
 
@@ -212,6 +214,8 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
       holdVisitorNotes: false,
       // Nor « Keep every version »: off, what it did (it kept no version).
       keepNoteVersions: false,
+      // Nor « Deleted notes »: it kept a deleted note as long as the note, read as the longest choice.
+      deletedNotesKeepDays: 90,
     },
   ]);
 
@@ -373,6 +377,32 @@ test('« Keep every version » is on for a new site, sent where anybody writes, 
   await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
   expect(worker.posted.at(-1)).not.toHaveProperty('keepNoteVersions');
   await expectNoViolation(page, 'the card « Safeguards » with « Keep every version »');
+});
+
+test('« Deleted notes » keeps 30 days by default, is sent where anybody writes, and said « n/a » where only members do (FRU-704)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
+  const safeguards = card(page, 'Safeguards');
+  const days = safeguards.getByRole('button', { name: /Deleted notes/ });
+  await expect(days).toContainText('30 days');
+  await expect(safeguards).toContainText('Kept, then gone for good');
+
+  await days.click();
+  const choices = page.getByRole('listbox', { name: 'Deleted notes' });
+  await expect(choices.getByRole('option')).toHaveText(['7 days', '30 days', '90 days']);
+  await choices.getByRole('option', { name: '7 days' }).click();
+  await expect(days).toContainText('7 days');
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).toMatchObject({ writers: 'anyone', deletedNotesKeepDays: 7 });
+
+  await levels(page).getByText('Read only', { exact: true }).click();
+  await expect(safeguards.getByRole('button', { name: /Deleted notes/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).not.toHaveProperty('deletedNotesKeepDays');
 });
 
 test('a refusal says why and keeps what was chosen, and a member reads the tab with nothing to change', async ({

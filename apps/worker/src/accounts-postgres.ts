@@ -49,6 +49,7 @@ import {
   type SavedView,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_VISITOR_RIGHT,
+  DEFAULT_DELETED_NOTE_KEEP,
   DEFAULT_VISITOR_NOTES_PER_HOUR,
   defaultWriters,
   offersDoneNotice,
@@ -190,6 +191,7 @@ const SITE_WITH_DESTINATION = {
   visitor_notes_per_hour: sites.visitor_notes_per_hour,
   hold_visitor_notes: sites.hold_visitor_notes,
   keep_note_versions: sites.keep_note_versions,
+  deleted_notes_keep_days: sites.deleted_notes_keep_days,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1739,6 +1741,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         visitorNotesPerHour,
         holdVisitorNotes,
         keepNoteVersions,
+        deletedNotesKeepDays,
       },
     ) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
@@ -1763,6 +1766,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               hold_visitor_notes: holdVisitorNotes ?? false,
               // FRU-704: on unless the caller says, as the mockup draws it.
               keep_note_versions: keepNoteVersions ?? true,
+              deleted_notes_keep_days: deletedNotesKeepDays ?? DEFAULT_DELETED_NOTE_KEEP,
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1778,6 +1782,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 ...(visitorNotesPerHour === undefined ? {} : { visitor_notes_per_hour: visitorNotesPerHour }),
                 ...(holdVisitorNotes === undefined ? {} : { hold_visitor_notes: holdVisitorNotes }),
                 ...(keepNoteVersions === undefined ? {} : { keep_note_versions: keepNoteVersions }),
+                ...(deletedNotesKeepDays === undefined ? {} : { deleted_notes_keep_days: deletedNotesKeepDays }),
               },
             })
             .returning({
@@ -1792,6 +1797,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               visitor_notes_per_hour: sites.visitor_notes_per_hour,
               hold_visitor_notes: sites.hold_visitor_notes,
               keep_note_versions: sites.keep_note_versions,
+              deleted_notes_keep_days: sites.deleted_notes_keep_days,
             }),
         );
 
@@ -1809,6 +1815,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             visitor_notes_per_hour: site.visitor_notes_per_hour,
             hold_visitor_notes: site.hold_visitor_notes,
             keep_note_versions: site.keep_note_versions,
+            deleted_notes_keep_days: site.deleted_notes_keep_days,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

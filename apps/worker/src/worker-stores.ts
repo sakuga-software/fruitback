@@ -12,6 +12,7 @@ import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
+import type { DeletedNotes } from './deleted-notes.ts';
 import { DEV_DATABASE_URL } from './postgres.ts';
 import {
   postgresAccountStore,
@@ -21,6 +22,7 @@ import {
   postgresDoneNotices,
   postgresHeldNotes,
   postgresNoteVersions,
+  postgresDeletedNotes,
   postgresNoteIndex,
   postgresAttachmentStore,
   postgresSessionStore,
@@ -162,6 +164,22 @@ export function heldNotesFor(config: WorkerConfig): HeldNotes | undefined {
 /** The versions of the notes (FRU-704), for a worker with a database: `note-versions.ts`. */
 export function noteVersionsFor(config: WorkerConfig): NoteVersions | undefined {
   return config.databaseUrl === undefined ? undefined : postgresNoteVersions(config.databaseUrl, config.databaseSchema);
+}
+
+/** « Deleted notes » (FRU-704), for a worker with a database: `deleted-notes.ts`. */
+export function deletedNotesFor(config: WorkerConfig): DeletedNotes | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresDeletedNotes(config.databaseUrl, config.databaseSchema);
+}
+
+/**
+ * Erases the notes their visitors deleted once the days of their site ran out (FRU-704). `server.ts`
+ * calls it on the timer of the sweep of `done_notices`. Answers how many went.
+ */
+export async function sweepDeletedNotes(env: WorkerEnv, now: number = Date.now()): Promise<number> {
+  const config = readConfig(env);
+  if (!config.ok) return 0;
+
+  return (await deletedNotesFor(config.config)?.sweep(now)) ?? 0;
 }
 
 /**

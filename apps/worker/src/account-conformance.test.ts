@@ -329,6 +329,22 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'keeps a deleted note of a new site 30 days, and keeps the value on a site added again (FRU-704)',
+    by: 'keeps a deleted note of a new site 7 days',
+    replace: {
+      from: 'deleted_notes_keep_days: deletedNotesKeepDays ?? DEFAULT_DELETED_NOTE_KEEP,',
+      to: 'deleted_notes_keep_days: deletedNotesKeepDays ?? 7,',
+    },
+  },
+  {
+    breaks: 'keeps a deleted note of a new site 30 days, and keeps the value on a site added again (FRU-704)',
+    by: 'never changes the days of a site that exists',
+    replace: {
+      from: '...(deletedNotesKeepDays === undefined ? {} : { deleted_notes_keep_days: deletedNotesKeepDays }),',
+      to: '',
+    },
+  },
+  {
     breaks:
       'keeps every version of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)',
     by: 'keeps no version of a new site',

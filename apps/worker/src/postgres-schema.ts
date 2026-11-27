@@ -133,6 +133,10 @@ export const sites = pgTable(
     // FRU-704: « Keep every version ». On by default, as the mockup draws it: `0060` adds it on for
     // every site, those of before included (Fruitback has no users yet).
     keep_note_versions: boolean('keep_note_versions').notNull().default(true),
+    // FRU-704: « Deleted notes », how many days a note its visitor deleted is kept before it is erased
+    // for good (`deleted-notes.ts`): 7, 30 or 90. 30 by default, as the mockup draws it, those of
+    // before included.
+    deleted_notes_keep_days: integer('deleted_notes_keep_days').notNull().default(30),
   },
   (table) => [
     foreignKey({
@@ -982,6 +986,10 @@ export const note_index = pgTable(
     // FRU-702: when the visitor who left the note deleted it. A read of its page no longer shows it;
     // the row, its stage and the note in its store stay, for the team. Empty for every other note.
     removed_at: instant('removed_at'),
+    // FRU-704: when the days of « Deleted notes » ran out for a note of a tracker (`deleted-notes.ts`):
+    // its words were erased from this row, which stays only so that its issue never shows on its page
+    // again. Empty for every other note. A note the worker keeps goes whole instead.
+    erased_at: instant('erased_at'),
     place: text('place').notNull(),
     connector_id: text('connector_id'),
     reference: text('reference'),
@@ -1054,6 +1062,11 @@ export const note_index = pgTable(
       sql`"site_id" COLLATE "C" DESC`,
       sql`"note_id" COLLATE "C" DESC`,
     ),
+    // FRU-704: the notes their visitors deleted, which the sweep erases once their days are over. Only
+    // those rows: the index is as small as they are.
+    index('note_index_by_removal')
+      .on(table.removed_at)
+      .where(sql`"removed_at" IS NOT NULL AND "erased_at" IS NULL`),
   ],
 );
 

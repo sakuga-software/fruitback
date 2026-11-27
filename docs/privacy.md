@@ -218,6 +218,19 @@ receives a `note.withdrawn` event that holds identifiers only. On a note sent to
 gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
 GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
 
+### A note deleted by its visitor
+
+When a visitor with no account deletes their note, it leaves its page for every reader at once. The
+site keeps it for its members the days it chose in its tab « Access » (« Deleted notes »: 7, 30 or 90
+days, 30 by default), so that a note deleted by mistake, or to hide something the team needs, can be
+restored. Then the worker erases it for good, by itself:
+
+- A note the worker keeps (in Fruitback, or sent on to an address) is deleted from its database, with
+  its replies, its labels, its versions, and the address the visitor gave to be told when it is done.
+- A note sent to a tracker stays in the tracker, which is the team's: the worker erases what it keeps
+  of it (the excerpt, the digest of the key of the browser, the element, the versions, the address),
+  and keeps only a marker, with no words, so that the issue never shows on the page again.
+
 ### The changes of a task, told to an address
 
 A note sent to an address is a task the worker keeps. When its status, one of its fields (the

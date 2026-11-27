@@ -1,6 +1,7 @@
 import { handleHeld } from './console-held.ts';
 import type { HeldNote, HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
+import type { DeletedNotes } from './deleted-notes.ts';
 import type { HeldSent } from './feedback-routes.ts';
 import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
@@ -41,6 +42,8 @@ import {
   VISITOR_RIGHTS,
   type VisitorRight,
   VISITOR_NOTE_LIMITS,
+  DELETED_NOTE_KEEPS,
+  type DeletedNoteKeep,
   type VisitorNoteLimit,
   type Workspace,
   type Visibility,
@@ -117,6 +120,8 @@ export type ConsoleApiContext = {
   sendHeld?: (held: HeldNote) => Promise<HeldSent>;
   /** FRU-704: the versions of the notes. Absent: the page of a note shows none. */
   noteVersions?: NoteVersions;
+  /** FRU-704: the notes their visitors deleted. Absent: the page of a note says nothing of it. */
+  deletedNotes?: DeletedNotes;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
@@ -229,6 +234,10 @@ function visitorNoteLimitOf(value: unknown): VisitorNoteLimit | undefined {
   return isOneOf(value, VISITOR_NOTE_LIMITS) ? value : undefined;
 }
 
+function deletedNoteKeepOf(value: unknown): DeletedNoteKeep | undefined {
+  return isOneOf(value, DELETED_NOTE_KEEPS) ? value : undefined;
+}
+
 /** The fields of a site the console shows, and the client id a script tag names. */
 type SiteView = {
   id: string;
@@ -246,6 +255,8 @@ type SiteView = {
   holdVisitorNotes: boolean;
   /** FRU-704: « Keep every version », as it is stored. */
   keepNoteVersions: boolean;
+  /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept, as it is stored. */
+  deletedNotesKeepDays: DeletedNoteKeep;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -270,6 +281,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visitorNotesPerHour: site.visitorNotesPerHour,
     holdVisitorNotes: site.holdVisitorNotes,
     keepNoteVersions: site.keepNoteVersions,
+    deletedNotesKeepDays: site.deletedNotesKeepDays,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -836,6 +848,7 @@ export async function handleConsoleApi(
     tasks: context.tasks ?? 'on',
     ...(context.readNote === undefined ? {} : { readNote: context.readNote }),
     ...(context.noteVersions === undefined ? {} : { versions: context.noteVersions }),
+    ...(context.deletedNotes === undefined ? {} : { deleted: context.deletedNotes }),
     ...(context.replyToNote === undefined ? {} : { replyToNote: context.replyToNote }),
     // FRU-712: who writes a reply from the console, as the widget names a session of the workspace.
     replier: async () => {
@@ -983,6 +996,12 @@ export async function handleConsoleApi(
     if (keepNoteVersions !== undefined && typeof keepNoteVersions !== 'boolean') {
       return json(400, { error: 'invalid-keep-note-versions' }, headers);
     }
+    // FRU-704: absent, a new site keeps a deleted note 30 days and a site that exists keeps what it had.
+    const deletedNotesKeepDays =
+      body?.deletedNotesKeepDays === undefined ? undefined : deletedNoteKeepOf(body.deletedNotesKeepDays);
+    if (body?.deletedNotesKeepDays !== undefined && deletedNotesKeepDays === undefined) {
+      return json(400, { error: 'invalid-deleted-notes-keep-days' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -994,6 +1013,7 @@ export async function handleConsoleApi(
       ...(visitorNotesPerHour === undefined ? {} : { visitorNotesPerHour }),
       ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
       ...(keepNoteVersions === undefined ? {} : { keepNoteVersions }),
+      ...(deletedNotesKeepDays === undefined ? {} : { deletedNotesKeepDays }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.

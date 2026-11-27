@@ -5,6 +5,7 @@ import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
+import type { DeletedNotes } from './deleted-notes.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { AttachmentStore } from './attachments.ts';
@@ -323,6 +324,17 @@ export function postgresNoteVersions(url: string, schema: string): NoteVersions 
     keep: true,
     forget: true,
     list: true,
+  });
+}
+
+/** « Deleted notes » (FRU-704): `deleted-notes-postgres.ts`, loaded at the first call. */
+export function postgresDeletedNotes(url: string, schema: string): DeletedNotes {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./deleted-notes-postgres.ts')).createPostgresDeletedNotes(database), {
+    of: true,
+    restore: true,
+    sweep: true,
   });
 }
 
