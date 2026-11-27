@@ -41,6 +41,7 @@ declare const chrome: {
     getContexts(filter: { contextTypes: string[] }): Promise<{ documentUrl?: string }[]>;
   };
   management: { getPermissionWarningsByManifest(manifest: string): Promise<string[]> };
+  tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
 
 test('the manifest declares the panel, and Chrome shows no new warning for it', async ({ extension }) => {
