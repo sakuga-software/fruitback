@@ -46,7 +46,7 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  * - **`POST /__dev/writers`** `{ writers, notifyDone? }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
- * - **`POST /__dev/guards`** `{ visitorNotesPerHour?, holdVisitorNotes? }` (FRU-704): the site `guards`, made at the first
+ * - **`POST /__dev/guards`** `{ visitorNotesPerHour?, holdVisitorNotes?, keepNoteVersions? }` (FRU-704): the site `guards`, made at the first
  *   call, and the safeguards of the card « Safeguards » set on it. Its own workspace, of its own
  *   owner, at the origin of the playground: a spec of a safeguard mounts the widget with this id, and
  *   the other specs, which share the site `playground`, are never counted by it. The site `playground`
@@ -154,6 +154,13 @@ async function setGuards(
 
     return;
   }
+  if (asked.keepNoteVersions !== undefined && typeof asked.keepNoteVersions !== 'boolean') {
+    response
+      .writeHead(400, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'invalid-keep-note-versions' }));
+
+    return;
+  }
   const accounts = createPostgresAccountStore(database);
   // One workspace for the life of the process, whichever call comes first.
   made.workspace ??= (async () => {
@@ -181,12 +188,14 @@ async function setGuards(
       ? {}
       : { visitorNotesPerHour: asked.visitorNotesPerHour as (typeof VISITOR_NOTE_LIMITS)[number] }),
     ...(asked.holdVisitorNotes === undefined ? {} : { holdVisitorNotes: asked.holdVisitorNotes as boolean }),
+    ...(asked.keepNoteVersions === undefined ? {} : { keepNoteVersions: asked.keepNoteVersions as boolean }),
   });
   response.writeHead(200, { 'Content-Type': 'application/json' }).end(
     JSON.stringify({
       id: site.id,
       visitorNotesPerHour: site.visitorNotesPerHour,
       holdVisitorNotes: site.holdVisitorNotes,
+      keepNoteVersions: site.keepNoteVersions,
     }),
   );
 }

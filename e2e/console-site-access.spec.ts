@@ -23,6 +23,8 @@ const SITES = [
     visitorDelete: 'while-open',
     notifyDone: false,
     visitorNotesPerHour: 10,
+    // FRU-704: « Keep every version », on for a new site.
+    keepNoteVersions: true,
   },
 ];
 
@@ -208,6 +210,8 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
       visitorNotesPerHour: 0,
       // Nor « Hold new visitor notes »: off, what it did.
       holdVisitorNotes: false,
+      // Nor « Keep every version »: off, what it did (it kept no version).
+      keepNoteVersions: false,
     },
   ]);
 
@@ -344,6 +348,33 @@ test('« Hold new visitor notes » is sent where anybody writes, and said « n/a
   expect(worker.posted.at(-1)).not.toHaveProperty('holdVisitorNotes');
 });
 
+test('« Keep every version » is on for a new site, sent where anybody writes, and said « n/a » where only members do (FRU-704)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
+  const safeguards = card(page, 'Safeguards');
+  const keep = safeguards.getByRole('switch', { name: /Keep every version/ });
+  await expect(keep).toBeChecked();
+  await expect(safeguards).toContainText('Edits and deletions stay in the history');
+
+  await safeguards.getByText('Keep every version', { exact: true }).click();
+  await expect(keep).not.toBeChecked();
+  // A safeguard is no level: the table still says « Contribute ».
+  await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).toMatchObject({ writers: 'anyone', keepNoteVersions: false });
+
+  await levels(page).getByText('Read only', { exact: true }).click();
+  await expect(safeguards.getByRole('switch')).toHaveCount(0);
+  await expect(safeguards.getByText('Keep every version', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).not.toHaveProperty('keepNoteVersions');
+  await expectNoViolation(page, 'the card « Safeguards » with « Keep every version »');
+});
+
 test('a refusal says why and keeps what was chosen, and a member reads the tab with nothing to change', async ({
   page,
 }) => {
@@ -387,7 +418,9 @@ test('a refusal says why and keeps what was chosen, and a member reads the tab w
   await expect(levels(page).getByRole('radio', { name: 'Contribute' })).toBeChecked();
   await expect(card(page, 'After a note').getByRole('switch')).toBeDisabled();
   await expect(card(page, 'Safeguards').getByRole('button', { name: /Notes per visitor/ })).toBeDisabled();
-  await expect(card(page, 'Safeguards').getByRole('switch')).toBeDisabled();
+  // FRU-704: both switches, « Hold new visitor notes » and « Keep every version ».
+  await expect(card(page, 'Safeguards').getByRole('switch')).toHaveCount(2);
+  for (const each of await card(page, 'Safeguards').getByRole('switch').all()) await expect(each).toBeDisabled();
   // The overview shows no way to change it either: its one « Change » leads to « Install » (FRU-689).
   await page.goto(`${CONSOLE}/w/w1/sites/s2`);
   await expect(page.locator('a[href$="/access"]').filter({ hasText: 'Change' })).toHaveCount(0);
