@@ -194,9 +194,10 @@ test('a visitor passes the bot check in the composer before their first note, an
   await write(page, 'Une première note, après la vérification');
 
   const composer = page.locator('[data-fruitback-composer]');
-  await expect(
-    composer.getByText('This site checks that a person sends this note. Your note goes once the check passes.'),
-  ).toBeVisible();
+  await expect(composer.locator('[data-fruitback-challenge-text]')).toHaveText(
+    'This site checks that a person sends this note. Your note goes once the check passes.',
+  );
+  await expect(composer.locator('[data-fruitback-challenge]')).toBeVisible();
   await expect(composer.locator('[data-fake-turnstile="1x00000000000000000000AA"]')).toBeVisible();
   await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une première note, après la vérification');
   await composer.getByRole('button', { name: 'Verify you are human' }).click();

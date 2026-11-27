@@ -526,7 +526,8 @@ export function createComposer(options: ComposerOptions): Composer {
   // FRU-704: where « Bot check » is drawn, above the foot, while the note waits for it.
   const challengeBox = part('[data-fruitback-challenge]');
   const challengeSlot = part('[data-fruitback-challenge-slot]');
-  part('[data-fruitback-challenge-text]').textContent = t.text('composer.challenge');
+  const challengeText = part('[data-fruitback-challenge-text]');
+  challengeText.textContent = t.text('composer.challenge');
   /** Ends the check drawn now, when the composer closes under it. */
   let challengeAbort: AbortController | undefined;
   const who = part('[data-fruitback-who]');
@@ -2079,7 +2080,10 @@ export function createComposer(options: ComposerOptions): Composer {
       const abort = new AbortController();
       challengeAbort = abort;
       challengeBox.hidden = false;
-      status.textContent = t.text('composer.challenge');
+      // Said once, by the line of the check, a live region: the status under the field says nothing more.
+      status.textContent = '';
+      challengeText.textContent = '';
+      challengeText.textContent = t.text('composer.challenge');
       try {
         const aborted = new Promise<typeof abandoned>((resolve) =>
           abort.signal.addEventListener('abort', () => resolve(abandoned), { once: true }),
@@ -2536,7 +2540,15 @@ const TEMPLATE: readonly Markup[] = [
     'div',
     { 'data-fruitback-challenge': '', class: 'fruitback-composer-challenge', hidden: '' },
     [
-      ['p', { 'data-fruitback-challenge-text': '', class: 'fruitback-composer-challenge-text' }],
+      [
+        'p',
+        {
+          'data-fruitback-challenge-text': '',
+          class: 'fruitback-composer-challenge-text',
+          role: 'status',
+          'aria-live': 'polite',
+        },
+      ],
       ['div', { 'data-fruitback-challenge-slot': '', class: 'fruitback-composer-challenge-slot' }],
     ],
   ],

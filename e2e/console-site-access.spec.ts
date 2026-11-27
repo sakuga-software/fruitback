@@ -421,11 +421,12 @@ test('« Bot check » is on for a new site, sent where anybody writes, said « n
   await expect(check).toBeEnabled();
   await expect(safeguards).toContainText('Cloudflare Turnstile before the first note');
   // The second line, as the mockup draws it.
-  await expect(safeguards.getByText(/^(Notes per visitor|Bot check|Hold new visitor notes)$/)).toHaveText([
-    'Notes per visitor',
-    'Bot check',
+  // The label of « Notes per visitor » is twice in the card (its line and the hidden label of its list).
+  await expect(safeguards.getByText(/^(Notes per visitor|Bot check|Hold new visitor notes)$/).last()).toHaveText(
     'Hold new visitor notes',
-  ]);
+  );
+  const order = await safeguards.getByText(/^(Notes per visitor|Bot check|Hold new visitor notes)$/).allInnerTexts();
+  expect([...new Set(order)]).toEqual(['Notes per visitor', 'Bot check', 'Hold new visitor notes']);
 
   await safeguards.getByText('Bot check', { exact: true }).click();
   await expect(check).not.toBeChecked();
