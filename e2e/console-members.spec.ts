@@ -1218,6 +1218,7 @@ for (const width of [390, 320]) {
               emails: 'Emails',
               again: 'Try again',
               send: 'Send 1 invite',
+              dialog: 'Invite people',
             }
           : {
               actions: 'Actions pour Tom',
@@ -1227,6 +1228,7 @@ for (const width of [390, 320]) {
               emails: 'E-mails',
               again: 'Réessayer',
               send: 'Envoyer 1 invitation',
+              dialog: 'Inviter des personnes',
             };
       const list = page.getByRole('region', { name: locale === 'en' ? 'Members' : 'Membres', exact: true });
       expect.soft(await sideScroll(page), 'the list').toBe(0);
@@ -1262,7 +1264,8 @@ for (const width of [390, 320]) {
       // The dialog, the block of an invitation, a refusal, and a read that failed.
       const inviteButton = page.locator('main header').getByRole('button', { name: words.invite, exact: true });
       await inviteButton.click();
-      const opened = page.getByRole('dialog');
+      // By its name: the menu of « Actions » is a dialog too while it fades out (FRU-736).
+      const opened = page.getByRole('dialog', { name: words.dialog, exact: true });
       await expect(opened).toBeVisible();
       await page.evaluate(() => Promise.all(document.getAnimations().map((each) => each.finished)));
       const drawn = await box(opened);
@@ -1277,7 +1280,7 @@ for (const width of [390, 320]) {
       worker.refuses = { status: 400, error: 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION' };
       await inviteButton.click();
       await page.getByRole('textbox', { name: words.emails, exact: true }).fill('zoe@client.fr');
-      await page.getByRole('dialog').getByRole('button', { name: words.send }).click();
+      await opened.getByRole('button', { name: words.send }).click();
       await expect(page.getByRole('alert')).toBeVisible();
       expect.soft(await sideScroll(page), 'a refusal').toBe(0);
       await expectNoDialogViolation(page, `the dialog at ${width} px in ${locale}`);

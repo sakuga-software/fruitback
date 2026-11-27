@@ -149,9 +149,11 @@ test('a box, then Shift and a click, select a range; the bar changes them in one
 
   await bar(p).getByRole('button', { name: 'Priority' }).click();
   await p.getByRole('menuitemradio', { name: 'High' }).click();
-  expect(sent).toEqual([
-    { path: '/console/workspaces/w1/tasks', body: { notes: ['n1', 'n2', 'n3'], change: { priority: 'high' } } },
-  ]);
+  await expect
+    .poll(() => sent)
+    .toEqual([
+      { path: '/console/workspaces/w1/tasks', body: { notes: ['n1', 'n2', 'n3'], change: { priority: 'high' } } },
+    ]);
   await expect(bar(p)).toContainText('3 notes changed.');
   for (const text of ['The headline', 'The logo', 'The footer']) {
     await expect(row(p, text).locator('[data-task-marks]')).toContainText('High');
@@ -165,10 +167,12 @@ test('a box, then Shift and a click, select a range; the bar changes them in one
   // The selection stays after a change: a label goes on every task, in one more call.
   await bar(p).getByRole('button', { name: 'Labels' }).click();
   await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();
-  expect(sent[1]).toEqual({
-    path: '/console/workspaces/w1/tasks',
-    body: { notes: ['n1', 'n2', 'n3'], change: { addLabels: ['l1'] } },
-  });
+  await expect
+    .poll(() => sent[1])
+    .toEqual({
+      path: '/console/workspaces/w1/tasks',
+      body: { notes: ['n1', 'n2', 'n3'], change: { addLabels: ['l1'] } },
+    });
 
   // The first Escape closes the menu, which keeps it; the next one clears the selection.
   await p.keyboard.press('Escape');
@@ -210,7 +214,9 @@ test('Cmd or Ctrl and A selects the page; a task that is not yours is said; Dele
 
   await bar(p).getByRole('button', { name: 'Delete…' }).click();
   await bar(p).getByRole('button', { name: 'Delete 3 notes' }).click();
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/tasks/delete', body: { notes: ['n1', 'n2', 'n3'] } }]);
+  await expect
+    .poll(() => sent)
+    .toEqual([{ path: '/console/workspaces/w1/tasks/delete', body: { notes: ['n1', 'n2', 'n3'] } }]);
   await expect(row(p, 'The headline')).toHaveCount(0);
   // The task that was not yours stays selected; the deletion is said.
   await expect(bar(p)).toContainText('1 note selected');
@@ -227,9 +233,11 @@ test('a right click on a selected task opens the menu of the whole selection', a
   await expect(p.getByRole('menuitem', { name: 'Copy the link to its page' })).toHaveCount(0);
   await p.getByRole('menuitem', { name: 'Status' }).hover();
   await p.getByRole('menuitemradio', { name: 'In progress' }).click();
-  expect(sent).toEqual([
-    { path: '/console/workspaces/w1/tasks', body: { notes: ['n1', 'n2'], change: { status: 'own:progress' } } },
-  ]);
+  await expect
+    .poll(() => sent)
+    .toEqual([
+      { path: '/console/workspaces/w1/tasks', body: { notes: ['n1', 'n2'], change: { status: 'own:progress' } } },
+    ]);
   await expect(row(p, 'The logo').getByRole('button', { name: 'Actions of the 2 selected notes' })).toBeVisible();
 
   // A task out of the selection keeps the menu of its own.
@@ -246,7 +254,7 @@ test('on the board, a card is selected by its box, and a refusal is said in the 
 
   await bar(p).getByRole('button', { name: 'Labels' }).click();
   await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();
-  expect(sent).toHaveLength(1);
+  await expect.poll(() => sent).toHaveLength(1);
   await expect(bar(p).getByRole('alert')).toContainText('This label was removed since the list was read.');
   await expect(bar(p)).toContainText('2 notes selected');
 });
