@@ -354,6 +354,12 @@ export default function Notes() {
     }
     wasSelected.current = selected;
   }, [selected]);
+  // FRU-731: a row of the table is drawn again only when what it shows changes, and keeps the writes of
+  // its menu from the render that drew it. They read the list again through the latest `read`: the one
+  // of the list now, never the one of the filters of before.
+  const readNow = useRef(read);
+  readNow.current = read;
+  const readLatest = useCallback(() => readNow.current(), []);
   const columnOf = (note: IndexedNote) =>
     view === 'board' ? columns.find((column) => column.notes.some((each) => each.id === note.id))?.notes : undefined;
   // FRU-654: the menu of each task, its members, its labels and its writes.
@@ -364,7 +370,7 @@ export default function Notes() {
     manages,
     statusesOf: (note) => (typeof shown === 'object' ? shown.statuses?.[note.site.id] : undefined),
     choose,
-    read,
+    read: readLatest,
   });
 
   // FRU-653: the page of a task, in the address: a link opens it, Escape and « Back » close it.
