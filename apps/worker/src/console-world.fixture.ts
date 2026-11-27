@@ -7,6 +7,7 @@ import { SESSION_COOKIE, workerOf } from './auth-worker.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { createPostgresHeldNotes } from './held-notes-postgres.ts';
+import { createPostgresNoteVersions } from './note-versions-postgres.ts';
 import { createMigratedPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 
 /**
@@ -61,6 +62,8 @@ export function worlds(): (more?: { env?: Partial<WorkerEnv> }) => Promise<World
         noteIndex: createPostgresNoteIndex(worker.database),
         // FRU-704: the notes of visitors that wait for a member, on the same database.
         heldNotes: createPostgresHeldNotes(worker.database),
+        // FRU-704: the versions of the notes, on the same database.
+        noteVersions: createPostgresNoteVersions(worker.database),
       },
     };
   };

@@ -1981,7 +1981,15 @@ function noteText(document: Document, issue: NoteIssue, t: Translator, edit: Edi
     tracker === undefined
       ? []
       : [element(document, 'span', 'fruitback-thread-edit-sent', t.text('edit.sentTo', { tracker }))];
-  form.append(field, element(document, 'div', 'fruitback-thread-edit-actions', [...sentTo, save, cancel]), status);
+  // FRU-704: on a site that keeps every version, the author is told that the team reads the text of before.
+  const kept =
+    issue.versionsKept === true ? [element(document, 'p', 'fruitback-thread-edit-kept', t.text('edit.kept'))] : [];
+  form.append(
+    field,
+    ...kept,
+    element(document, 'div', 'fruitback-thread-edit-actions', [...sentTo, save, cancel]),
+    status,
+  );
 
   return [form];
 }

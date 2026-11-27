@@ -11,6 +11,7 @@ import { type Mailer, createTemMailer } from './mail.ts';
 import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
+import type { NoteVersions } from './note-versions.ts';
 import { DEV_DATABASE_URL } from './postgres.ts';
 import {
   postgresAccountStore,
@@ -19,6 +20,7 @@ import {
   postgresKv,
   postgresDoneNotices,
   postgresHeldNotes,
+  postgresNoteVersions,
   postgresNoteIndex,
   postgresAttachmentStore,
   postgresSessionStore,
@@ -155,6 +157,11 @@ export function doneNoticesFor(config: WorkerConfig): DoneNotices | undefined {
 /** The notes of visitors that wait for a member (FRU-704), for a worker with a database: `held-notes.ts`. */
 export function heldNotesFor(config: WorkerConfig): HeldNotes | undefined {
   return config.databaseUrl === undefined ? undefined : postgresHeldNotes(config.databaseUrl, config.databaseSchema);
+}
+
+/** The versions of the notes (FRU-704), for a worker with a database: `note-versions.ts`. */
+export function noteVersionsFor(config: WorkerConfig): NoteVersions | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresNoteVersions(config.databaseUrl, config.databaseSchema);
 }
 
 /**

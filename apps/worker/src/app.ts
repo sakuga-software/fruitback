@@ -51,6 +51,7 @@ import {
   doneNoticesFor,
   kvFor,
   noteIndexFor,
+  noteVersionsFor,
   sessionStoreFor,
   storeFor,
 } from './worker-stores.ts';
@@ -391,6 +392,8 @@ async function routed(
   const kv = context.kv ?? kvFor(served);
   // FRU-237: the notes of the sites of the accounts are indexed, in the database of the accounts.
   const noteIndex = accounts === undefined ? undefined : (context.noteIndex ?? noteIndexFor(served));
+  // FRU-704: the versions of the notes, on a site that keeps every version.
+  const noteVersions = accounts === undefined ? undefined : (context.noteVersions ?? noteVersionsFor(served));
   // FRU-604: who to tell when a note is done, and what writes to them. Nothing without accounts.
   const done: DoneNoticeSeams = {
     notices: accounts === undefined ? undefined : (context.doneNotices ?? doneNoticesFor(served)),
@@ -730,7 +733,7 @@ async function routed(
       watchedStore(store, accounts),
       kv,
       cors.headers,
-      { accounts, noteIndex, context },
+      { accounts, noteIndex, versions: noteVersions, context },
       checks,
     );
   }
@@ -762,7 +765,7 @@ async function routed(
       watchedStore(store, accounts),
       kv,
       cors.headers,
-      { accounts, noteIndex, context },
+      { accounts, noteIndex, versions: noteVersions, context },
       checks,
     );
   }

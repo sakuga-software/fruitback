@@ -1613,7 +1613,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-six BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-seven BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1882,6 +1882,24 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 - **The site `playground` of the dev worker says « No limit »**: every spec of the suite sends to it
   from one address. `POST /__dev/guards` makes a site `guards` in a workspace of its own, at the same
   origin, for the specs of the safeguards.
+
+## The versions of a note (FRU-704)
+
+- **`keep_note_versions` of `sites`, on by default** (the mockup draws it on), the line « Keep every
+  version » of the card « Safeguards ». `0060` adds it on for the sites of before too. `clientOf` gives
+  `keepNoteVersions` to the routes only where `writers` is `anyone`, as the other safeguards.
+- **`note_versions` holds one row by edit and by deletion** (`note-versions.ts`): the text before an
+  edit, or the text of a deleted note, who (`member` with its account, or `visitor` and nothing more)
+  and when. Its foreign key is the row of the note in `note_index` (`ON DELETE CASCADE`), so a version
+  goes with its note, its site and its workspace, and the purge of a note takes its history.
+- **The routes write it before the change** (`withVersion` of `edit-routes.ts`), after every guard: a
+  change that does not happen takes it back, and a store of versions that fails is `502` with nothing
+  changed. Writing it after would lose the text of before when the second write fails.
+- **50 versions of one note at most** (`NOTE_VERSION_LIMIT`), the oldest going in the same transaction:
+  an edit of a visitor counts with their replies of the minute, and a text is 5,000 characters, so a
+  note holds 250 KB of history at most.
+- **The console reads them in `GET …/notes/<note>`** (`console-tasks.ts`), for a role that sees the
+  tracker. A store of versions that does not answer leaves them out, and the note is read.
 
 ## The notes of visitors that wait for a member (FRU-704)
 
@@ -3415,7 +3433,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-six BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-seven BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.

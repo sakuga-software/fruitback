@@ -7,6 +7,7 @@ import { normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import { canonicalizeRequestedPage, indexed, invalidatePages, placeOf, routingFailure } from './note-helpers.ts';
 import type { NoteIndex } from './notes-index.ts';
+import type { NewNoteVersion, NoteVersions } from './note-versions.ts';
 import { checkReplyLimit } from './rate-limit.ts';
 import { indexedAuthorOf } from './reply-routes.ts';
 import type { ClientResolution } from './clients.ts';
@@ -102,6 +103,47 @@ async function replyAuthorOf(
 }
 
 /**
+ * « Keep every version » (FRU-704): on a site that keeps them, the version of before is written, then
+ * `change` runs. A change that does not happen (`happened` says no, or it throws) takes its version
+ * back, so the history holds only what was changed. A store of versions that does not answer is a
+ * store that does not answer: `StoreError`, `502`, and nothing changes.
+ */
+async function withVersion<T>(
+  versions: NoteVersions | undefined,
+  version: NewNoteVersion | undefined,
+  change: () => Promise<T>,
+  happened: (answer: T) => boolean,
+): Promise<T> {
+  if (versions === undefined || version === undefined) return change();
+  let id: string | undefined;
+  try {
+    id = await versions.keep(version);
+  } catch (error) {
+    throw new StoreError(
+      `the versions of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  const takeBack = async () => {
+    if (id !== undefined) await versions.forget(version.site, version.note, id).catch(() => undefined);
+  };
+  let answer: T;
+  try {
+    answer = await change();
+  } catch (error) {
+    await takeBack();
+    throw error;
+  }
+  if (!happened(answer)) await takeBack();
+
+  return answer;
+}
+
+/** The author of a version, as `note-versions.ts` keeps it: an account, or a visitor and nothing more. */
+function versionAuthorOf(caller: Extract<Caller, { ok: true }>): NewNoteVersion['author'] {
+  return caller.kind === 'member' ? { kind: 'member', account: caller.author } : { kind: 'visitor' };
+}
+
+/**
  * `POST /feedback/<id>/text?client=<site>` with `{ url, text }` (FRU-475).
  *
  * Replaces the text of a note, and writes a reply under it that says it was edited. The decisions of
@@ -119,8 +161,10 @@ async function replyAuthorOf(
  *   it the same way, and is told by `note.edited`, ids only. Linear gets a comment with the new text,
  *   and its description stays the team's; where the replies are hidden, no edit (`403
  *   edits-not-taken`): a read would show the text of before. GitHub takes no reply, and no edit.
- * - **History.** The text of before is not kept: a person may edit a note to take out what they
- *   should not have written. The reply says who edited it, and when.
+ * - **History.** The reply says who edited it, and when. The text of before is kept only on a site
+ *   that keeps every version (FRU-704, `note-versions.ts`), for its members, and the widget tells the
+ *   author so before they save (`versionsKept`). Elsewhere it is not kept: a person may edit a note to
+ *   take out what they should not have written.
  */
 export async function postEdit(
   request: Request,
@@ -132,6 +176,8 @@ export async function postEdit(
   context: {
     accounts: AccountStore | undefined;
     noteIndex: NoteIndex | undefined;
+    /** FRU-704: where the versions of the notes are kept. Absent: none is. */
+    versions?: NoteVersions | undefined;
     context: RequestContext;
   },
   checks: CallerChecks,
@@ -204,16 +250,35 @@ export async function postEdit(
       return json(429, { error: 'rate-limited' }, corsHeaders);
     }
 
-    const answer = await store.edit?.(
-      { issue: found.id, clientId },
-      {
-        text,
-        author: named,
-        note: found.note,
-        identifier: found.identifier,
-      },
-      target,
-      route.policy,
+    // FRU-704: the text of before, on a site that keeps every version. The same text again is no version.
+    const version: NewNoteVersion | undefined =
+      target?.keepNoteVersions === true && text !== found.note.text
+        ? {
+            workspace,
+            site: clientId,
+            note: found.note.id,
+            kind: 'edit',
+            text: found.note.text,
+            author: versionAuthorOf(caller),
+            at: Date.now(),
+          }
+        : undefined;
+    const answer = await withVersion(
+      context.versions,
+      version,
+      async () =>
+        store.edit?.(
+          { issue: found.id, clientId },
+          {
+            text,
+            author: named,
+            note: found.note,
+            identifier: found.identifier,
+          },
+          target,
+          route.policy,
+        ),
+      (edited) => edited !== undefined && edited !== 'not-open',
     );
     if (answer === undefined) return json(404, { error: 'not-found' }, corsHeaders);
     // Marked done or closed by the team between the read above and the write.
@@ -266,7 +331,8 @@ const WITHDRAW_LOCK_MS = 15_000;
  *   store, an address (which gets `note.withdrawn`), Linear (a reply, then the first `canceled`
  *   state). GitHub takes none (`403 withdrawals-not-taken`).
  * - **What.** The note goes to `closed`, with a reply that says who withdrew it. **Nothing is
- *   deleted**: the text, the replies and the issue stay, for the team.
+ *   deleted**: the text, the replies and the issue stay, for the team. A site that keeps every version
+ *   keeps the deletion in the history of the note too (FRU-704), with who did it and when.
  */
 export async function postWithdraw(
   request: Request,
@@ -278,6 +344,8 @@ export async function postWithdraw(
   context: {
     accounts: AccountStore | undefined;
     noteIndex: NoteIndex | undefined;
+    /** FRU-704: where the versions of the notes are kept. Absent: none is. */
+    versions?: NoteVersions | undefined;
     context: RequestContext;
   },
   checks: CallerChecks,
@@ -355,12 +423,31 @@ export async function postWithdraw(
       indexed(index, (each) => each.remove(workspace, clientId, found.note.id, null));
     try {
       let answer: Awaited<ReturnType<NonNullable<NoteStore['withdraw']>>> | undefined;
+      // FRU-704: the note as it was, on a site that keeps every version.
+      const version: NewNoteVersion | undefined =
+        target?.keepNoteVersions === true
+          ? {
+              workspace,
+              site: clientId,
+              note: found.note.id,
+              kind: 'delete',
+              text: found.note.text,
+              author: versionAuthorOf(caller),
+              at: Date.now(),
+            }
+          : undefined;
       try {
-        answer = await store.withdraw?.(
-          { issue: found.id, clientId },
-          { author: named, note: found.note, identifier: found.identifier },
-          target,
-          route.policy,
+        answer = await withVersion(
+          context.versions,
+          version,
+          async () =>
+            store.withdraw?.(
+              { issue: found.id, clientId },
+              { author: named, note: found.note, identifier: found.identifier },
+              target,
+              route.policy,
+            ),
+          (withdrawn) => withdrawn !== undefined && withdrawn !== 'not-open',
         );
       } catch (error) {
         if (marks !== undefined) await unmark(marks);

@@ -26,7 +26,7 @@ import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { hostOf } from '../site-address';
 import { browserOf } from '../browser-name';
-import { type IndexedNote, type NotePlace } from './notes-model';
+import { type IndexedNote, type NoteAuthor, type NotePlace, type NoteVersion } from './notes-model';
 import { KINDS, connectorName } from './connector-parts';
 import { TaskMenuContext } from './task-menu';
 import { siteOfId } from '../note-id';
@@ -85,7 +85,10 @@ export function TaskPanel({
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   // Each answer names the note it is of: a panel opened on another note shows no answer of the one before.
-  const [answer, setAnswer] = useState<{ of: string; value: NoteIssue | TaskIssue | 'failed' | 'gone' } | undefined>();
+  // FRU-704: and the versions of a note of a page, which the worker answers to a member only.
+  const [answer, setAnswer] = useState<
+    { of: string; value: NoteIssue | TaskIssue | 'failed' | 'gone'; versions?: NoteVersion[] } | undefined
+  >();
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
   const [attempt, setAttempt] = useState(0);
@@ -98,13 +101,20 @@ export function TaskPanel({
     setAnswer(undefined);
     setProblem(undefined);
     // FRU-657: a task written by hand reads as `{ task }`, a note of a page as `{ note }`.
-    void call<{ note: NoteIssue } | { task: TaskIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then(
-      (got) => {
-        if (!current) return;
-        if (got.ok) setAnswer({ of: id, value: 'task' in got.data ? got.data.task : got.data.note });
-        else setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
-      },
-    );
+    void call<{ note: NoteIssue; versions?: NoteVersion[] } | { task: TaskIssue }>(
+      'GET',
+      `${base}/notes/${encodeURIComponent(id)}`,
+    ).then((got) => {
+      if (!current) return;
+      if (!got.ok) setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
+      else if ('task' in got.data) setAnswer({ of: id, value: got.data.task });
+      else
+        setAnswer({
+          of: id,
+          value: got.data.note,
+          ...(got.data.versions === undefined ? {} : { versions: got.data.versions }),
+        });
+    });
 
     return () => {
       current = false;
@@ -165,6 +175,7 @@ export function TaskPanel({
   if (id === undefined) return null;
 
   const read = answer !== undefined && answer.of === id ? answer.value : 'loading';
+  const versions = answer !== undefined && answer.of === id ? answer.versions : undefined;
   const written = typeof read === 'object' && 'task' in read ? read : undefined;
   const issue = typeof read === 'object' && 'note' in read ? read : undefined;
   const replies = (written ?? issue)?.comments;
@@ -303,7 +314,7 @@ export function TaskPanel({
               {listed === undefined ? null : (
                 <Property term={t('Left by')}>
                   <span className="truncate font-medium">
-                    {authorWords(listed)} · {ago(listed.createdAt)}
+                    {authorWords(listed.author)} · {ago(listed.createdAt)}
                   </span>
                 </Property>
               )}
@@ -331,6 +342,7 @@ export function TaskPanel({
             )}
             {issue === undefined ? null : <Preview issue={issue} />}
             <Activity comments={replies} synced={placeName} />
+            {versions === undefined || versions.length === 0 ? null : <History versions={versions} />}
             {issue === undefined ? null : <Technical issue={issue} />}
           </>
         )}
@@ -488,9 +500,8 @@ function placeLine(name: string | undefined, label: string | undefined): string 
   return [name, after === '' ? undefined : after].filter((part) => part !== undefined).join(' · ');
 }
 
-/** Who left a note, in words: a visitor, or the name of a person of the workspace. */
-function authorWords(note: IndexedNote): string {
-  const { author } = note;
+/** Who left a note, or changed it, in words: a visitor, or the name of a person of the workspace. */
+function authorWords(author: NoteAuthor): string {
   if (author.kind === 'verified' || author.kind === 'anonymous') return t('Visitor');
 
   return author.name ?? t('Somebody of the workspace');
@@ -607,6 +618,38 @@ function Activity({ comments, synced }: { comments: NoteIssue['comments']; synce
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/**
+ * The versions of a note (FRU-704), oldest first: who edited it and when, with the text of before, and
+ * who deleted it. Only a member reads them: the worker gives a guest none.
+ */
+function History({ versions }: { versions: readonly NoteVersion[] }) {
+  useLocale();
+
+  return (
+    <section className="flex flex-col gap-[12px]" data-task-history="">
+      <h3 className="flex items-center gap-[8px] text-small font-semibold">
+        {t('History')}
+        <span className="font-normal text-muted tabular-nums">{versions.length}</span>
+      </h3>
+      <ol className="m-0 flex list-none flex-col gap-[14px] p-0">
+        {versions.map((version) => (
+          <li key={version.id} className="flex flex-col gap-[4px]" data-task-version={version.kind}>
+            <span className="text-hint">
+              <span className="font-semibold text-ink">{authorWords(version.author)}</span>{' '}
+              <span className="text-ink">{version.kind === 'edit' ? t('edited the note') : t('deleted the note')}</span>{' '}
+              <span className="text-muted">{ago(version.at)}</span>
+            </span>
+            <span className="text-hint text-muted">{version.kind === 'edit' ? t('Before') : t('Its text then')}</span>
+            <span className="border-l-2 border-line pl-[8px] text-small whitespace-pre-wrap text-ink-soft [overflow-wrap:anywhere]">
+              {version.text}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

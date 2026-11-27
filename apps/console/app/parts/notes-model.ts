@@ -9,6 +9,18 @@ export type NoteAuthor = {
   name?: string;
 };
 
+/**
+ * A version of a note (FRU-704), as `GET …/notes/<note>` answers it to a member on a site that keeps
+ * every version: the text before an edit, or the note as it was when it was deleted.
+ */
+export type NoteVersion = {
+  id: string;
+  kind: 'edit' | 'delete';
+  text: string;
+  author: NoteAuthor;
+  at: string;
+};
+
 /** Where a note went: Fruitback, a connector (its id and its name), or a connector removed since. */
 export type NotePlace = {
   kind: 'fruitback' | 'linear' | 'rest' | 'github' | 'removed';

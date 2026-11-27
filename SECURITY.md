@@ -183,6 +183,10 @@ clear unless this list says otherwise:
   of another; and only an `https` address is given.
 - The notes of visitors that wait for a member, on a site that holds them: the note and the digest
   of the key of the browser, in `held_notes`, until a member answers it, and 30 days at most.
+- The versions of a note, on a site that keeps every version: the text before each edit, and the
+  text of a note when it was deleted, with who did it (the account of a member, or « a visitor »
+  and nothing more) and when, in `note_versions`, as long as the note is in the index, 50 at most
+  for one note. See « The versions of a note ».
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit. For the notes of
   a visitor in an hour, the address and the digest of the key of the browser, with the
   site, for two hours.
@@ -2739,6 +2743,43 @@ them by a key that their browser holds, and by nothing else.
   and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
+
+### The versions of a note (FRU-704)
+
+The line « Keep every version » of the card « Safeguards » keeps, for the members of the site, what an
+edit or a deletion takes away. On by default, as the mockup draws it, and for the sites of before.
+
+- Which changes. An edit of the text (`POST /feedback/<id>/text`) and a withdrawal or a deletion
+  (`POST /feedback/<id>/withdraw`), by a member or by a visitor, on a site that takes the notes of
+  anybody and keeps every version (`keepNoteVersions` of the client, which `clientOf` gives only
+  there). The same text again keeps nothing. Every guard of the two routes runs first: the version
+  is written only for a change that the route lets through.
+  test:`keeps the text of before each edit of a visitor, and a member reads them oldest first`,
+  test:`keeps a deletion with the note as it was, and its author`,
+  test:`keeps nothing for the same text again, and nothing on a site that keeps no version`,
+  test:`keeps nothing where only members write, as the card says « n/a »`.
+- What is kept, and where. The text of before an edit, or the text of the note when it was deleted,
+  the kind, the moment, and who: the account of a member, or `visitor` with no key, no digest and no
+  name, in the table `note_versions` of the database of the worker.
+- Who reads them. `GET /console/workspaces/<id>/notes/<note>` answers `versions` to a role that sees
+  the tracker (a member, an admin, an owner), on a site it reads, oldest first, a member named by the
+  name of their account now. A guest reads the note as it is now and no version. The widget reads
+  none: it says `versionsKept: true` beside `editable` to the author, and the form of an edit tells
+  them that the team keeps the text of before.
+  test:`shows a guest the note and no version`,
+  test:`names a member by the name of their account now`.
+- In which order. The version is written before the change, in one transaction that checks the note
+  is in the index of the workspace; a change that does not happen (refused, `not-open`, or a store
+  that throws) takes its version back. A store of versions that does not answer is `502`, and the
+  note is not changed.
+  test:`takes the version back when the store does not change the note, and changes nothing when the versions fail`.
+- How long. As long as the row of the note in the index: a version goes with its note, its site and
+  its workspace (a foreign key, `ON DELETE CASCADE`), and the oldest goes past 50 versions of one note.
+  An account that goes leaves its versions with no account.
+  test:`keeps the newest 50 versions of a note, and lets the oldest go`,
+  test:`lets the versions go with their note`.
+- Each guard (the version of an edit, and the version taken back) is taken out of a copy of
+  `edit-routes.ts` in `note-versions.test.ts`, and the case that holds it fails.
 
 ### The notes of a visitor in an hour (FRU-704)
 

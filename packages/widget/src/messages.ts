@@ -279,6 +279,8 @@ export const ENGLISH = {
   'edit.openLabel': 'Edit your note',
   'edit.label': 'Your note',
   'edit.sentTo': 'Edited text is sent to {tracker} too',
+  // FRU-704: on a site that keeps every version, the team reads the text of before an edit.
+  'edit.kept': 'The team of this site keeps the text of before in the history of the note.',
   'edit.save': 'Save',
   'edit.cancel': 'Cancel',
   'edit.saving': 'Saving…',
