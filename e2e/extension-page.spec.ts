@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs/promises';
-import { type Page, expect } from '@playwright/test';
+import { type ElementHandle, type Page, expect } from '@playwright/test';
 import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -45,6 +45,16 @@ async function goTo(page: Page, at: PageName): Promise<void> {
 
 function rowOf(page: Page, pattern: string) {
   return page.locator(`tr.rule-row[data-pattern="${pattern}"]`);
+}
+
+/**
+ * Waits until the table is drawn again from storage, after a change of a rule: the switch of before
+ * leaves the page. The draw comes after the write, and a key or a click on the switch of before is
+ * lost with it (FRU-736: Space went down on the old switch and up on the new one, on a slow runner).
+ */
+async function drawnAgain(control: ElementHandle | null): Promise<void> {
+  expect(control).not.toBeNull();
+  await expect.poll(() => control?.evaluate((node) => node.isConnected)).toBe(false);
 }
 
 async function storedSites(extension: { worker: { evaluate: <T>(fn: () => Promise<T>) => Promise<T> } }) {
@@ -116,20 +126,28 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
 
   // The switch of the row turns it off, then on: the grant is held, so no prompt.
   const toggle = rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch', { name: `Fruitback on ${PLAYGROUND_ORIGIN}` });
+  let drawn = await toggle.elementHandle();
   await toggle.click();
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(false);
-  await rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch').click();
+  await drawnAgain(drawn);
+  drawn = await toggle.elementHandle();
+  await toggle.click();
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(true);
+  await drawnAgain(drawn);
   // From the keyboard: Space presses it, and the focus stays on it when the table is drawn again
   // (raised in review).
-  await rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch').focus();
+  drawn = await toggle.elementHandle();
+  await toggle.focus();
   await page.keyboard.press('Space');
-  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(false);
-  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toBeFocused();
+  await drawnAgain(drawn);
+  await expect(toggle).toBeFocused();
+  drawn = await toggle.elementHandle();
   await page.keyboard.press('Space');
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(true);
-  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toBeFocused();
+  await drawnAgain(drawn);
+  await expect(toggle).toBeFocused();
 
   // « Add a site »: once stored, the panel of the new rule takes the place of the form (raised in review).
   await page.getByRole('button', { name: 'Add a site' }).click();

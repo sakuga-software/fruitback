@@ -714,6 +714,29 @@ test('j and k walk the notes, Enter opens the one with the focus, and a field ke
   await expect(search(page)).toHaveValue('j');
 });
 
+test('the panel takes Escape from the moment it is drawn (FRU-736)', async ({ page }) => {
+  // On CI, Escape came after the panel was visible and before it listened to the keys: the panel
+  // stayed open. A key sent when the panel enters the page, before the browser draws it, plays that.
+  await workerWith(page);
+  await open(page);
+  await page.evaluate(() => {
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('[data-task-panel]') === null) return;
+      observer.disconnect();
+      document.body.dataset.escapeSent = '';
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+  await rows(page).first().locator('[data-note-title]').click();
+  // The panel was drawn, and the key went to it then.
+  await expect(page.locator('body[data-escape-sent]')).toHaveCount(1);
+  await expect(page).not.toHaveURL(/task=/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 test('« Send again » waits, then the row loses its alert; a refusal says so on the row', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);

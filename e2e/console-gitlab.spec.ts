@@ -96,7 +96,9 @@ for (const width of [390, 1440]) {
 
     await card.getByLabel('Access token').fill(TOKEN);
     await connect.click();
-    expect(worker.added.at(-1)).toEqual({ kind: 'gitlab', url: 'https://gitlab.acme.dev', token: TOKEN });
+    await expect
+      .poll(() => worker.added.at(-1))
+      .toEqual({ kind: 'gitlab', url: 'https://gitlab.acme.dev', token: TOKEN });
     // Its panel opens with the sites that send there, and no part of the page writes the token.
     const panel = page.getByRole('region', { name: /GitLab/ });
     await expect(panel).toBeVisible();
