@@ -3735,7 +3735,10 @@ replies, and on a public site mounted by the extension with no session, only the
   it, and `at`. Never the text, for the reason of FRU-475. A queue that refuses the row is logged and
   the author is answered, as for `note.created`. The console lists it as « Note edited by its
   author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
-- **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
+- **GitHub takes an edit the way Linear does** (FRU-628): a comment « Edited the note » with the new
+  text, the body of the issue never written again, the issue read again after the comment, and a
+  read that takes the text from the newest such comment written before `closed_at`. See « GitHub
+  takes the writes of a person (FRU-628) » below.
 - **A tracker has no lock, so Linear reads the stage again after the comment** (round 4 of #866).
   An issue done or canceled by then had its move before that read: the comment is deleted, and the
   route answers `409 not-open`. A move after that read comes after the comment too, and the read of
@@ -3772,7 +3775,7 @@ replies, and on a public site mounted by the extension with no session, only the
   text of the page closes the fence. A read takes the newest place written before the issue left the
   open stages (`withMovedPlace` in `toNoteIssue`, `closedAtOf`). The comment is kept only while the
   issue is open (`commentWhileOpen`, shared with the edit).
-- **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
+- **An address** keeps the move and gets `note.moved`, ids only. GitHub keeps it as Linear does (FRU-628).
 - **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
   review of #877): a tracker has no lock, and a double click would write two comments. The key holds
   15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
@@ -3805,8 +3808,9 @@ replies, and on a public site mounted by the extension with no session, only the
   writes the reply, then moves the issue to the first state of type `canceled` of the board
   (`withdrawStateOf`), read **before** the reply: a team with none fails with nothing written, and a
   move that Linear refuses takes the reply back, so a new try does not pile replies up (review of
-  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub takes
-  none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
+  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub
+  writes the comment, then closes the issue with `state_reason: not_planned` (FRU-628). An address
+  keeps it in the worker's own store and gets `note.withdrawn`, ids only.
 - **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
   no lock, and a double click would write two replies.
 - **Linear reads the stage again after the reply**, as for an edit: an issue the team marked done or
@@ -3815,6 +3819,55 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
   withdrawal does not depend on the replies being shown: the stage says it on its own.
 - The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
+
+## GitHub takes the writes of a person (FRU-628)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-27, wave 7):
+
+- **Every write is a comment of the issue**, written with the installation token of the App
+  (« Issues: Read and write », the one permission the App already asks for): `POST
+  /repos/{owner}/{repo}/issues/{n}/comments`. A reply as `replyText`, a verdict as `checkText`, an
+  edit as `editText(…, true)`, a move as `moveText(…, true)`, a withdrawal as `withdrawText`. The
+  body of the issue is never written again.
+- **« Still wrong » reopens the issue** after its comment (`PATCH` with `state: open`,
+  `state_reason: reopened`), in the order of Linear: a reopen that fails leaves a « wrong » comment on
+  an issue still closed, and a new try writes both.
+- **A withdrawal closes the issue with `state_reason: not_planned`** after its comment, which gives
+  the stage `closed` (`stageForGithubIssue`), or the stage the site gives `closed:not_planned`. A
+  close that GitHub refuses deletes the comment, so a new try does not pile comments up.
+- **An edit, a move and a withdrawal are kept only while the issue is open**, as for Linear
+  (`commentWhileOpen`): the issue is read before the comment (closed: `not-open`, nothing written)
+  and again after it (closed meanwhile: the comment is deleted, else written again with no text, and
+  the route answers `409 not-open`). A read takes the text and the place of the newest such comment
+  written before `closed_at` (`withEditedText`, `withMovedPlace`). `editsInReplies`: where the replies
+  are hidden, no edit and no move. The limit of the read of Linear holds here too: a read takes the
+  newest `COMMENTS_PER_ISSUE` (20) comments, so an edit or a move older than them is not read, and the
+  note shows the text or the place it was sent with. A withdrawal comment holds neither the line of an
+  edit nor the one of a move, so a note reopened after it keeps its text and place
+  (test:`leaves the text and the place of a note reopened after a withdrawal as they were (review of #996)`).
+  Only the team reopens a withdrawn note, in GitHub: « Still wrong » takes a note `done`, and a
+  withdrawn one is `closed`. The withdrawal changes no text, so the last edit of the author, written
+  while the note was open, stays its text, as on Linear
+  (test:`reads the last edit of the author as the text of a note that the team reopened after its withdrawal (review of #996)`).
+- **The number of the issue comes from the read, and its `id` must match.** GitHub writes under the
+  number of an issue (`#12`), and its REST API finds no issue by its `id`. So `ReplyTarget` carries
+  the `identifier` that the read gave (`writeReply`, the verdict, `reply_to_note` of `/mcp`), and an
+  edit, a move and a withdrawal carry it already. Before it writes, the store reads `GET
+  …/issues/{n}`: an issue of another `id`, a pull request or an issue that GitHub deleted (`410`) is
+  no note of this client, and nothing is written. A caller that gives no number gets a `StoreError`
+  (`502`), never a write to a guessed issue.
+- **Who.** The routes decide, as for every store: nothing here widens who may reply, give a verdict,
+  edit, move or withdraw. The comment shows the App as its author on GitHub; the line at the top of
+  the text says who wrote it, as for Linear.
+
+The REST documentation (« Permissions required for GitHub Apps », read on 2026-11-27) lists, under
+« Issues », for an installation token: `GET …/issues/{n}` with « read », and `POST
+…/issues/{n}/comments`, `DELETE …/issues/comments/{id}`, `PATCH …/issues/comments/{id}` and `PATCH
+…/issues/{n}` with « write ». The four writes are also listed under « Pull requests », and the page
+says that such an endpoint « work[s] with any one permission from a set »: « Issues » alone does it,
+and nothing in the page is particular to a repository of an organisation. Every case runs
+against a GitHub simulated in the tests (`github.test.ts`, `store-conformance.test.ts`): no real
+repository was written, and no App of a test repository is installed.
 
 ## The status of a note, from its thread on the page (FRU-718)
 

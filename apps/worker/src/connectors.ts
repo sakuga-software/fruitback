@@ -525,9 +525,9 @@ export function createRoutedStore(
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
     // FRU-651: a status is a task: none changes here when the worker keeps no task, receivers included.
     statusesFor: async (client) => options.tasks !== 'off' && takesStatuses(await pick(client), client),
-    // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`) and Linear (a reply).
+    // FRU-475, FRU-605: the worker's own store, an address (with `note.edited`), Linear and GitHub (a reply).
     editsFor: async (client, policy) => takesEdits(await pick(client), client, policy),
-    // FRU-605: the worker's own store, an address (with `note.withdrawn`) and Linear (canceled).
+    // FRU-605: the worker's own store, an address (with `note.withdrawn`), Linear (canceled), GitHub (not planned).
     withdrawalsFor: async (client) => takesWithdrawals(await pick(client), client),
     // FRU-368: the states of the tracker of the client, for the statuses of its site.
     trackerStatesFor: async (client) => {

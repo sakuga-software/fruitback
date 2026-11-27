@@ -137,7 +137,7 @@ stored as it arrived, and **where** depends on the connector:
 | ---------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `linear`   | verbatim in an issue description                                                                   | anyone with access to that workspace                                                                                 |
 | `postgres` | `JSON.stringify(note)` in the `payload` column of the table `notes`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
-| `github`   | verbatim in an issue body                                                                          | anyone who can read that repository. On a public repository, that is everyone.                                       |
+| `github`   | verbatim in an issue body; its replies, verdicts, edits and moves in comments of the issue         | anyone who can read that repository. On a public repository, that is everyone.                                       |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the note. On PostgreSQL the database and its dumps are the

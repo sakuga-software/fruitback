@@ -246,3 +246,23 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
     assert.deepEqual(refused.body, { error: 'store-unavailable' });
   });
 });
+
+describe('the note a reply goes under (FRU-628)', () => {
+  it('names the issue by its id and by the identifier the read gave it, for a store that writes by number', async () => {
+    const { world, site, note } = await aSite('everyone');
+    const memory = createMemoryStore();
+    const targets: unknown[] = [];
+    const spy: NoteStore = {
+      ...memory,
+      reply: async (target, ...rest) => {
+        targets.push(target);
+        return memory.reply?.(target, ...rest);
+      },
+    };
+
+    const written = await reply(world, site.id, note.id, { body: 'Same here.', name: 'Bob' }, { store: spy });
+
+    assert.equal(written.status, 201, JSON.stringify(written.body));
+    assert.deepEqual(targets, [{ issue: note.id, clientId: site.id, identifier: note.identifier }]);
+  });
+});
