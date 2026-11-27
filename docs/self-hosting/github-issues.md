@@ -33,7 +33,32 @@ they typed one. See [SECURITY.md](https://github.com/sakuga-software/fruitback/b
    repository that receives the notes.
 
 « Issues » is the only permission the worker uses: it creates issues and their two labels, lists
-issues, and lists the comments of an issue. The App JWT finds the installation and mints the token.
+issues, reads one issue by its number, lists and writes the comments of an issue, deletes a comment it
+wrote, and closes or reopens an issue. The App JWT finds the installation and mints the token. The
+REST documentation lists « Get an issue » under the permission « Issues » with the access « read »,
+and « Create an issue comment », « Update an issue comment », « Delete an issue comment » and
+« Update an issue » with the access « write », for an installation token (« Permissions required
+for GitHub Apps », read on 2026-11-27). Not measured on a real repository:
+no App of a test repository is installed.
+
+## What the people of a page write there
+
+A reply from the page, a verdict, an edit and a move of its author, and a withdrawal are comments of
+the issue, written by the App, so GitHub shows them as comments of the App. The line at the top of
+each says who wrote it.
+
+- A reply is a comment with the text of the person, quoted.
+- « Looks fixed » is a marked comment. « Still wrong » writes it, then reopens the issue.
+- An edit is a comment « Edited the note » with the new text. The body of the issue is never
+  written again: it is the team's, and keeps the text the note was sent with. A read takes the text
+  of the note from the newest such comment written before the issue was closed.
+- A move is a comment « Moved the note » with the new place in it, read the same way.
+- A withdrawal is a comment, then the issue is closed as « not planned ». Nothing is deleted.
+
+An edit, a move and a withdrawal are taken while the issue is open. GitHub has no lock, so the worker
+reads the issue again after the comment: an issue closed meanwhile keeps its state, and the comment
+is deleted. Where the site hides the replies, the author cannot edit or move a note: a read would
+show the text of before.
 
 ## Configure the worker
 
@@ -78,4 +103,7 @@ issues of the client, 100 a call, newest first, and stops at 1,000 issues: a cli
 oldest pins. Each pin of that page with replies costs one or two more calls. The read cache keeps one
 answer per page for a short time, so a busy page costs one listing per cache window, not one per
 visitor. A write costs one call per label and one for the issue: two calls for a note that names no
-client, three for a note that names one.
+client, three for a note that names one. On top of the read of the page that finds the note, a reply or « Looks fixed » costs two calls (the issue, the
+comment), « Still wrong » three, an edit or a move three, and a withdrawal four. GitHub warns that
+comments created too quickly may meet its secondary rate limit; the routes allow one verdict, one move
+and one withdrawal at a time on a note, and limit the replies of a visitor.

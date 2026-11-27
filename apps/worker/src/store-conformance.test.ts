@@ -207,6 +207,7 @@ type GithubIssue = {
   state: string;
   state_reason: string | null;
   updated_at: string;
+  closed_at: string | null;
   labels: { name: string }[];
   replies: { id: number; body: string; created_at: string; user: { login: string } }[];
 };
@@ -214,7 +215,8 @@ type GithubIssue = {
 /**
  * GitHub, as far as the GitHub store uses it, for any repository. It keeps the labels and the issues
  * it receives, per repository. A list filter needs every label, without case. Comments come back
- * oldest first, as GitHub sorts them, because the store picks its pages from that order.
+ * oldest first, as GitHub sorts them, because the store picks its pages from that order. An issue is
+ * read and changed by its number, and takes comments (FRU-628).
  */
 function fakeGithub(): { issue(id: string): GithubIssue } {
   const labels = new Map<string, Set<string>>();
@@ -262,6 +264,7 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
         state: 'open',
         state_reason: null,
         updated_at: '2026-09-15T10:00:00Z',
+        closed_at: null,
         labels: (body.labels as string[]).map((name) => ({ name })),
         replies: [],
       };
@@ -278,6 +281,35 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
         .map(({ repository: _repository, replies, ...row }) => ({ ...row, comments: replies.length }));
 
       return json(200, onPage(rows));
+    }
+
+    const numbered = /^(GET|PATCH) \/issues\/(\d+)$/.exec(route);
+    if (numbered) {
+      const issue = inRepository.find((candidate) => candidate.number === Number(numbered[2]));
+      if (issue === undefined) return json(404, { message: 'Not Found' });
+      if (numbered[1] === 'PATCH') {
+        issue.state = String(body.state);
+        issue.state_reason = typeof body.state_reason === 'string' ? body.state_reason : null;
+        issue.closed_at = issue.state === 'closed' ? '2026-09-15T12:00:00Z' : null;
+      }
+      const { repository: _repository, replies, ...row } = issue;
+
+      return json(200, { ...row, comments: replies.length });
+    }
+
+    const commented = /^POST \/issues\/(\d+)\/comments$/.exec(route);
+    if (commented) {
+      const issue = inRepository.find((candidate) => candidate.number === Number(commented[1]));
+      if (issue === undefined) return json(404, { message: 'Not Found' });
+      const reply = {
+        id: 500 + issue.replies.length,
+        body: String(body.body),
+        created_at: new Date(Date.UTC(2026, 8, 15, 11, issue.replies.length)).toISOString(),
+        user: { login: 'fruitback-app[bot]' },
+      };
+      issue.replies.push(reply);
+
+      return json(201, reply);
     }
 
     const comments = /^GET \/issues\/(\d+)\/comments$/.exec(route);
@@ -470,10 +502,13 @@ const SUBJECTS: ConformanceSubject[] = [
   },
   {
     provider: 'github',
-    noReply:
-      'GitHub is a store of the environment and no connector of a workspace yet (FRU-188): no route writes to it',
-    noCheck: 'a verdict is a reply (FRU-294), and GitHub takes no reply: see noReply',
-    markDone: 'GitHub takes no verdict',
+    markDone(created) {
+      Object.assign(github!.issue(created.id), {
+        state: 'closed',
+        state_reason: 'completed',
+        closed_at: '2026-09-15T10:30:00Z',
+      });
+    },
     writtenStage: DEFAULT_NOTE_STAGE,
     replyCap: GITHUB_REPLY_CAP,
     otherTenant: { repository: 'acme/other' },
