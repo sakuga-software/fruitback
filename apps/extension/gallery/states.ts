@@ -486,7 +486,13 @@ function panelStates(): GalleryState[] {
     where: 'Acme',
     notes,
   });
-  const search: SearchState = { scope: 'page', q: '', stage: STAGE_FILTERS[0], pinsShown: true, path: '/' };
+  const search: SearchState = {
+    scope: 'page',
+    q: '',
+    stage: STAGE_FILTERS[0],
+    pinsShown: true,
+    page: { host: 'staging.acme.dev', path: '/' },
+  };
   const searchHandlers = {
     onScope: nothing,
     onQuery: nothing,

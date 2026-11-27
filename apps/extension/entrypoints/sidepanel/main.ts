@@ -24,7 +24,7 @@ import {
 } from '../../src/side-panel.ts';
 import type { Scope, SearchHandlers, SearchState, StageFilter } from '../../src/search-options.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
-import { type SiteNote, readSiteNotes } from '../../src/site-notes.ts';
+import { type SiteNote, onTabPage, readSiteNotes } from '../../src/site-notes.ts';
 import { type SiteVerdictOutcome, sendSiteVerdict } from '../../src/site-check.ts';
 import { BADGE_REFRESH } from '../../src/badge.ts';
 import { readSite } from '../../src/sites.ts';
@@ -40,8 +40,8 @@ import type { TabCommand } from '../../src/protocol.ts';
 /**
  * The side panel (FRU-296, FRU-299). It follows the active tab of its window, and asks the widget of
  * the tab for the notes it read (`notes`); the widget tells it when they change, through the bridge.
- * « Whole site » of « Search and options » (FRU-307) is the one read of a worker, with the session of
- * this browser (`site-notes.ts`).
+ * « Whole site » of « Search and options » (FRU-307) and the notes to check of the other pages
+ * (FRU-734) are its two reads of a worker, with the session of this browser (`site-notes.ts`).
  *
  * The address of a tab is given to the extension only for a site it has access to, or after the
  * click on the toolbar icon (`activeTab`). A site that is on has that access: any other tab reads as
@@ -185,7 +185,7 @@ async function look(): Promise<void> {
     if (!pinsShown && before !== undefined) showPinsOf(before);
     pinsShown = true;
   } else if (search !== undefined && followed !== undefined) {
-    search = { ...search, path: followed.path };
+    search = { ...search, page: { host: followed.host, path: followed.path } };
   }
   draw();
   void readToCheck();
@@ -220,7 +220,7 @@ async function readToCheck(): Promise<void> {
 function toCheckElsewhere(): SiteNote[] {
   const here = Array.isArray(notes) ? new Set(notes.map((note) => note.id)) : new Set<string>();
 
-  return toCheckOnSite.filter((note) => !here.has(note.note) && note.page.path !== followed?.path);
+  return toCheckOnSite.filter((note) => !here.has(note.note) && !onTabPage(note, followed));
 }
 
 /** The badge of the tab counts the notes to check again: a verdict changed them. */
@@ -464,7 +464,7 @@ function toggleSearch(): void {
     q: '',
     stage: 'all',
     pinsShown,
-    ...(followed === undefined ? {} : { path: followed.path }),
+    ...(followed === undefined ? {} : { page: { host: followed.host, path: followed.path } }),
     ...(followed?.source === undefined ? {} : { site: 'reading' as const }),
   };
   draw();
@@ -520,7 +520,7 @@ async function readWholeSite(more = false): Promise<void> {
 /** A note of the site: its thread on this page, or its page in a new tab, where its row opens. */
 async function openSiteNote(note: SiteNote): Promise<void> {
   if (followed === undefined) return;
-  if (note.page.path === followed.path) {
+  if (onTabPage(note, followed)) {
     search = undefined;
     open = note.note;
     const here = Array.isArray(notes) ? notes.find((each) => each.id === note.note) : undefined;

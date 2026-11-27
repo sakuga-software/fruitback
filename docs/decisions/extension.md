@@ -679,7 +679,8 @@ holds `http://127.0.0.1/*`; a page of `http://127.0.0.1` with no rule, the panel
 ### The rules, in short
 
 - **The panel asks the widget of the tab for the notes of the page; it reads no worker for them.**
-  Only « Whole site » of « Search and options » reads one (FRU-307, below). `notes` answers `pageNotes()` of
+  Two reads go to the worker: « Whole site » of « Search and options » (FRU-307, below), and the notes
+  to check of the other pages (`check=1`, FRU-734). `notes` answers `pageNotes()` of
   the widget: the notes its pins show, with their numbers, from its last read, and none of a stage
   the reporter hid. One read, the same numbers as the pins, no second model and no cache.
 - **The widget says when to ask again.** `watchNotes` of the widget tells of each read, hidden

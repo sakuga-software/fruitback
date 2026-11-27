@@ -262,9 +262,12 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   await clickInRow(page, target?.note ?? '', said.show);
   await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText('Answered from the side panel');
 
-  // The panel read no worker: every read went through the widget of the tab.
+  // The panel read no worker for the notes of the page: they went through the widget of the tab. Its
+  // one read of the worker here is the list of the notes to check of the other pages (FRU-734).
   const fetched = await inPanel<string[]>(page, `performance.getEntriesByType('resource').map((entry) => entry.name)`);
-  expect(fetched.filter((url) => !url.startsWith('chrome-extension://'))).toEqual([]);
+  const read = fetched.filter((url) => !url.startsWith('chrome-extension://'));
+  expect(read.filter((url) => new URL(url).searchParams.get('check') !== '1')).toEqual([]);
+  expect(read.every((url) => new URL(url).pathname === '/session/notes')).toBe(true);
 });
 
 test('« To check »: « Looks fixed » sends a note to Done, « Still wrong » reopens one (FRU-300, FRU-606)', async ({

@@ -35,8 +35,9 @@ import {
  *
  * **The panel reads no worker for the notes of the page.** The widget of the tab holds the notes it
  * read for its pins; the panel asks it for them (`notes`), and is told when they change. One read, the
- * same numbers as the pins, no second model and no cache. Only « Whole site » of « Search and
- * options » reads the worker (FRU-307, `site-notes.ts`).
+ * same numbers as the pins, no second model and no cache. Two reads go to the worker, with the
+ * session: « Whole site » of « Search and options » (FRU-307), and the notes to check of the other
+ * pages of the site (FRU-734). Both are in `site-notes.ts`.
  *
  * No `browser` here: the APIs come in as arguments, so `side-panel.test.ts` reads every part under
  * `node --test`. `entrypoints/sidepanel/main.ts` holds the state and binds them.

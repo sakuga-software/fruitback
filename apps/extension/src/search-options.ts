@@ -3,7 +3,7 @@ import { msg, t } from './i18n.ts';
 import { linkButton, make, segmentedTabs, stageRing, statusDrop, toggle } from './kit.ts';
 import { listWord } from './note-status.ts';
 import type { PanelNote } from './protocol.ts';
-import type { SiteNote, SiteStage } from './site-notes.ts';
+import { type SiteNote, type SiteStage, type TabPage, onTabPage } from './site-notes.ts';
 
 /**
  * « Search and options » of the side panel (FRU-307): the scope (« This page », « Whole site »), the
@@ -45,8 +45,8 @@ export type SearchState = {
   /** Absent: this site has no list of its own here (an extension-mode site, a site with no session). */
   site?: SiteList;
   pinsShown: boolean;
-  /** The address of the tab, `path` and query: the rows of the site on it say « This page ». */
-  path?: string;
+  /** The page of the tab: the rows of the site on it say « This page ». */
+  page?: TabPage;
 };
 
 export type SearchHandlers = {
@@ -324,7 +324,7 @@ export function siteList(
     const list = make(document, 'ul', 'panel-list');
     list.classList.add('site-list');
     list.setAttribute('aria-label', t('Notes of the whole site'));
-    for (const note of shown) list.append(siteRow(document, note, state.path, handlers, now, age));
+    for (const note of shown) list.append(siteRow(document, note, state.page, handlers, now, age));
     parts.push(list);
   }
   // The list of other words than the field's: its next page is not offered, the new read is coming.
@@ -378,12 +378,12 @@ const EXCERPT = 64;
 function siteRow(
   document: Document,
   note: SiteNote,
-  path: string | undefined,
+  page: TabPage | undefined,
   handlers: SearchHandlers,
   now: number,
   age: (iso: string, now: number) => string,
 ): HTMLLIElement {
-  const here = path !== undefined && note.page.path === path;
+  const here = onTabPage(note, page);
   const row = make(document, 'li', 'panel-row');
   row.classList.add('site-row');
   row.dataset.note = note.note;
