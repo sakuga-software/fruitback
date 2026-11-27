@@ -174,6 +174,35 @@ describe('watching for a browser that connects (FRU-410)', () => {
     assert.deepEqual(connected, [NEW]);
   });
 
+  it('keeps a turn that comes while a read is on its way, and makes it once that read is answered (FRU-736)', async () => {
+    let answer: (value: Answer<ExtensionBrowser[]>) => void = () => {};
+    let calls = 0;
+    const slow = (): Promise<Answer<ExtensionBrowser[]>> => {
+      calls += 1;
+      if (calls === 2) return new Promise((resolve) => (answer = resolve));
+
+      return Promise.resolve({ ok: true, data: calls < 3 ? [OLD] : [OLD, NEW] });
+    };
+    const connected: ExtensionBrowser[] = [];
+    watchConnection({ read: slow, page: fakePage(), now: () => OPENED, onConnected: (found) => connected.push(found) });
+    await settle();
+    mock.timers.tick(CONNECTED_EVERY_MS);
+    await settle();
+    assert.equal(calls, 2);
+    // The second read is on its way when the clock moves on: its turn waits for it, and asks nothing yet.
+    mock.timers.tick(CONNECTED_EVERY_MS);
+    await settle();
+    assert.equal(calls, 2);
+    answer({ ok: true, data: [OLD] });
+    await settle();
+    assert.equal(calls, 3);
+    assert.deepEqual(connected, [NEW]);
+    // Found: the turn set for later asks nothing.
+    mock.timers.tick(CONNECTED_EVERY_MS * 3);
+    await settle();
+    assert.equal(calls, 3);
+  });
+
   it('stops when the page goes away', async () => {
     answers = [{ ok: true, data: [] }];
     const page = fakePage();

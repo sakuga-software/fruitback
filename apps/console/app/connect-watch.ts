@@ -49,6 +49,10 @@ type ConnectionWatch = {
  * nothing; shown again, it asks at once, because the person comes back from the tab where they
  * pressed « Connect ». A read that fails changes nothing, and the next one is made at its time.
  * Returns the function that stops it.
+ *
+ * FRU-736: the next read is set when a read starts, not when it is answered. A turn that comes while
+ * a read is on its way is kept: the read is made once that one is answered. Before, a clock that
+ * moved during a read found no next read set, and the page asked nothing more.
  */
 export function watchConnection({ read, page, now, onConnected }: ConnectionWatch): () => void {
   const openedAt = now();
@@ -56,6 +60,8 @@ export function watchConnection({ read, page, now, onConnected }: ConnectionWatc
   let first = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let asking = false;
+  // A turn came while a read was on its way.
+  let again = false;
   let stopped = false;
 
   const cancel = () => {
@@ -63,12 +69,20 @@ export function watchConnection({ read, page, now, onConnected }: ConnectionWatc
     timer = undefined;
   };
   const schedule = () => {
-    if (stopped || asking || timer !== undefined || page.visibilityState !== 'visible') return;
-    timer = setTimeout(() => void ask(), CONNECTED_EVERY_MS);
+    if (stopped || timer !== undefined || page.visibilityState !== 'visible') return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      void ask();
+    }, CONNECTED_EVERY_MS);
   };
   const ask = async () => {
-    timer = undefined;
-    if (stopped || asking || page.visibilityState !== 'visible') return;
+    if (stopped || page.visibilityState !== 'visible') return;
+    schedule();
+    if (asking) {
+      again = true;
+
+      return;
+    }
     asking = true;
     // A read that throws is a read that failed: the next one is made at its time.
     const answer = await read().catch((): undefined => undefined);
@@ -82,11 +96,15 @@ export function watchConnection({ read, page, now, onConnected }: ConnectionWatc
       const found = wasFirst ? undefined : newlyConnected(answer.data, known, openedAt);
       if (found !== undefined) {
         stopped = true;
+        cancel();
 
         return onConnected(found);
       }
     }
-    schedule();
+    if (again) {
+      again = false;
+      void ask();
+    }
   };
   const shown = () => {
     if (page.visibilityState !== 'visible') return cancel();
