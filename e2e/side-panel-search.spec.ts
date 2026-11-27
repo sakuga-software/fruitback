@@ -11,7 +11,6 @@ import {
   search,
   clickPanel,
   clickShowOnPage,
-  showOpenTab,
 } from './side-panel.ts';
 
 /**
@@ -49,7 +48,6 @@ test('« Search and options »: the search, « Whole site » over three pages, t
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
-  await showOpenTab(page);
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
 
   // The magnifier opens the options; the search filters the notes of the page.
@@ -165,7 +163,6 @@ test('« Show on the page » of a row of the whole site: another page opens in a
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: OPEN_SIDEBAR }).click();
-  await showOpenTab(page);
   await expect.poll(async () => (await panelRows(page).catch(() => ({ rows: [] }))).rows.length).toBeGreaterThan(0);
   expect(await clickPanel(page, 'button.panel-search')).toBe(true);
   expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);

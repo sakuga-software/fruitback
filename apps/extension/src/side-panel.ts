@@ -682,8 +682,6 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     onSelect: (id) => options.onTab(id === 'check' || id === 'done' ? id : 'open'),
   });
   tabs.classList.add('panel-tabs');
-  // The notes of the other pages in the count of « To check », whatever tab is shown.
-  tabs.dataset.elsewhere = String(elsewhere);
   const shown = byTab[chosen];
   const parts: Node[] = [tabs];
   if (chosen === 'check') {
