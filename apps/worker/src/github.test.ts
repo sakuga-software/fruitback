@@ -1162,6 +1162,30 @@ describe('the writes of a person under a note (FRU-628)', () => {
       assert.equal(issue?.comments?.length, 1);
     });
 
+    it('reads the last edit of the author as the text of a note that the team reopened after its withdrawal (review of #996)', async () => {
+      // « Still wrong » takes only a note done (409 not-done): a withdrawn note is closed, and only the
+      // team reopens it, in GitHub. The withdrawal changes no text: the last edit, written while the note
+      // was open, stays its text, as on Linear.
+      const edited = editText({ text: 'Le texte modifié.', author: MEMBER }, 'en', true);
+      fakeGithub({
+        ...installation(),
+        'GET /repos/acme/site/issues': () => json(200, [row({ comments: 2, ...OPEN, state_reason: 'reopened' })]),
+        'GET /repos/acme/site/issues/12/comments': () =>
+          json(200, [
+            { id: 1, body: edited, created_at: '2026-09-14T10:00:00Z', user: { login: 'app' } },
+            { id: 2, body: withdrawText(WITHDRAWAL, 'en'), created_at: '2026-09-14T10:05:00Z', user: { login: 'app' } },
+          ]),
+      });
+      const [issue] = await createGithubStore(CONFIG, { now: () => NOW }).findForPage(
+        { url: PAGE, clientId: 'acme' },
+        undefined,
+        POLICY,
+      );
+
+      assert.equal(issue?.stage, 'new');
+      assert.equal(issue?.note.text, 'Le texte modifié.');
+    });
+
     it('says in the log a comment that GitHub kept when it refused both the close and the delete (review of #996)', async () => {
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
       const refused = () => json(403, { message: 'Resource not accessible by integration' });

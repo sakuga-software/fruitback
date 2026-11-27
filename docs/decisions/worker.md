@@ -3810,6 +3810,10 @@ replies, and on a public site mounted by the extension with no session, only the
   note shows the text or the place it was sent with. A withdrawal comment holds neither the line of an
   edit nor the one of a move, so a note reopened after it keeps its text and place
   (test:`leaves the text and the place of a note reopened after a withdrawal as they were (review of #996)`).
+  Only the team reopens a withdrawn note, in GitHub: « Still wrong » takes a note `done`, and a
+  withdrawn one is `closed`. The withdrawal changes no text, so the last edit of the author, written
+  while the note was open, stays its text, as on Linear
+  (test:`reads the last edit of the author as the text of a note that the team reopened after its withdrawal (review of #996)`).
 - **The number of the issue comes from the read, and its `id` must match.** GitHub writes under the
   number of an issue (`#12`), and its REST API finds no issue by its `id`. So `ReplyTarget` carries
   the `identifier` that the read gave (`writeReply`, the verdict, `reply_to_note` of `/mcp`), and an
