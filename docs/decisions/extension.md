@@ -2289,6 +2289,14 @@ popup. A `401` that says `canWrite: false` takes « Leave a note » away. **Not 
 the protocol between the widget and the extension. The second read is one `GET`, only after a read
 that failed, and only on the Cloud of the build.
 
+**The panel asks for the session as the popup does (FRU-735).** It said « signed in » when this
+browser held a session of the Fruitback of the build, without asking Fruitback: a session that had
+ended (expired, or signed out from the console) took the line of an account that is not a member.
+Both now read `account-state.ts`: `accountOf` asks for an access (`ensureAccess`), which forgets a
+session that Fruitback refuses, and `holdsCloudSession` says signed in for an account that answers,
+one Fruitback cannot reach, or a pairing, never for one that ended. The ask costs no request of its
+own: the panel asks only after a refused read, and `offerFor` asked for the same access before.
+
 **Not taken: refuse extension mode on the Cloud** (FRU-643, cancelled on 2026-11-22). Extension mode
 is the first path of a person who finds Fruitback, and a site that says « Anyone on the page » takes
 their notes. **Not taken: a button in the widget.** The widget of extension mode has no `onSignIn`,

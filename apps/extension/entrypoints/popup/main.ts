@@ -29,6 +29,7 @@ import { NO_RULE, form, readability, siteWithoutAccess, status } from './rule-sc
 import { linked, session } from './pairing.ts';
 import { holdsAccess, otherCopyLine, visibility, wantsSession } from './site-actions.ts';
 import { accountOf, accountShown, signIn, unreachableScreen } from './sign-in.ts';
+import { holdsCloudSession } from '../../src/account-state.ts';
 import {
   actions,
   app,
@@ -205,7 +206,7 @@ async function renderPopup(editing = false, claimedNow?: ConnectState): Promise<
       account,
       pending: pendingNow,
       // An account that ended was forgotten by `accountOf`, after `held` was read.
-      cloudSession: CLOUD !== undefined && held[CLOUD] !== undefined && accountState !== 'ended',
+      cloudSession: holdsCloudSession(CLOUD, held, accountState),
     }),
   );
   shownKind = state.kind;
