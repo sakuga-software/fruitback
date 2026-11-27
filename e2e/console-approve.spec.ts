@@ -32,15 +32,25 @@ const NOTES = [
 
 type Worker = { posted: string[]; fails?: string };
 
-async function workerWith(page: Page, role: Role = 'member', notes = NOTES): Promise<Worker> {
+/**
+ * `late`: the first read of the count waits for it, and then answers the count of when it was asked,
+ * as a slow worker does (FRU-733).
+ */
+async function workerWith(page: Page, role: Role = 'member', notes = NOTES, late?: Promise<void>): Promise<Worker> {
   const worker: Worker = { posted: [] };
   let waiting = [...notes];
+  let held = late;
   await stubWorker(page, {
     workspaces: [{ ...ACME, role }],
     answer: (pathname: string, route: Route) => {
       const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
       if (pathname === '/console/workspaces/w1/held/count') {
-        return role === 'guest' ? json({ error: 'forbidden' }, 403) : json({ count: waiting.length });
+        if (role === 'guest') return json({ error: 'forbidden' }, 403);
+        const count = waiting.length;
+        const wait = held;
+        held = undefined;
+
+        return wait === undefined ? json({ count }) : wait.then(() => json({ count }));
       }
       if (pathname === '/console/workspaces/w1/held') return json({ notes: waiting });
       const asked = /^\/console\/workspaces\/w1\/held\/(\w+)\/(\w+)\/(approve|reject)$/.exec(pathname);
@@ -88,6 +98,27 @@ test('a member finds the notes to approve from the bar, approves one and rejects
   await expect(page.getByRole('status')).toHaveText('Rejected. The note was removed.');
   await expect(page.locator('[data-approve-empty]')).toHaveText('No note waits for approval.');
   expect(worker.posted).toEqual(['approve n1', 'reject n2']);
+});
+
+test('a late read of the bar does not set an older count of « To approve » again (FRU-733)', async ({ page }) => {
+  let release = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await workerWith(page, 'member', NOTES, released);
+  await page.goto(`${CONSOLE}/w/w1/approve`);
+  await expect(rows(page)).toHaveCount(2);
+  await page.getByRole('button', { name: 'Approve the note of Camille' }).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(entry(page)).toContainText('1');
+
+  // The read of the bar, asked when two notes waited, answers now.
+  const answered = page.waitForEvent('requestfinished', (request) => request.url().endsWith('/held/count'));
+  release();
+  await answered;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(entry(page)).toContainText('1');
+  await expect(entry(page)).not.toContainText('2');
 });
 
 test('a refused approval says why, and the note still waits (FRU-704)', async ({ page }) => {
