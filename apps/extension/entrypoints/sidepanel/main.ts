@@ -32,6 +32,7 @@ import { readSite, rememberPreviews } from '../../src/sites.ts';
 import { probeRead } from '../../src/read-probe.ts';
 import { type CloudSeams, offerFor } from '../../src/cloud.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
+import { signedInTo } from '../../src/account-state.ts';
 import {
   type TabCommandAnswer,
   type TabCommandArguments,
@@ -274,7 +275,8 @@ async function whyFailed(
       probeRead({ endpoint: rule.endpoint, clientId: rule.clientId }, rule.page, {
         fetch: (url, init) => fetch(url, init),
       }),
-    signedIn: async () => CLOUD !== undefined && (await sessions.list())[CLOUD] !== undefined,
+    // FRU-735: as the popup asks it. A session that Fruitback ended is forgotten, and signs nobody in.
+    signedIn: () => signedInTo(CLOUD, sessions),
     member: async () => (await offerFor(origin, cloudSeams())) !== undefined,
   });
 }
