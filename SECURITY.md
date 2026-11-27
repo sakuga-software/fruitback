@@ -137,7 +137,7 @@ stored as it arrived, and **where** depends on the connector:
 | ---------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `linear`   | verbatim in an issue description                                                                   | anyone with access to that workspace                                                                                 |
 | `postgres` | `JSON.stringify(note)` in the `payload` column of the table `notes`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
-| `github`   | verbatim in an issue body                                                                          | anyone who can read that repository. On a public repository, that is everyone.                                       |
+| `github`   | verbatim in an issue body; its replies, verdicts, edits and moves in comments of the issue         | anyone who can read that repository. On a public repository, that is everyone.                                       |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the note. On PostgreSQL the database and its dumps are the
@@ -183,6 +183,13 @@ clear unless this list says otherwise:
   of another; and only an `https` address is given.
 - The notes of visitors that wait for a member, on a site that holds them: the note and the digest
   of the key of the browser, in `held_notes`, until a member answers it, and 30 days at most.
+- The versions of a note, on a site that keeps every version: the text before each edit, and the
+  text of a note when it was deleted, with who did it (the account of a member, or « a visitor »
+  and nothing more) and when, in `note_versions`, as long as the note is in the index, 50 at most
+  for one note. See « The versions of a note ».
+- A note its visitor deleted: kept as it was, out of its page, the days its site says (7, 30 or 90,
+  30 by default), then erased for good by the sweep of the worker. See « The notes their visitors
+  deleted ».
 - The addresses of callers, for two minutes, in the table `kv` of the rate limit. For the notes of
   a visitor in an hour, the address and the digest of the key of the browser, with the
   site, for two hours.
@@ -2739,6 +2746,76 @@ them by a key that their browser holds, and by nothing else.
   and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
+
+### The versions of a note (FRU-704)
+
+The line « Keep every version » of the card « Safeguards » keeps, for the members of the site, what an
+edit or a deletion takes away. On by default, as the mockup draws it, and for the sites of before.
+
+- Which changes. An edit of the text (`POST /feedback/<id>/text`) and a withdrawal or a deletion
+  (`POST /feedback/<id>/withdraw`), by a member or by a visitor, on a site that takes the notes of
+  anybody and keeps every version (`keepNoteVersions` of the client, which `clientOf` gives only
+  there). The same text again keeps nothing. Every guard of the two routes runs first: the version
+  is written only for a change that the route lets through.
+  test:`keeps the text of before each edit of a visitor, and a member reads them oldest first`,
+  test:`keeps a deletion with the note as it was, and its author`,
+  test:`keeps nothing for the same text again, and nothing on a site that keeps no version`,
+  test:`keeps nothing where only members write, as the card says « n/a »`.
+- What is kept, and where. The text of before an edit, or the text of the note when it was deleted,
+  the kind, the moment, and who: the account of a member, or `visitor` with no key, no digest and no
+  name, in the table `note_versions` of the database of the worker.
+- Who reads them. `GET /console/workspaces/<id>/notes/<note>` answers `versions` to a role that sees
+  the tracker (a member, an admin, an owner), on a site it reads, oldest first, a member named by the
+  name of their account now. A guest reads the note as it is now and no version. The widget reads
+  none: it says `versionsKept: true` beside `editable` to the author, and the form of an edit tells
+  them that the team keeps the text of before.
+  test:`shows a guest the note and no version`,
+  test:`names a member by the name of their account now`.
+- In which order. The version is written before the change, in one transaction that checks the note
+  is in the index of the workspace; a change that does not happen (refused, `not-open`, or a store
+  that throws) takes its version back. A store of versions that does not answer is `502`, and the
+  note is not changed.
+  test:`takes the version back when the store does not change the note, and changes nothing when the versions fail`.
+- How long. As long as the row of the note in the index: a version goes with its note, its site and
+  its workspace (a foreign key, `ON DELETE CASCADE`), and the oldest goes past 50 versions of one note.
+  An account that goes leaves its versions with no account.
+  test:`keeps the newest 50 versions of a note, and lets the oldest go`,
+  test:`lets the versions go with their note`.
+- Each guard (the version of an edit, and the version taken back) is taken out of a copy of
+  `edit-routes.ts` in `note-versions.test.ts`, and the case that holds it fails.
+
+### The notes their visitors deleted (FRU-704)
+
+The line « Deleted notes » of the card « Safeguards » sets how many days a note its visitor deleted
+(`POST /feedback/<id>/withdraw` with the key of the browser, which marks `removed_at`) is kept: 7, 30
+or 90, 30 by default as the mockup draws it, those of before included.
+
+- Meanwhile. The note stays in its store, closed as withdrawn, and out of its page for every reader.
+  `GET /console/workspaces/<id>/notes/<note>` answers `deleted: { at, until }` to a role that sees
+  the tracker (a member, an admin, an owner), on a site it reads; a guest reads no deletion.
+  test:`tells a member until when the site keeps the note, 30 days by default`.
+- Restore. `POST …/notes/<note>/restore`, for the same roles: one statement takes the mark off while
+  the days have not run out, and the page is read again, so the pin shows to every reader, with the
+  stage the note has (closed). A guest gets `403`; a note restored already, or whose days ran out,
+  `404`.
+  test:`restores the note for a member: its pin shows on its page again, and the console says it is kept no more`,
+  test:`refuses a guest the restore and the date, and restores nothing once the days ran out`.
+- Erased. The sweep of the worker runs on the timer of the sweep of `done_notices`, 500 notes a pass
+  at most, each row locked (`FOR UPDATE SKIP LOCKED`), so a restore at the same moment waits and finds
+  nothing. A note the worker keeps (its own store, or sent on to an address) goes whole: its row in
+  `notes`, its replies and labels, its row in the index, its versions, and the address of a visitor
+  that waited for it to be done. A note of a tracker lives in the tracker, the team's: the worker
+  erases what it keeps of it (the excerpt, the digest of the browser key, the element, the versions,
+  the address that waited) and keeps the row, with `erased_at`, so that its issue never shows on its
+  page again; the lists of the console leave it out. A visitor sends no file, so no file waits. The
+  cached reads of the pages of the notes that went whole are dropped after the sweep, since only the
+  mark of their row hid them there.
+  test:`drops the cached read of the page of a note it erased, so its pin never shows again (review of #999)`.
+  test:`erases a note the worker keeps once the days of its site ran out: the note, its row, its versions`,
+  test:`erases the words it keeps of a note of a tracker, and keeps its row so that the issue never shows again`,
+  test:`keeps a deleted note of every site 30 days, then the sweep erases it` (on PGlite and on PostgreSQL).
+- The guard of the days of a restore is taken out of a copy of `deleted-notes-postgres.ts` in
+  `deleted-notes.test.ts`, and a late restore then goes through.
 
 ### The notes of a visitor in an hour (FRU-704)
 

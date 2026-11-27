@@ -1613,7 +1613,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-six BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-eight BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1882,6 +1882,41 @@ site opened to anyone, a site closed again when a caller names no `writers`, and
 - **The site `playground` of the dev worker says « No limit »**: every spec of the suite sends to it
   from one address. `POST /__dev/guards` makes a site `guards` in a workspace of its own, at the same
   origin, for the specs of the safeguards.
+
+## The notes their visitors deleted (FRU-704)
+
+- **`deleted_notes_keep_days` of `sites`, 30 by default** (7, 30 or 90, `DELETED_NOTE_KEEPS`), the line
+  « Deleted notes » of the card « Safeguards ». `0061` adds it for the sites of before too. The routes
+  do not need it: only the console and the sweep read it, in SQL.
+- **The deletion is still `removed_at` of the index** (FRU-702). `deleted-notes.ts` reads it
+  (`of`), takes it off (`restore`, one `UPDATE … FROM sites` that checks the days) and erases what ran
+  out (`sweep`).
+- **A note of a tracker keeps a row, with `erased_at`.** Deleting its row would bring its issue back
+  on its page: `GET /feedback` hides a deleted note by the mark of its row (`withoutRemoved`). So the
+  sweep clears the words of the row and marks it; `filtered` of `notes-index-postgres.ts` leaves an
+  erased row out of every list and count of the console. A note the worker keeps has no issue
+  elsewhere: its rows go whole.
+- **The sweep** runs on the timer of `sweepDoneNotices` (`server.ts`), `DELETED_SWEEP_BATCH` (500) at
+  a time, rows locked with `SKIP LOCKED`, and the partial index `note_index_by_removal` holds only the
+  rows that wait.
+
+## The versions of a note (FRU-704)
+
+- **`keep_note_versions` of `sites`, on by default** (the mockup draws it on), the line « Keep every
+  version » of the card « Safeguards ». `0060` adds it on for the sites of before too. `clientOf` gives
+  `keepNoteVersions` to the routes only where `writers` is `anyone`, as the other safeguards.
+- **`note_versions` holds one row by edit and by deletion** (`note-versions.ts`): the text before an
+  edit, or the text of a deleted note, who (`member` with its account, or `visitor` and nothing more)
+  and when. Its foreign key is the row of the note in `note_index` (`ON DELETE CASCADE`), so a version
+  goes with its note, its site and its workspace, and the purge of a note takes its history.
+- **The routes write it before the change** (`withVersion` of `edit-routes.ts`), after every guard: a
+  change that does not happen takes it back, and a store of versions that fails is `502` with nothing
+  changed. Writing it after would lose the text of before when the second write fails.
+- **50 versions of one note at most** (`NOTE_VERSION_LIMIT`), the oldest going in the same transaction:
+  an edit of a visitor counts with their replies of the minute, and a text is 5,000 characters, so a
+  note holds 250 KB of history at most.
+- **The console reads them in `GET …/notes/<note>`** (`console-tasks.ts`), for a role that sees the
+  tracker. A store of versions that does not answer leaves them out, and the note is read.
 
 ## The notes of visitors that wait for a member (FRU-704)
 
@@ -3415,7 +3450,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-six BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-eight BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3700,7 +3735,10 @@ replies, and on a public site mounted by the extension with no session, only the
   it, and `at`. Never the text, for the reason of FRU-475. A queue that refuses the row is logged and
   the author is answered, as for `note.created`. The console lists it as « Note edited by its
   author ». `DELIVERY_EVENTS` gains it; the column is a text, so no migration.
-- **GitHub takes no edit**, as it takes no reply (FRU-628 follows it).
+- **GitHub takes an edit the way Linear does** (FRU-628): a comment « Edited the note » with the new
+  text, the body of the issue never written again, the issue read again after the comment, and a
+  read that takes the text from the newest such comment written before `closed_at`. See « GitHub
+  takes the writes of a person (FRU-628) » below.
 - **A tracker has no lock, so Linear reads the stage again after the comment** (round 4 of #866).
   An issue done or canceled by then had its move before that read: the comment is deleted, and the
   route answers `409 not-open`. A move after that read comes after the comment too, and the read of
@@ -3737,7 +3775,7 @@ replies, and on a public site mounted by the extension with no session, only the
   text of the page closes the fence. A read takes the newest place written before the issue left the
   open stages (`withMovedPlace` in `toNoteIssue`, `closedAtOf`). The comment is kept only while the
   issue is open (`commentWhileOpen`, shared with the edit).
-- **An address** keeps the move and gets `note.moved`, ids only. GitHub takes none (FRU-628).
+- **An address** keeps the move and gets `note.moved`, ids only. GitHub keeps it as Linear does (FRU-628).
 - **One move at a time on a note**, a key of the KV as for a withdrawal (`409 move-in-progress`,
   review of #877): a tracker has no lock, and a double click would write two comments. The key holds
   15 minutes (`MOVE_LOCK_MS`), longer than a call to a tracker can last (`fetch` of Node gives up
@@ -3770,8 +3808,9 @@ replies, and on a public site mounted by the extension with no session, only the
   writes the reply, then moves the issue to the first state of type `canceled` of the board
   (`withdrawStateOf`), read **before** the reply: a team with none fails with nothing written, and a
   move that Linear refuses takes the reply back, so a new try does not pile replies up (review of
-  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub takes
-  none (FRU-628). An address keeps it in the worker's own store and gets `note.withdrawn`, ids only.
+  #870, test:`fails with nothing written when the team has no canceled state (review of #870)`). GitHub
+  writes the comment, then closes the issue with `state_reason: not_planned` (FRU-628). An address
+  keeps it in the worker's own store and gets `note.withdrawn`, ids only.
 - **One at a time**: a key of the KV, as for a verdict (`409 withdraw-in-progress`). A tracker has
   no lock, and a double click would write two replies.
 - **Linear reads the stage again after the reply**, as for an edit: an issue the team marked done or
@@ -3780,6 +3819,55 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`withdrawable: true` is added after the cache**, as `editable`; the route decides again. A
   withdrawal does not depend on the replies being shown: the stage says it on its own.
 - The extension relays `/withdraw` as it relays `/text` (`WITHDRAW_PATH`, `relay.ts`).
+
+## GitHub takes the writes of a person (FRU-628)
+
+**The rules, in short** (arbitrated by the orchestrator on 2026-11-27, wave 7):
+
+- **Every write is a comment of the issue**, written with the installation token of the App
+  (« Issues: Read and write », the one permission the App already asks for): `POST
+  /repos/{owner}/{repo}/issues/{n}/comments`. A reply as `replyText`, a verdict as `checkText`, an
+  edit as `editText(…, true)`, a move as `moveText(…, true)`, a withdrawal as `withdrawText`. The
+  body of the issue is never written again.
+- **« Still wrong » reopens the issue** after its comment (`PATCH` with `state: open`,
+  `state_reason: reopened`), in the order of Linear: a reopen that fails leaves a « wrong » comment on
+  an issue still closed, and a new try writes both.
+- **A withdrawal closes the issue with `state_reason: not_planned`** after its comment, which gives
+  the stage `closed` (`stageForGithubIssue`), or the stage the site gives `closed:not_planned`. A
+  close that GitHub refuses deletes the comment, so a new try does not pile comments up.
+- **An edit, a move and a withdrawal are kept only while the issue is open**, as for Linear
+  (`commentWhileOpen`): the issue is read before the comment (closed: `not-open`, nothing written)
+  and again after it (closed meanwhile: the comment is deleted, else written again with no text, and
+  the route answers `409 not-open`). A read takes the text and the place of the newest such comment
+  written before `closed_at` (`withEditedText`, `withMovedPlace`). `editsInReplies`: where the replies
+  are hidden, no edit and no move. The limit of the read of Linear holds here too: a read takes the
+  newest `COMMENTS_PER_ISSUE` (20) comments, so an edit or a move older than them is not read, and the
+  note shows the text or the place it was sent with. A withdrawal comment holds neither the line of an
+  edit nor the one of a move, so a note reopened after it keeps its text and place
+  (test:`leaves the text and the place of a note reopened after a withdrawal as they were (review of #996)`).
+  Only the team reopens a withdrawn note, in GitHub: « Still wrong » takes a note `done`, and a
+  withdrawn one is `closed`. The withdrawal changes no text, so the last edit of the author, written
+  while the note was open, stays its text, as on Linear
+  (test:`reads the last edit of the author as the text of a note that the team reopened after its withdrawal (review of #996)`).
+- **The number of the issue comes from the read, and its `id` must match.** GitHub writes under the
+  number of an issue (`#12`), and its REST API finds no issue by its `id`. So `ReplyTarget` carries
+  the `identifier` that the read gave (`writeReply`, the verdict, `reply_to_note` of `/mcp`), and an
+  edit, a move and a withdrawal carry it already. Before it writes, the store reads `GET
+  …/issues/{n}`: an issue of another `id`, a pull request or an issue that GitHub deleted (`410`) is
+  no note of this client, and nothing is written. A caller that gives no number gets a `StoreError`
+  (`502`), never a write to a guessed issue.
+- **Who.** The routes decide, as for every store: nothing here widens who may reply, give a verdict,
+  edit, move or withdraw. The comment shows the App as its author on GitHub; the line at the top of
+  the text says who wrote it, as for Linear.
+
+The REST documentation (« Permissions required for GitHub Apps », read on 2026-11-27) lists, under
+« Issues », for an installation token: `GET …/issues/{n}` with « read », and `POST
+…/issues/{n}/comments`, `DELETE …/issues/comments/{id}`, `PATCH …/issues/comments/{id}` and `PATCH
+…/issues/{n}` with « write ». The four writes are also listed under « Pull requests », and the page
+says that such an endpoint « work[s] with any one permission from a set »: « Issues » alone does it,
+and nothing in the page is particular to a repository of an organisation. Every case runs
+against a GitHub simulated in the tests (`github.test.ts`, `store-conformance.test.ts`): no real
+repository was written, and no App of a test repository is installed.
 
 ## The status of a note, from its thread on the page (FRU-718)
 

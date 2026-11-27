@@ -9,6 +9,8 @@ import { isDay, isPriority } from './task-fields.ts';
 import { NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
+import type { NoteVersions } from './note-versions.ts';
+import type { DeletedNotes } from './deleted-notes.ts';
 import { invalidatePages } from './note-helpers.ts';
 import { OWN_SOURCE, envelopeStatuses } from './site-statuses.ts';
 import {
@@ -67,6 +69,10 @@ export type NotesContext = {
   tasks: 'on' | 'off';
   /** FRU-653: one note as its page reads it. Absent: `GET …/notes/<note>` answers 404. */
   readNote?: (workspace: string, site: string, note: string) => Promise<NoteIssue | undefined>;
+  /** FRU-704: the versions of the notes, which `GET …/notes/<note>` answers to a role that sees the tracker. */
+  versions?: NoteVersions;
+  /** FRU-704: the notes their visitors deleted: `GET …/notes/<note>` says it, `POST …/notes/<note>/restore` restores one. */
+  deleted?: DeletedNotes;
   /** FRU-712: writes a reply under a note of a page. Absent: `POST …/notes/<note>/replies` answers 404. */
   replyToNote?: ReplyToNote;
   /** FRU-712: the caller as a reply names them, read at the call; `undefined` once they left the workspace. */

@@ -209,6 +209,7 @@ export const FRENCH: Catalog = {
   'edit.openLabel': 'Modifier votre note',
   'edit.label': 'Votre note',
   'edit.sentTo': 'Le texte modifié part aussi dans {tracker}',
+  'edit.kept': 'L’équipe de ce site garde le texte d’avant dans l’historique de la note.',
   'edit.save': 'Enregistrer',
   'edit.cancel': 'Annuler',
   'edit.saving': 'Enregistrement…',

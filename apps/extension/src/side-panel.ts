@@ -15,6 +15,7 @@ import {
 } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 import type { SiteNote } from './site-notes.ts';
+import { type MemberRemedy, type ReadProbe, memberRemedy } from './read-probe.ts';
 import { listWord, notePaint } from './note-status.ts';
 import {
   type SearchHandlers,
@@ -35,9 +36,10 @@ import {
  *
  * **The panel reads no worker for the notes of the page.** The widget of the tab holds the notes it
  * read for its pins; the panel asks it for them (`notes`), and is told when they change. One read, the
- * same numbers as the pins, no second model and no cache. Two reads go to the worker, with the
- * session: « Whole site » of « Search and options » (FRU-307), and the notes to check of the other
- * pages of the site (FRU-734). Both are in `site-notes.ts`.
+ * same numbers as the pins, no second model and no cache. The worker is read for « Whole site » of
+ * « Search and options » (FRU-307), for the notes to check of the other pages of the site (FRU-734),
+ * both in `site-notes.ts`, and for the question of the popup after a read that failed (FRU-729,
+ * `membersOnlyOf`).
  *
  * No `browser` here: the APIs come in as arguments, so `side-panel.test.ts` reads every part under
  * `node --test`. `entrypoints/sidepanel/main.ts` holds the state and binds them.
@@ -198,8 +200,70 @@ export type NotesTab = NoteTab;
  * it says when it has. `failed`: its read failed. `signed-out`: the session of the site ended (FRU-315). `reload`: nothing on the page answers, a page open
  * before the site was turned on. `not-started`: the page answers, but still has no widget after
  * `NO_WIDGET_WAIT_MS` (a mount that threw, a widget taken down): reloading the page mounts it again.
+ * `MembersOnly`: a failed read that the worker refused to a reader with no member's session (FRU-729).
  */
-export type PanelNotes = PanelNote[] | 'reading' | 'failed' | 'reload' | 'signed-out' | 'not-started';
+export type PanelNotes = PanelNote[] | 'reading' | 'failed' | 'reload' | 'signed-out' | 'not-started' | MembersOnly;
+
+/**
+ * FRU-729: the site of an extension-mode rule on the Fruitback of this build is read by its members
+ * only. The widget gives its host `failed` for that refusal (`notesState`), so the panel asks the
+ * worker the question of the popup (`probeRead`), and says the line of the popup (`memberRemedy`).
+ * `closed`: the worker refuses a note too, so the panel offers no « Leave a note ».
+ */
+export type MembersOnly = { members: MemberRemedy; closed: boolean };
+
+/** What `membersOnlyOf` asks. Each answer that throws counts as « no ». */
+export type MembersOnlySeams = {
+  /** `probeRead` of the popup, on the page of the tab. */
+  probe: () => Promise<ReadProbe>;
+  /** This browser holds a session of the Fruitback of the build. */
+  signedIn: () => Promise<boolean>;
+  /** A workspace of that session lists the site (`offerFor`). Asked only when signed in. */
+  member: () => Promise<boolean>;
+};
+
+/**
+ * Why a read failed, when it is the refusal of a site that its members read: on the Fruitback of
+ * this build only, as the popup says it (FRU-663). A rule of a worker run by somebody else, a worker
+ * that is down, and an answer that is not a `401` keep « could not be read ».
+ */
+export async function membersOnlyOf(
+  rule: { endpoint: string },
+  cloud: string | undefined,
+  seams: MembersOnlySeams,
+): Promise<MembersOnly | undefined> {
+  if (cloud === undefined || rule.endpoint !== cloud) return undefined;
+  const answer = await seams.probe().catch((): ReadProbe => 'unknown');
+  if (answer !== 'members-only' && answer !== 'wants-a-session') return undefined;
+  const signedIn = await seams.signedIn().catch(() => false);
+  const member = signedIn && (await seams.member().catch(() => false));
+
+  return { members: memberRemedy(answer, { onCloud: true, signedIn, member }), closed: answer === 'members-only' };
+}
+
+/**
+ * Reads where only the latest one counts (Kentō #73e393): a read that a newer one overtook gives
+ * `undefined`, whatever it read (notes, a failure, a refusal). The newer read draws, not this one.
+ * The value is wrapped, so a read that answers `undefined` is still told from an overtaken one.
+ */
+export function latestOnly<A extends unknown[], T>(
+  work: (...args: A) => Promise<T>,
+): (...args: A) => Promise<{ value: T } | undefined> {
+  let started = 0;
+
+  return async (...args) => {
+    started += 1;
+    const mine = started;
+    const value = await work(...args);
+
+    return mine === started ? { value } : undefined;
+  };
+}
+
+/** Whether the notes are a refusal of a site that its members read (FRU-729). */
+export function isMembersOnly(notes: PanelNotes): notes is MembersOnly {
+  return typeof notes === 'object' && !Array.isArray(notes);
+}
 
 /**
  * How long the panel waits for a widget the page does not have yet (raised in review). A widget
@@ -469,14 +533,19 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
     return root;
   }
 
-  // « Leave a note », and what to do next.
-  const action = make(document, 'div', 'panel-action');
-  const leave = primaryButton(document, t('Leave a note'), options.onLeave, { size: 'panel' });
-  // FRU-601: in the colour of « Appearance ».
-  leave.classList.add('kit-note');
-  leave.prepend(dropMark(document));
-  action.append(leave, make(document, 'p', 'panel-hint', t('Then click the part of the page you want to comment on')));
-  root.append(action);
+  // « Leave a note », and what to do next. Not on a site that refuses a note from here (FRU-729).
+  if (!(isMembersOnly(state.notes) && state.notes.closed)) {
+    const action = make(document, 'div', 'panel-action');
+    const leave = primaryButton(document, t('Leave a note'), options.onLeave, { size: 'panel' });
+    // FRU-601: in the colour of « Appearance ».
+    leave.classList.add('kit-note');
+    leave.prepend(dropMark(document));
+    action.append(
+      leave,
+      make(document, 'p', 'panel-hint', t('Then click the part of the page you want to comment on')),
+    );
+    root.append(action);
+  }
 
   const search = options.search;
   if (search !== undefined) {
@@ -541,6 +610,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
 
     return [box];
   }
+  if (isMembersOnly(notes)) return [membersOnlyPart(document, options, notes.members)];
   if (notes === 'reload') {
     const box = make(document, 'div', 'panel-failed');
     box.append(
@@ -630,6 +700,27 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
   }
 
   return parts;
+}
+
+/**
+ * FRU-729: the line of the popup for a site that its members read. Its button is in the popup
+ * (« Sign in to Fruitback », « Turn on with my account »): the panel opens the popup, as for a
+ * session that ended (FRU-532). No « Try again »: a new read is refused the same way.
+ */
+function membersOnlyPart(document: Document, options: PanelOptions, remedy: MemberRemedy): HTMLElement {
+  const box = make(document, 'div', 'panel-signed-out');
+  box.classList.add('panel-members');
+  const line = make(document, 'p', 'panel-reading', t(remedy.sentence));
+  line.setAttribute('role', 'status');
+  box.append(line);
+  if (remedy.action === undefined) return box;
+  box.append(
+    options.onOpenPopup === undefined
+      ? make(document, 'p', 'panel-state-text', t('Do it from the Fruitback button in the toolbar.'))
+      : popupButton(document, options.onOpenPopup),
+  );
+
+  return box;
 }
 
 /**

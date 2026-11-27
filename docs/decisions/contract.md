@@ -66,6 +66,9 @@ first publish made it expensive.
 - **An issue says `withdrawable: true`** (FRU-605) to the reader who may withdraw it now: their own
   note, open, on a site with one place whose store takes a withdrawal. Optional, a read-envelope
   field: `NOTE_VERSION` does not move.
+- **An issue says `versionsKept: true`** (FRU-704) beside `editable: true`, on a site that keeps every
+  version: the team of the site will read the text of before an edit. The widget says so in the form
+  of an edit. Optional, a read-envelope field: `NOTE_VERSION` does not move.
 - **An issue says `canSetStatus: true`** (FRU-718) to the reader who may change its status from its
   thread: a member with a session who left it, or a role that manages the sites, on a site whose store
   keeps statuses. Optional, a read-envelope field: `NOTE_VERSION` does not move. The console's list

@@ -175,6 +175,12 @@ INSERT INTO held_notes (site_id, note_id, workspace_id, payload, author_visitor,
   ('site_drill2', 'sd_held1', 'ws_drill1', '{"id":"sd_held1","text":"Held for a member."}', 'digest-of-a-test-key', 1, NULL),
   ('site_drill2', 'sd_held2', 'ws_drill1', '{"id":"sd_held2","text":"Being approved."}', NULL, 2, 3);
 
+-- The versions of a note (FRU-704): the text of before an edit of its visitor, and a deletion by a
+-- member. Test words only.
+INSERT INTO note_versions (id, site_id, note_id, workspace_id, kind, text, author_kind, author_account_id, at) VALUES
+  ('ver_drill1', 'site_drill1', 'sd_drill1', 'ws_drill1', 'edit', 'The price is cut.', 'visitor', NULL, 1),
+  ('ver_drill2', 'site_drill1', 'sd_drill9', 'ws_drill1', 'delete', 'Sent to the hook.', 'member', 'acc_drill1', 2);
+
 -- The day a member was last seen in the workspace (FRU-249).
 INSERT INTO last_seen (member_id, day) VALUES
   ('mem_drill1', '2026-10-11');

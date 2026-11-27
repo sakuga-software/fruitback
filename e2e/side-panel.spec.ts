@@ -1,10 +1,12 @@
-import { expect } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
 import {
   OPEN_SIDEBAR,
   PLAYGROUND_ORIGIN,
+  addRule,
   clickThatClosesPopup,
   openBareSite,
   openPopup,
+  sessionSitesOf,
   test,
   SITE_ON,
 } from './extension.ts';
@@ -24,7 +26,7 @@ import {
   verdict,
   rowMeta,
 } from './side-panel.ts';
-import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN, noteWriters } from './worker-sessions.ts';
 
 /**
  * The side panel of the browser (FRU-296): its place in the manifest, the warnings Chrome shows for
@@ -40,6 +42,11 @@ declare const chrome: {
     getContexts(filter: { contextTypes: string[] }): Promise<{ documentUrl?: string }[]>;
   };
   management: { getPermissionWarningsByManifest(manifest: string): Promise<string[]> };
+  tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
+  storage: Record<
+    'local' | 'session',
+    { get(keys: null): Promise<Record<string, unknown>>; remove(keys: string[]): Promise<void> }
+  >;
 };
 
 test('the manifest declares the panel, and Chrome shows no new warning for it', async ({ extension }) => {
@@ -619,4 +626,134 @@ test('a row of the panel wears the colour and the name of the status its pin wea
     { word: 'In review', fill: 'rgb(124, 58, 237)', text: 'rgb(255, 255, 255)', stage: pins[1]?.stage },
     { word: 'Waiting for the client', fill: 'rgb(254, 249, 195)', text: 'rgb(24, 24, 27)', stage: pins[0]?.stage },
   ]);
+});
+
+test('extension mode on a site of the Cloud that its members read: the panel says so, and opens the popup to sign in (FRU-729)', async ({
+  extension,
+}) => {
+  // Said, not read from the default: the site of the Fruitback of the build takes notes from its members.
+  await noteWriters('members');
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-members-only');
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
+
+  // The panel behind the site, as a tab that is not active: it follows the site's tab. The popup of
+  // this rule offers no « Open sidebar », and Playwright hands no `Page` for a real panel.
+  const url = `chrome-extension://${extension.id}/sidepanel.html`;
+  await extension.worker.evaluate(async (panelUrl) => {
+    await chrome.tabs.create({ url: panelUrl, active: false });
+  }, url);
+  let found: Page | undefined;
+  await expect.poll(() => (found = extension.context.pages().find((each) => each.url() === url))).toBeDefined();
+  const panel = found as Page;
+
+  // The line of the popup, not « could not be read » (the widget gives its host `failed` for it).
+  await expect(panel.locator('.panel-members [role="status"]')).toHaveText(
+    /^(Only the members of this site see its notes and leave one here\. Sign in to Fruitback|Seuls les membres de ce site voient ses notes et en laissent ici\. Connectez-vous à Fruitback)/,
+  );
+  await expect(panel.locator('.panel-failed')).toHaveCount(0);
+  // The site takes no note from here: no « Leave a note » that leads nowhere.
+  await expect(panel.locator('.panel-action')).toHaveCount(0);
+
+  // « Open Fruitback » opens the popup on the site, where « Sign in to Fruitback » is.
+  const popups = () =>
+    extension.worker.evaluate(async () =>
+      (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).map((context) => context.documentUrl),
+    );
+  await panel.locator('.panel-members button.panel-open-popup').click();
+  await expect.poll(popups).toEqual([`chrome-extension://${extension.id}/popup.html`]);
+  await expect
+    .poll(() =>
+      inTarget<boolean>(
+        page,
+        '/popup.html',
+        `[...document.querySelectorAll('button')].some((button) => /^(Sign in to Fruitback|Se connecter à Fruitback)$/.test(button.textContent ?? ''))`,
+      ).catch(() => false),
+    )
+    .toBe(true);
+});
+
+test('extension mode on a site of the Cloud that its members read, with a session of the account that ended: the panel says to sign in (FRU-735)', async ({
+  extension,
+}) => {
+  const CLOUD = AUTHENTICATED_WORKER_ORIGIN;
+  const CONSOLE = 'http://localhost:5178';
+  await noteWriters('members');
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-session-ended');
+
+  // Signed in as an account, through the routes of FRU-238 answered here, as `popup-sign-in.spec.ts`
+  // does. The account is a member of no workspace: the worker of the suite does not know its token.
+  await extension.context.route(sessionSitesOf(CLOUD), (route) =>
+    route.fulfill({ json: { account: true, workspaces: [], sites: [] } }),
+  );
+  await extension.context.route(`${CLOUD}/session/connect`, (route) =>
+    route.fulfill({
+      status: 201,
+      json: {
+        request: 'req_panel_ended',
+        claim: 'claim-panel-ended',
+        word: 'FIG 12',
+        verificationUri: `${CONSOLE}/connect/req_panel_ended`,
+        expiresIn: 900,
+        interval: 2,
+      },
+    }),
+  );
+  await extension.context.route(`${CLOUD}/session/connect/claim`, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        refreshToken: 'panel-ended-refresh',
+        accessToken: 'panel-ended-access',
+        expiresIn: 600,
+        identity: { subject: 'acct_panel', name: 'Camille Durand', email: 'camille@acme.dev', account: true },
+      },
+    }),
+  );
+  await extension.context.route(`${CONSOLE}/**`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>Connect</title>' }),
+  );
+  const popup = await openPopup(extension, page);
+  const opened = extension.context.waitForEvent('page');
+  await popup.getByRole('button', { name: /^(Sign in with email|Se connecter par e-mail)$/ }).click();
+  await (await opened).close();
+  await expect(popup.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('C', {
+    timeout: 15_000,
+  });
+  await popup.close();
+
+  // The session expires: its access token goes, and Fruitback refuses the refresh. Storage still
+  // holds the session until somebody asks Fruitback, which is what the panel did not do.
+  await extension.worker.evaluate(async () => {
+    const area = chrome.storage.session;
+    await area.remove(Object.keys(await area.get(null)).filter((key) => key.startsWith('fruitback:grant:')));
+  });
+  await extension.context.route(`${CLOUD}/session/refresh`, (route) =>
+    route.fulfill({ status: 401, json: { error: 'session-revoked' } }),
+  );
+  const storedLocal = () => extension.worker.evaluate(async () => JSON.stringify(await chrome.storage.local.get(null)));
+  // A control: the session is there before the panel opens, so its absence after is the panel's doing.
+  expect(await storedLocal()).toContain('panel-ended-refresh');
+
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: CLOUD });
+  await openBareSite(page, 'side-panel-session-ended');
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
+
+  const url = `chrome-extension://${extension.id}/sidepanel.html`;
+  await extension.worker.evaluate(async (panelUrl) => {
+    await chrome.tabs.create({ url: panelUrl, active: false });
+  }, url);
+  let found: Page | undefined;
+  await expect.poll(() => (found = extension.context.pages().find((each) => each.url() === url))).toBeDefined();
+  const panel = found as Page;
+
+  // The line of a person with no session, as the popup says it: not « your account is not one of them ».
+  await expect(panel.locator('.panel-members [role="status"]')).toHaveText(
+    /^(Only the members of this site see its notes and leave one here\. Sign in to Fruitback|Seuls les membres de ce site voient ses notes et en laissent ici\. Connectez-vous à Fruitback)/,
+  );
+  await expect(panel.locator('.panel-members button.panel-open-popup')).toBeVisible();
+  // The session that ended is forgotten, as the popup forgets it.
+  await expect.poll(storedLocal).not.toContain('panel-ended-refresh');
 });

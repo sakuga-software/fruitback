@@ -165,6 +165,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO held_notes (site_id, note_id, workspace_id, payload, held_at)
        VALUES ('site_acme', 'hn_1', 'ws_acme', '{}', 1)`,
   );
+  // FRU-704: one version of the note of the index, the text of before an edit.
+  await rowsOf(
+    database,
+    `INSERT INTO note_versions (id, site_id, note_id, workspace_id, kind, text, author_kind, author_account_id, at)
+       VALUES ('ver_1', 'site_acme', 'sd_1', 'ws_acme', 'edit', 'Before.', 'visitor', NULL, 1)`,
+  );
   // FRU-261: one read of an administrator of the instance.
   await rowsOf(
     database,
@@ -214,7 +220,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixty-six BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixty-eight BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -255,8 +261,10 @@ it('knows the sixty-six BIGINT columns of the worker, and that better-auth has n
     'note_index.archived_at',
     'note_index.checked_at',
     'note_index.created_at',
+    'note_index.erased_at',
     'note_index.removed_at',
     'note_labels.note_id',
+    'note_versions.at',
     'notes.archived_at',
     'notes.created_at',
     'notes.id',
@@ -324,7 +332,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 24);
+      assert.equal(nullable.length, 25);
       assert.deepEqual(wrong, []);
     });
 

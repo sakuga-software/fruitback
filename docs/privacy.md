@@ -172,16 +172,36 @@ The person who left a note can change its text while the note is open: new, to d
 A note done or closed cannot be edited. Where the note goes decides what is kept:
 
 - On a note the worker keeps, the new text replaces the old one in the database: **the worker keeps no
-  copy of the text of before**. A reply under the note says who edited it and when, with no text.
+  copy of the text of before**, unless the site keeps every version (below). A reply under the note
+  says who edited it and when, with no text.
 - On a note sent to an address, the same happens in the worker, and the address receives a
   `note.edited` event that holds identifiers only, never a text. The address keeps the note it was
   first sent.
-- On a note sent to Linear, the issue keeps its description, with the text of before: it is the
-  team's, and they may have changed it. A comment under the issue says who edited the note, with the
-  new text. Taking out a text from Linear is done in Linear, by the team. A site whose replies are
-  hidden takes no edit. A note sent to GitHub cannot be edited.
+- On a note sent to Linear or GitHub, the issue keeps its description, with the text of before: it
+  is the team's, and they may have changed it. A comment under the issue says who edited the note,
+  with the new text. Taking out a text from Linear or GitHub is done there, by the team. A site whose
+  replies are hidden takes no edit. On a public GitHub repository, the new text is public too, as
+  the note is.
 
 The excerpt of the index of the notes is written again from the new text.
+
+### The versions of a note (FRU-704)
+
+A site that keeps every version (« Keep every version » in its tab « Access », on by default) keeps,
+for its members, what an edit or a deletion takes away from a note, wherever the note went:
+
+- What: the text before each edit, and the text of the note when its author deleted or withdrew
+  it, with the moment and who did it: the account of a member, or « a visitor » and nothing more (no
+  key, no digest of it, no name, no address). In the table `note_versions` of the database.
+- Who reads it: the members, admins and owners of the workspace, on the page of the note in the
+  console. A guest and the widget read none. The form of an edit tells its author, before they save,
+  that the team keeps the text of before.
+- How long: as long as the note is in the index of its site, 50 versions at most for one note, the
+  oldest going first. They go with the note, its site and its workspace.
+- Why: so that an edit or a deletion of a note left on a public page cannot take away from the team
+  what it already read, or rewrite a note once it was acted on. A site whose authors must be able to
+  take a text out for good turns the switch off: nothing is kept from then, and an edit is again the
+  only copy. The versions kept before stay with their note.
 
 ### A note moved by its author
 
@@ -189,15 +209,29 @@ The person who left a note can move it to another element of its page while it i
 keeps the new place (the element, as the widget reads it, and the size of the window) in place of
 the old one. On a note sent to Linear, the issue keeps the place in its description, and a comment
 says who moved the note and to which element, with the new place in it. An address receives a
-`note.moved` event that holds identifiers only. A note sent to GitHub cannot be moved.
+`note.moved` event that holds identifiers only. A note sent to GitHub is moved as on Linear.
 
 ### A note withdrawn by its author
 
 The person who left a note can withdraw it while it is open. **Nothing is deleted**: the note is
 closed, and a reply under it says who withdrew it and when. On a note sent to an address, the address
 receives a `note.withdrawn` event that holds identifiers only. On a note sent to Linear, the issue
-gets the same reply as a comment, and moves to the first canceled state of its team. A note sent to
-GitHub cannot be withdrawn. To have a note deleted, ask the team of the site.
+gets the same reply as a comment, and moves to the first canceled state of its team. On a note sent
+to GitHub, the issue gets the same comment, and is closed as « not planned ». To have a note
+deleted, ask the team of the site.
+
+### A note deleted by its visitor
+
+When a visitor with no account deletes their note, it leaves its page for every reader at once. The
+site keeps it for its members the days it chose in its tab « Access » (« Deleted notes »: 7, 30 or 90
+days, 30 by default), so that a note deleted by mistake, or to hide something the team needs, can be
+restored. Then the worker erases it for good, by itself:
+
+- A note the worker keeps (in Fruitback, or sent on to an address) is deleted from its database, with
+  its replies, its labels, its versions, and the address the visitor gave to be told when it is done.
+- A note sent to a tracker stays in the tracker, which is the team's: the worker erases what it keeps
+  of it (the excerpt, the digest of the key of the browser, the element, the versions, the address),
+  and keeps only a marker, with no words, so that the issue never shows on the page again.
 
 ### The changes of a task, told to an address
 

@@ -1,8 +1,8 @@
 import { type NoteComment, type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
 import { composes, elementsOf, typedInField } from '../keys';
-import { type FormEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
-import { ago } from '../ago';
+import { ago, agoInSentence, dayOf } from '../ago';
 import { ConnectorMark } from '../connector-marks';
 import { t } from '../i18n';
 import { NoteIcon } from '../note-icons';
@@ -26,7 +26,7 @@ import { ReadProblem } from '../read-problem';
 import { useLocale } from '../use-locale';
 import { hostOf } from '../site-address';
 import { browserOf } from '../browser-name';
-import { type IndexedNote, type NotePlace } from './notes-model';
+import { type IndexedNote, type NoteAuthor, type NotePlace, type NoteVersion } from './notes-model';
 import { KINDS, connectorName } from './connector-parts';
 import { TaskMenuContext } from './task-menu';
 import { siteOfId } from '../note-id';
@@ -85,7 +85,17 @@ export function TaskPanel({
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   // Each answer names the note it is of: a panel opened on another note shows no answer of the one before.
-  const [answer, setAnswer] = useState<{ of: string; value: NoteIssue | TaskIssue | 'failed' | 'gone' } | undefined>();
+  // FRU-704: and the versions of a note of a page, which the worker answers to a member only.
+  const [answer, setAnswer] = useState<
+    | {
+        of: string;
+        value: NoteIssue | TaskIssue | 'failed' | 'gone';
+        versions?: NoteVersion[];
+        // FRU-704: a note its visitor deleted, and until when its site keeps it.
+        deleted?: { at: string; until: string };
+      }
+    | undefined
+  >();
   const [problem, setProblem] = useState<string | undefined>();
   // « Try again » asks again: the read follows this count, as it follows the note.
   const [attempt, setAttempt] = useState(0);
@@ -98,13 +108,20 @@ export function TaskPanel({
     setAnswer(undefined);
     setProblem(undefined);
     // FRU-657: a task written by hand reads as `{ task }`, a note of a page as `{ note }`.
-    void call<{ note: NoteIssue } | { task: TaskIssue }>('GET', `${base}/notes/${encodeURIComponent(id)}`).then(
-      (got) => {
-        if (!current) return;
-        if (got.ok) setAnswer({ of: id, value: 'task' in got.data ? got.data.task : got.data.note });
-        else setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
-      },
-    );
+    void call<
+      { note: NoteIssue; versions?: NoteVersion[]; deleted?: { at: string; until: string } } | { task: TaskIssue }
+    >('GET', `${base}/notes/${encodeURIComponent(id)}`).then((got) => {
+      if (!current) return;
+      if (!got.ok) setAnswer({ of: id, value: got.status === 404 ? 'gone' : 'failed' });
+      else if ('task' in got.data) setAnswer({ of: id, value: got.data.task });
+      else
+        setAnswer({
+          of: id,
+          value: got.data.note,
+          ...(got.data.versions === undefined ? {} : { versions: got.data.versions }),
+          ...(got.data.deleted === undefined ? {} : { deleted: got.data.deleted }),
+        });
+    });
 
     return () => {
       current = false;
@@ -112,16 +129,19 @@ export function TaskPanel({
   }, [id, base, attempt]);
 
   // Opened, the panel takes the focus, so that the keyboard reads it at once.
+  // FRU-736: a layout effect, as the keys below: in the commit that draws the panel.
   const open = id !== undefined;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) panel.current?.focus({ preventScroll: true });
   }, [open]);
 
   // Escape closes; the arrows go to the note above or under it (FRU-687). On the document, before
   // the keys of the selection on the window: Escape closes the panel first, and clears nothing else.
+  // FRU-736: a layout effect, so the panel listens from the commit that draws it. A passive effect
+  // ran up to 1.2 s later on a slow CPU (measured), and Escape in that time closed nothing.
   const keys = useRef({ previous, next, onStep, onClose });
   keys.current = { previous, next, onStep, onClose };
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || composes(event)) return;
@@ -165,6 +185,8 @@ export function TaskPanel({
   if (id === undefined) return null;
 
   const read = answer !== undefined && answer.of === id ? answer.value : 'loading';
+  const versions = answer !== undefined && answer.of === id ? answer.versions : undefined;
+  const deleted = answer !== undefined && answer.of === id ? answer.deleted : undefined;
   const written = typeof read === 'object' && 'task' in read ? read : undefined;
   const issue = typeof read === 'object' && 'note' in read ? read : undefined;
   const replies = (written ?? issue)?.comments;
@@ -269,6 +291,21 @@ export function TaskPanel({
             onRetry={() => setAttempt((count) => count + 1)}
           />
         ) : null}
+        {deleted === undefined ? null : (
+          <Deleted
+            key={id}
+            deleted={deleted}
+            to={`${base}/notes/${encodeURIComponent(id)}/restore`}
+            onRestored={() =>
+              setAnswer((now) => {
+                if (now?.of !== id) return now;
+                const { deleted: _gone, ...rest } = now;
+
+                return rest;
+              })
+            }
+          />
+        )}
         {written === undefined ? null : <TaskText text={written.task.text} />}
         {issue === undefined || more === '' ? null : (
           <p className="text-body whitespace-pre-wrap [overflow-wrap:anywhere] text-ink" data-task-text="">
@@ -303,7 +340,7 @@ export function TaskPanel({
               {listed === undefined ? null : (
                 <Property term={t('Left by')}>
                   <span className="truncate font-medium">
-                    {authorWords(listed)} · {ago(listed.createdAt)}
+                    {authorWords(listed.author)} · {ago(listed.createdAt)}
                   </span>
                 </Property>
               )}
@@ -331,6 +368,7 @@ export function TaskPanel({
             )}
             {issue === undefined ? null : <Preview issue={issue} />}
             <Activity comments={replies} synced={placeName} />
+            {versions === undefined || versions.length === 0 ? null : <History versions={versions} />}
             {issue === undefined ? null : <Technical issue={issue} />}
           </>
         )}
@@ -488,9 +526,8 @@ function placeLine(name: string | undefined, label: string | undefined): string 
   return [name, after === '' ? undefined : after].filter((part) => part !== undefined).join(' · ');
 }
 
-/** Who left a note, in words: a visitor, or the name of a person of the workspace. */
-function authorWords(note: IndexedNote): string {
-  const { author } = note;
+/** Who left a note, or changed it, in words: a visitor, or the name of a person of the workspace. */
+function authorWords(author: NoteAuthor): string {
   if (author.kind === 'verified' || author.kind === 'anonymous') return t('Visitor');
 
   return author.name ?? t('Somebody of the workspace');
@@ -607,6 +644,90 @@ function Activity({ comments, synced }: { comments: NoteIssue['comments']; synce
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/**
+ * A note its visitor deleted (FRU-704): when, until when its site keeps it, and « Restore », which
+ * shows its pin on its page again. A refusal says why, and the note stays as it is.
+ */
+function Deleted({
+  deleted,
+  to,
+  onRestored,
+}: {
+  deleted: { at: string; until: string };
+  to: string;
+  onRestored: () => void;
+}) {
+  useLocale();
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | undefined>();
+
+  async function restore() {
+    setBusy(true);
+    setSaid(undefined);
+    const answer = await call('POST', to);
+    setBusy(false);
+    if (answer.ok) {
+      onRestored();
+      return;
+    }
+    setSaid(
+      answer.status === 404
+        ? t('This note can no longer be restored: its days ran out.')
+        : t('The note was not restored. Try again in a moment.'),
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-[8px] rounded-card border border-line bg-surface p-[12px]" data-task-deleted="">
+      <p className="text-small text-ink">
+        {t('Its visitor deleted this note {when}. Fruitback erases it for good on {day}.', {
+          when: agoInSentence(deleted.at),
+          day: dayOf(deleted.until),
+        })}
+      </p>
+      <span className="flex items-center gap-[8px]">
+        <Button tone="outline" size="panel" disabled={busy} onClick={() => void restore()}>
+          {t('Restore')}
+        </Button>
+        <span className="text-hint text-muted">{t('Its pin shows on its page again, closed.')}</span>
+      </span>
+      {said === undefined ? null : <Problem>{said}</Problem>}
+    </div>
+  );
+}
+
+/**
+ * The versions of a note (FRU-704), oldest first: who edited it and when, with the text of before, and
+ * who deleted it. Only a member reads them: the worker gives a guest none.
+ */
+function History({ versions }: { versions: readonly NoteVersion[] }) {
+  useLocale();
+
+  return (
+    <section className="flex flex-col gap-[12px]" data-task-history="">
+      <h3 className="flex items-center gap-[8px] text-small font-semibold">
+        {t('History')}
+        <span className="font-normal text-muted tabular-nums">{versions.length}</span>
+      </h3>
+      <ol className="m-0 flex list-none flex-col gap-[14px] p-0">
+        {versions.map((version) => (
+          <li key={version.id} className="flex flex-col gap-[4px]" data-task-version={version.kind}>
+            <span className="text-hint">
+              <span className="font-semibold text-ink">{authorWords(version.author)}</span>{' '}
+              <span className="text-ink">{version.kind === 'edit' ? t('edited the note') : t('deleted the note')}</span>{' '}
+              <span className="text-muted">{ago(version.at)}</span>
+            </span>
+            <span className="text-hint text-muted">{version.kind === 'edit' ? t('Before') : t('Its text then')}</span>
+            <span className="border-l-2 border-line pl-[8px] text-small whitespace-pre-wrap text-ink-soft [overflow-wrap:anywhere]">
+              {version.text}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

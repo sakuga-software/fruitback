@@ -269,6 +269,10 @@ export function accountCases(it: Declare<AccountStore>): void {
       visitorNotesPerHour: 10,
       // FRU-704: « Hold new visitor notes » is off for a new site, as the mockup draws it.
       holdVisitorNotes: false,
+      // FRU-704: « Keep every version » is on for a new site, as the mockup draws it.
+      keepNoteVersions: true,
+      // FRU-704: a note its visitor deleted is kept 30 days, the value of the mockup.
+      deletedNotesKeepDays: 30,
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -282,6 +286,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorEdit: 'while-open',
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
+        keepNoteVersions: true,
       },
     });
   });
@@ -448,6 +453,46 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.clientMap())[made.id]?.holdVisitorNotes, undefined);
   });
 
+  it('keeps every version of a new site, keeps the switch on a site added again, and serves it where a visitor writes (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.keepNoteVersions, true);
+    assert.equal((await store.client(made.id))?.keepNoteVersions, true);
+    assert.equal(
+      (await store.addSite(workspace.id, { origin, visibility: 'everyone', keepNoteVersions: false })).keepNoteVersions,
+      false,
+    );
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).keepNoteVersions, false);
+    assert.equal((await store.client(made.id))?.keepNoteVersions, undefined);
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', keepNoteVersions: true });
+    assert.equal((await store.client(made.id))?.keepNoteVersions, true);
+    // A site of its members only keeps none: the card says « n/a ».
+    await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'members' });
+    assert.equal((await store.clientMap())[made.id]?.keepNoteVersions, undefined);
+  });
+
+  it('keeps a deleted note of a new site 30 days, and keeps the value on a site added again (FRU-704)', async (store) => {
+    const { workspace } = await world(store);
+    const origin = 'https://acme.dev';
+
+    const made = await store.addSite(workspace.id, { origin, visibility: 'everyone', writers: 'anyone' });
+    assert.equal(made.deletedNotesKeepDays, 30);
+    assert.equal(
+      (await store.addSite(workspace.id, { origin, visibility: 'everyone', deletedNotesKeepDays: 7 }))
+        .deletedNotesKeepDays,
+      7,
+    );
+    // A caller that does not name it (the extension) keeps it.
+    assert.equal((await store.addSite(workspace.id, { origin, visibility: 'everyone' })).deletedNotesKeepDays, 7);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => site.deletedNotesKeepDays),
+      [7],
+    );
+  });
+
   it('keeps one address apart in two workspaces', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);
@@ -468,6 +513,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorEdit: 'while-open',
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
+        keepNoteVersions: true,
       },
     });
   });

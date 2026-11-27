@@ -47,7 +47,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.afterAll(async () => {
   // The site goes back to « No limit » and holds nothing, so a spec run after this one starts clean.
-  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false });
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, keepNoteVersions: true });
 });
 
 test('a visitor leaves the notes of the hour, then the widget asks them to wait, with their text kept (FRU-704)', async ({
@@ -106,4 +106,44 @@ test('a note of a visitor waits for a member on a site that holds them, and the 
   await mount(page, `/?widget=off&case=${caseOf('visitor-held')}`);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
   await guards({ holdVisitorNotes: false });
+});
+
+/** The thread of the one pin of the page. */
+async function openThread(page: Page) {
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await page.locator('[data-fruitback-pin]').getByRole('button').first().click();
+
+  return page.getByRole('dialog', { name: /Note 1/ });
+}
+
+test('a visitor who edits their note on a site that keeps every version is told the team keeps the text of before (FRU-704)', async ({
+  page,
+}) => {
+  const KEPT = 'The team of this site keeps the text of before in the history of the note.';
+  await guards({ visitorNotesPerHour: 0, holdVisitorNotes: false, keepNoteVersions: true });
+  const path = `/?widget=off&case=${caseOf('visitor-versions')}`;
+  await mount(page, path);
+  await write(page, 'Une note qu’on modifie ensuite');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+  await mount(page, path);
+  const thread = await openThread(page);
+  await thread.getByRole('button', { name: 'More actions on your note' }).click();
+  await thread.getByRole('menuitem', { name: 'Edit the text' }).click();
+  await expect(thread.getByText(KEPT)).toBeVisible();
+  await thread.getByRole('textbox', { name: 'Your note' }).fill('Une note modifiée, gardée pour l’équipe');
+  const saved = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/text'));
+  await thread.getByRole('button', { name: 'Save' }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(thread.getByText('Saved')).toBeVisible();
+
+  // The site keeps no version now: the same form says nothing of it.
+  await guards({ keepNoteVersions: false });
+  await mount(page, path);
+  const again = await openThread(page);
+  await again.getByRole('button', { name: 'More actions on your note' }).click();
+  await again.getByRole('menuitem', { name: 'Edit the text' }).click();
+  await expect(again.getByRole('textbox', { name: 'Your note' })).toBeVisible();
+  await expect(again.getByText(KEPT)).toHaveCount(0);
+  await guards({ keepNoteVersions: true });
 });

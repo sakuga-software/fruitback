@@ -4,7 +4,7 @@ import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
 import { invalidatePages, withoutTracker } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
-import { type NotesContext, noteIdOf } from './console-notes.ts';
+import { type NotesContext, authorView, noteIdOf } from './console-notes.ts';
 import { notesOf, readLabel, readNewTask, readTaskChange, readTasksChange } from './task-fields.ts';
 import { afterStatusMoved, ownKeyOf } from './console-status.ts';
 import { withoutTrackerStatus } from './site-statuses.ts';
@@ -17,6 +17,10 @@ import { withoutTrackerStatus } from './site-statuses.ts';
  *   manages the sites). `DELETE …/notes/<note>/task` deletes it, with the same rights (FRU-665).
  * - `POST …/notes`: writes a task by hand (FRU-657), with no page and no pin, in a site the caller
  *   reads. `GET …/notes/<note>` reads it as `{ task }`, where a note of a page is `{ note }`.
+ *   A role that sees the tracker reads its versions there too (FRU-704, `versions`), oldest first, and,
+ *   for a note its visitor deleted, until when it is kept (`deleted`, `deleted-notes.ts`).
+ * - `POST …/notes/<note>/restore` (FRU-704): a role that sees the tracker restores a note its visitor
+ *   deleted, while its site keeps it: its pin shows on its page again. `204`; `404` for any other note.
  * - `GET …/labels`: the labels of the workspace, for whoever reads its notes.
  * - `POST …/labels`, `POST …/labels/<id>` (a change), `DELETE …/labels/<id>`: for a role that manages the sites.
  *
@@ -36,11 +40,15 @@ export async function handleTasks(
   const task = /^\/notes\/([A-Za-z0-9_-]+)\/task$/.exec(rest);
   const label = /^\/labels\/([A-Za-z0-9_-]+)$/.exec(rest);
   const one = /^\/notes\/([A-Za-z0-9_-]+)$/.exec(rest);
+  const restore = /^\/notes\/([A-Za-z0-9_-]+)\/restore$/.exec(rest);
   // FRU-657: `POST …/notes` writes a task; `GET …/notes` is the list, in `console-notes.ts`.
   const create = rest === '/notes' && request.method === 'POST';
-  if (task === null && label === null && one === null && rest !== '/labels' && !create) return undefined;
+  if (task === null && label === null && one === null && restore === null && rest !== '/labels' && !create) {
+    return undefined;
+  }
   const { headers } = context;
   if (!context.allowed('read-feedback')) return json(403, { error: 'forbidden' }, headers);
+  if (restore !== null) return restoreNote(restore[1] as string, request, context, noteKeyOf);
   if (create) return createTask(request, context);
 
   // FRU-653: one note, whole, as its page reads it: the page of a task in the console.
@@ -68,9 +76,18 @@ export async function handleTasks(
     const issue = await context.readNote(context.workspace, note.site, note.note);
     if (issue === undefined) return json(404, { error: 'not-found' }, headers);
     // A guest reads nothing of the tracker (FRU-244), as in the list.
-    const shown = context.allowed('see-tracker') ? issue : withoutTrackerStatus(withoutTracker(issue, issue.note.id));
+    const seesTracker = context.allowed('see-tracker');
+    const shown = seesTracker ? issue : withoutTrackerStatus(withoutTracker(issue, issue.note.id));
+    // FRU-704: the versions, for the members only: a guest reads the note as it is now.
+    const [versions, deleted] = seesTracker
+      ? await Promise.all([versionsOf(context, note.site, note.note), deletionOf(context, note.site, note.note)])
+      : [undefined, undefined];
 
-    return json(200, { note: shown }, headers);
+    return json(
+      200,
+      { note: shown, ...(versions === undefined ? {} : { versions }), ...(deleted === undefined ? {} : { deleted }) },
+      headers,
+    );
   }
   const writes = request.method !== 'GET';
   if (writes && context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
@@ -294,4 +311,76 @@ async function handleSeveral(
   }
 
   return json(200, { changed: answer.notes.length }, headers);
+}
+
+/**
+ * The versions of a note as the page of a note shows them (FRU-704), oldest first: what was there
+ * before each edit, and the deletion. The name of a member is the name its account has now; a visitor
+ * is « anonymous », as in the list. `undefined`: no store of versions, or one that did not answer (said
+ * in the log): the note is read without them.
+ */
+async function versionsOf(context: NotesContext, site: string, note: string) {
+  if (context.versions === undefined) return undefined;
+  try {
+    const versions = await context.versions.list(context.workspace, site, note);
+
+    return versions.map((version) => ({
+      id: version.id,
+      kind: version.kind,
+      text: version.text,
+      author: authorView(version.author, context.account),
+      at: new Date(version.at).toISOString(),
+    }));
+  } catch (error) {
+    console.error('[fruitback] the versions of a note were not read', error instanceof Error ? error.message : error);
+
+    return undefined;
+  }
+}
+
+/**
+ * When a note its visitor deleted was deleted, and until when its site keeps it (FRU-704). `undefined`:
+ * any other note, no store, or one that did not answer (said in the log).
+ */
+async function deletionOf(context: NotesContext, site: string, note: string) {
+  if (context.deleted === undefined) return undefined;
+  try {
+    const deleted = await context.deleted.of(context.workspace, site, note, context.now);
+
+    return deleted === undefined
+      ? undefined
+      : { at: new Date(deleted.removedAt).toISOString(), until: new Date(deleted.until).toISOString() };
+  } catch (error) {
+    console.error('[fruitback] the deletion of a note was not read', error instanceof Error ? error.message : error);
+
+    return undefined;
+  }
+}
+
+/**
+ * `POST …/notes/<note>/restore` (FRU-704): a note its visitor deleted shows on its page again. A role
+ * that sees the tracker, on a site it reads; a guest is refused, as it reads no deletion. The stage
+ * stays what the deletion left: closed, which the status of the note changes as for any note.
+ */
+async function restoreNote(
+  id: string,
+  request: Request,
+  context: NotesContext,
+  noteKeyOf: (id: string) => { site: string; note: string } | undefined,
+): Promise<Response> {
+  const { headers } = context;
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+  if (!context.allowed('see-tracker')) return json(403, { error: 'forbidden' }, headers);
+  const note = noteKeyOf(id);
+  if (note === undefined || context.deleted === undefined) return json(404, { error: 'not-found' }, headers);
+  const reach = await context.reach();
+  if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(note.site))) {
+    return json(404, { error: 'not-found' }, headers);
+  }
+  const restored = await context.deleted.restore(context.workspace, note.site, note.note, context.now);
+  if (restored === undefined) return json(404, { error: 'not-found' }, headers);
+  // The page of the note is read again: its pin shows to every reader.
+  if (context.kv !== undefined) await invalidatePages(context.kv, [restored.page]);
+
+  return new Response(null, { status: 204, headers });
 }

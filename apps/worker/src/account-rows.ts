@@ -21,7 +21,10 @@ import {
   VISIBILITIES,
   VISITOR_RIGHTS,
   type VisitorRight,
+  DEFAULT_DELETED_NOTE_KEEP,
   DEFAULT_VISITOR_NOTES_PER_HOUR,
+  DELETED_NOTE_KEEPS,
+  type DeletedNoteKeep,
   VISITOR_NOTE_LIMITS,
   type VisitorNoteLimit,
   type Visibility,
@@ -86,6 +89,12 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     : DEFAULT_VISITOR_NOTES_PER_HOUR;
   // FRU-704: anything but `true` is off, the default, as `notify_done`.
   const holdVisitorNotes = row.hold_visitor_notes === true;
+  // FRU-704: anything but `false` is on, the default of the column, as the mockup draws it.
+  const keepNoteVersions = row.keep_note_versions !== false;
+  // FRU-704: a value that is not one of the list is the default, never a shorter one.
+  const deletedNotesKeepDays: DeletedNoteKeep = isOneOf(row.deleted_notes_keep_days, DELETED_NOTE_KEEPS)
+    ? row.deleted_notes_keep_days
+    : DEFAULT_DELETED_NOTE_KEEP;
 
   return {
     id: row.id,
@@ -98,6 +107,8 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     visitorDelete,
     visitorNotesPerHour,
     holdVisitorNotes,
+    keepNoteVersions,
+    deletedNotesKeepDays,
     destinations,
   };
 }

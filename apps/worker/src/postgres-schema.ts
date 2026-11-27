@@ -130,6 +130,13 @@ export const sites = pgTable(
     visitor_notes_per_hour: integer('visitor_notes_per_hour').notNull().default(10),
     // FRU-704: « Hold new visitor notes ». Off by default, as the mockup draws it.
     hold_visitor_notes: boolean('hold_visitor_notes').notNull().default(false),
+    // FRU-704: « Keep every version ». On by default, as the mockup draws it: `0060` adds it on for
+    // every site, those of before included (Fruitback has no users yet).
+    keep_note_versions: boolean('keep_note_versions').notNull().default(true),
+    // FRU-704: « Deleted notes », how many days a note its visitor deleted is kept before it is erased
+    // for good (`deleted-notes.ts`): 7, 30 or 90. 30 by default, as the mockup draws it, those of
+    // before included.
+    deleted_notes_keep_days: integer('deleted_notes_keep_days').notNull().default(30),
   },
   (table) => [
     foreignKey({
@@ -979,6 +986,10 @@ export const note_index = pgTable(
     // FRU-702: when the visitor who left the note deleted it. A read of its page no longer shows it;
     // the row, its stage and the note in its store stay, for the team. Empty for every other note.
     removed_at: instant('removed_at'),
+    // FRU-704: when the days of « Deleted notes » ran out for a note of a tracker (`deleted-notes.ts`):
+    // its words were erased from this row, which stays only so that its issue never shows on its page
+    // again. Empty for every other note. A note the worker keeps goes whole instead.
+    erased_at: instant('erased_at'),
     place: text('place').notNull(),
     connector_id: text('connector_id'),
     reference: text('reference'),
@@ -1051,6 +1062,53 @@ export const note_index = pgTable(
       sql`"site_id" COLLATE "C" DESC`,
       sql`"note_id" COLLATE "C" DESC`,
     ),
+    // FRU-704: the notes their visitors deleted, which the sweep erases once their days are over. Only
+    // those rows: the index is as small as they are.
+    index('note_index_by_removal')
+      .on(table.removed_at)
+      .where(sql`"removed_at" IS NOT NULL AND "erased_at" IS NULL`),
+  ],
+);
+
+/**
+ * The versions of a note (FRU-704): « Keep every version » of the card « Safeguards », in
+ * `note-versions.ts`. One row for each edit of the text, with the text of before, and one for the
+ * deletion or the withdrawal of the note. A row goes with the row of its note in the index, so with its
+ * site and its workspace too, and the oldest goes past `NOTE_VERSION_LIMIT` rows of one note.
+ */
+export const note_versions = pgTable(
+  'note_versions',
+  {
+    id: text('id').notNull(),
+    site_id: text('site_id').notNull(),
+    note_id: text('note_id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    // `edit` or `delete`: `note-versions.ts`.
+    kind: text('kind').notNull(),
+    // An edit: the text before it. A deletion: the text the note had then.
+    text: text('text').notNull(),
+    // `member` or `visitor`, as `note_index.author_kind`. A visitor is named by nothing more.
+    author_kind: text('author_kind').notNull(),
+    // The account of a member, read again at each read for its name. Empty for a visitor, and once the
+    // account is gone.
+    author_account_id: text('author_account_id'),
+    at: instant('at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'note_versions_pkey', columns: [table.id] }),
+    foreignKey({
+      name: 'note_versions_note_fkey',
+      columns: [table.site_id, table.note_id],
+      foreignColumns: [note_index.site_id, note_index.note_id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'note_versions_author_account_id_fkey',
+      columns: [table.author_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    // The history of one note, oldest first, and what `ON DELETE SET NULL` of an account looks for.
+    index('note_versions_by_note').on(table.site_id, table.note_id, table.at),
+    index('note_versions_by_author').on(table.author_account_id),
   ],
 );
 

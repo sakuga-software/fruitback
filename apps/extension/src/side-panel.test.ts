@@ -5,6 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { compile } from '@tailwindcss/node';
 import { setLanguage } from './i18n.ts';
+import {
+  CLOUD_NOTES_NEED_MEMBER,
+  CLOUD_READ_NEEDS_MEMBER,
+  MEMBER_TURNS_ON,
+  NOT_A_MEMBER,
+  type ReadProbe,
+} from './read-probe.ts';
 import type { PanelNote } from './protocol.ts';
 import type { SiteNote } from './site-notes.ts';
 import {
@@ -20,6 +27,8 @@ import {
   iconOpensPanel,
   keepPopupOnActionClick,
   setPanelOnClick,
+  latestOnly,
+  membersOnlyOf,
   notesOf,
   offersPopup,
   openOnRead,
@@ -953,6 +962,179 @@ describe('« Open Fruitback », the popup from the panel (FRU-532)', () => {
     }
 
     assert.deepEqual(said.sort(), ['a', 'b']);
+  });
+});
+
+describe('a site of the Cloud that its members read, in extension mode (FRU-729)', () => {
+  const CLOUD = 'https://api.fruitback.test';
+  const rule = { endpoint: CLOUD };
+  /** The seams of `membersOnlyOf`, and what each was asked. */
+  const seams = (answer: ReadProbe, signedIn = false, member = false) => {
+    const asked: string[] = [];
+
+    return {
+      asked,
+      probe: async () => {
+        asked.push('probe');
+
+        return answer;
+      },
+      signedIn: async () => {
+        asked.push('signed-in');
+
+        return signedIn;
+      },
+      member: async () => {
+        asked.push('member');
+
+        return member;
+      },
+    };
+  };
+
+  it('says the line of the popup for a refused read, signed out, with the popup to sign in', async () => {
+    assert.deepEqual(await membersOnlyOf(rule, CLOUD, seams('members-only')), {
+      members: { sentence: CLOUD_NOTES_NEED_MEMBER, action: 'sign-in' },
+      closed: true,
+    });
+    // Notes open to anyone, reads to members only: « Leave a note » stays.
+    assert.deepEqual(await membersOnlyOf(rule, CLOUD, seams('wants-a-session')), {
+      members: { sentence: CLOUD_READ_NEEDS_MEMBER, action: 'sign-in' },
+      closed: false,
+    });
+  });
+
+  it('signed in, asks whether the account is a member, as the popup does', async () => {
+    const member = seams('members-only', true, true);
+    assert.deepEqual(await membersOnlyOf(rule, CLOUD, member), {
+      members: { sentence: MEMBER_TURNS_ON, action: 'turn-on' },
+      closed: true,
+    });
+    assert.deepEqual(member.asked, ['probe', 'signed-in', 'member']);
+    assert.deepEqual((await membersOnlyOf(rule, CLOUD, seams('members-only', true, false)))?.members, {
+      sentence: NOT_A_MEMBER,
+    });
+    // Signed out, the workspaces are not asked.
+    const out = seams('members-only');
+    await membersOnlyOf(rule, CLOUD, out);
+    assert.deepEqual(out.asked, ['probe', 'signed-in']);
+  });
+
+  it('keeps « could not be read » off the Cloud of the build, and for any other answer', async () => {
+    const elsewhere = seams('members-only');
+    assert.equal(await membersOnlyOf({ endpoint: 'https://feedback.acme.dev' }, CLOUD, elsewhere), undefined);
+    assert.equal(await membersOnlyOf(rule, undefined, elsewhere), undefined);
+    // Not even asked: a worker run by somebody else keeps the words of before.
+    assert.deepEqual(elsewhere.asked, []);
+    for (const answer of ['answers', 'not-found', 'unknown'] as const) {
+      assert.equal(await membersOnlyOf(rule, CLOUD, seams(answer)), undefined, answer);
+    }
+    const throwing = { ...seams('members-only'), probe: () => Promise.reject(new Error('down')) };
+    assert.equal(await membersOnlyOf(rule, CLOUD, throwing), undefined);
+  });
+
+  const options = (notes: PanelNotes, popup: boolean): PanelOptions & { calls: string[] } => {
+    const calls: string[] = [];
+    const push = (what: string) => () => void calls.push(what);
+
+    return {
+      calls,
+      state: { kind: 'on', host: 'staging.acme.dev', notes },
+      onClose: push('close'),
+      onLeave: push('leave'),
+      onTab: push('tab'),
+      onToggle: push('toggle'),
+      onShow: push('show'),
+      onReplyOpen: push('reply'),
+      onReplyInput: push('input'),
+      onReplySend: push('send'),
+      onReplyCancel: push('cancel'),
+      onRetry: push('retry'),
+      onReload: push('reload'),
+      onSettings: push('settings'),
+      onVerdict: push('verdict'),
+      ...(popup ? { onOpenPopup: push('popup') } : {}),
+    };
+  };
+
+  it('says it in the panel in place of « could not be read », and opens the popup to sign in', () => {
+    const shown = options({ members: { sentence: CLOUD_NOTES_NEED_MEMBER, action: 'sign-in' }, closed: true }, true);
+    const root = panelPage(page(), shown);
+
+    assert.equal(root.querySelector('.panel-members [role="status"]')?.textContent, CLOUD_NOTES_NEED_MEMBER);
+    assert.doesNotMatch(root.textContent ?? '', /could not be read|Try again|does not answer/);
+    // The site takes no note from here: no « Leave a note » that leads nowhere.
+    assert.equal(
+      [...root.querySelectorAll('button')].some((button) => button.textContent?.includes('Leave a note')),
+      false,
+    );
+    const open = root.querySelector<HTMLButtonElement>('.panel-members button.panel-open-popup');
+    assert.equal(open?.textContent, 'Open Fruitback');
+    open?.click();
+    assert.deepEqual(shown.calls, ['popup']);
+  });
+
+  it('keeps « Leave a note » where notes are open, and says where the button is with no popup', () => {
+    const root = panelPage(
+      page(),
+      options({ members: { sentence: CLOUD_READ_NEEDS_MEMBER, action: 'sign-in' }, closed: false }, false),
+    );
+    assert.equal(root.querySelector('.panel-action .kit-note')?.textContent?.includes('Leave a note'), true);
+    assert.equal(root.querySelector('.panel-members button'), null);
+    assert.match(root.querySelector('.panel-members')?.textContent ?? '', /from the Fruitback button in the toolbar/);
+  });
+
+  it('offers no button to an account that is not a member, and says it in French', () => {
+    setLanguage('fr');
+    const root = panelPage(page(), options({ members: { sentence: NOT_A_MEMBER }, closed: true }, true));
+    assert.equal(root.querySelector('.panel-members button'), null);
+    assert.match(root.querySelector('.panel-members')?.textContent ?? '', /^Seuls les membres de ce site/);
+  });
+});
+
+describe('only the latest read of the notes is drawn (Kentō #73e393)', () => {
+  /** A read that answers when the test says so. */
+  const held = () => {
+    const answers: ((value: string) => void)[] = [];
+    const read = latestOnly(
+      (_name: string) =>
+        new Promise<string>((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    return { read, answers };
+  };
+
+  it('drops a slow read that succeeded, once a newer one started', async () => {
+    const { read, answers } = held();
+    const older = read('older');
+    const newer = read('newer');
+    // The newer read answers first, then the older one, with notes.
+    answers[1]?.('notes of now');
+    answers[0]?.('notes of before');
+
+    assert.deepEqual(await newer, { value: 'notes of now' });
+    assert.equal(await older, undefined);
+  });
+
+  it('drops a slow read that failed the same way, and keeps a read nobody overtook', async () => {
+    const { read, answers } = held();
+    const older = read('older');
+    const newer = read('newer');
+    answers[0]?.('failed');
+    answers[1]?.('notes of now');
+    assert.equal(await older, undefined);
+    assert.deepEqual(await newer, { value: 'notes of now' });
+
+    const alone = read('alone');
+    answers[2]?.('reload');
+    assert.deepEqual(await alone, { value: 'reload' });
+  });
+
+  it('tells a read that answered `undefined` from one that was overtaken', async () => {
+    const read = latestOnly(async () => undefined);
+    assert.deepEqual(await read(), { value: undefined });
   });
 });
 

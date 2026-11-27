@@ -830,6 +830,8 @@ function filtered(workspace: string, query: Omit<NoteQuery, 'limit'>, pending?: 
     query.undelivered === true ? undeliveredOf(pending) : undefined,
     // FRU-665: an archived task is out of the list, unless the list asks for the archived ones.
     query.archived === true ? isNotNull(note_index.archived_at) : isNull(note_index.archived_at),
+    // FRU-704: a note of a tracker whose days of « Deleted notes » ran out is erased: in no list, no count.
+    isNull(note_index.erased_at),
     ...taskFilters(query),
     ...wordsOf(query.q).map((word) => {
       const like = `%${word.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;

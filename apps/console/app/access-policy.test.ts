@@ -19,6 +19,8 @@ const CONTRIBUTE: Access = {
   notifyDone: false,
   visitorNotesPerHour: 10,
   holdVisitorNotes: false,
+  keepNoteVersions: false,
+  deletedNotesKeepDays: 30,
 };
 
 describe('the access of a site, in the tab « Access » (FRU-703)', () => {
@@ -32,6 +34,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       // A worker of before counted nothing (FRU-704).
       visitorNotesPerHour: 0,
       holdVisitorNotes: false,
+      keepNoteVersions: false,
+      deletedNotesKeepDays: 90,
     });
     assert.equal(accessOf({ ...SITE, visibility: 'members' }).writers, 'members');
     assert.deepEqual(
@@ -44,6 +48,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
         notifyDone: true,
         visitorNotesPerHour: 0,
         holdVisitorNotes: false,
+        keepNoteVersions: false,
+        deletedNotesKeepDays: 90,
       },
     );
     assert.equal(accessOf({ ...SITE, visitorNotesPerHour: 20 }).visitorNotesPerHour, 20);
@@ -71,6 +77,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       notifyDone: true,
       visitorNotesPerHour: 10,
       holdVisitorNotes: false,
+      keepNoteVersions: false,
+      deletedNotesKeepDays: 30,
     });
   });
 
@@ -84,6 +92,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       notifyDone: false,
       visitorNotesPerHour: 10,
       holdVisitorNotes: false,
+      keepNoteVersions: false,
+      deletedNotesKeepDays: 30,
     });
     // Where only members write, the table says « Never », and that is what is stored (#ca9e30): a
     // site opened again later brings back no right that nobody saw.
@@ -112,6 +122,14 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
     assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, holdVisitorNotes: true }), false);
     assert.equal(sameAccess({ ...closed, holdVisitorNotes: true }, closed), true);
     assert.equal(accessOf({ ...SITE, holdVisitorNotes: true }).holdVisitorNotes, true);
+    assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, keepNoteVersions: true }), false);
+    assert.equal(sameAccess({ ...closed, keepNoteVersions: true }, closed), true);
+    assert.equal(accessOf({ ...SITE, keepNoteVersions: true }).keepNoteVersions, true);
+    assert.equal(accessBody('https://acme.dev', { ...CONTRIBUTE, keepNoteVersions: true }).keepNoteVersions, true);
+    assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, deletedNotesKeepDays: 7 }), false);
+    assert.equal(sameAccess({ ...closed, deletedNotesKeepDays: 7 }, closed), true);
+    assert.equal(accessOf({ ...SITE, deletedNotesKeepDays: 7 }).deletedNotesKeepDays, 7);
+    assert.equal(accessBody('https://acme.dev', { ...CONTRIBUTE, deletedNotesKeepDays: 90 }).deletedNotesKeepDays, 90);
   });
 
   it('lets a visitor reply where everyone reads and anybody writes, as the worker does', () => {

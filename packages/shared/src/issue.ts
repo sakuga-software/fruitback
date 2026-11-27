@@ -234,6 +234,12 @@ export const noteIssueSchema = z.object({
    */
   withdrawable: z.literal(true).optional(),
   /**
+   * `true` beside `editable` on a site that keeps every version (FRU-704): an edit keeps the text of
+   * before, which the members of the site read in the history of the note. The widget says so before
+   * the author saves. Absent elsewhere. Read-envelope field.
+   */
+  versionsKept: z.literal(true).optional(),
+  /**
    * `true` on a note whose status the reader may change from its thread (FRU-718), with the rights of
    * `POST /feedback/<id>/status`: a member who left it, or a role that manages the sites, with a
    * session, on a site whose store keeps statuses. Absent for every other note and reader: a visitor,

@@ -179,6 +179,10 @@ export async function getFeedback(
         ...(checked === undefined ? {} : { checked }),
         ...(mine ? { mine: true as const } : {}),
         ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) ? { editable: true as const } : {}),
+        // FRU-704: and an edit keeps the text of before, for the members of the site.
+        ...(mine && editsHere && EDITABLE_STAGES.has(issue.stage) && route.client?.keepNoteVersions === true
+          ? { versionsKept: true as const }
+          : {}),
         ...(mine && withdrawalsHere && EDITABLE_STAGES.has(issue.stage) ? { withdrawable: true as const } : {}),
         ...(setsStatus === 'every' || (setsStatus === 'own' && mine) ? { canSetStatus: true as const } : {}),
       };

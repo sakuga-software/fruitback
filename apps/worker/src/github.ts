@@ -15,7 +15,24 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import { type ClientConfig, type ClientPolicy, REPOSITORY_PATTERN } from './clients.ts';
-import { type CreatedIssue, type NoteIssueQuery, type NoteStore, StoreError, type TrackerState } from './store.ts';
+import {
+  checkText,
+  editText,
+  moveText,
+  replyText,
+  withEditedText,
+  withMovedPlace,
+  withdrawText,
+} from './reply-text.ts';
+import {
+  type CreatedIssue,
+  EDITABLE_STAGES,
+  type NoteIssueQuery,
+  type NoteStore,
+  type ReplyTarget,
+  StoreError,
+  type TrackerState,
+} from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -223,11 +240,11 @@ export class GithubResponseError extends StoreError {
   }
 }
 
-type GithubCall = { method?: 'GET' | 'POST'; token: string; body?: unknown };
+type GithubCall = { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; token: string; body?: unknown };
 
 /**
  * `api` is for the tests: a GitHub on a port of the machine. A `GET` gives up after `READ_TIMEOUT_MS`
- * with a `StoreError`; a `POST` waits.
+ * with a `StoreError`; a write (`POST`, `PATCH`, `DELETE`) waits.
  */
 export async function githubFetch(
   path: string,
@@ -369,6 +386,8 @@ const issueRowSchema = z.object({
   state: z.string(),
   state_reason: z.string().nullable().optional(),
   updated_at: z.string(),
+  /** When the issue was closed, `null` while it is open (FRU-628): an edit written after it is not taken. */
+  closed_at: z.string().nullable().optional(),
   comments: z.number(),
   labels: z.array(z.union([z.string(), z.object({ name: z.string() })])),
   pull_request: z.unknown().optional(),
@@ -539,12 +558,7 @@ export function createIssueStore({
       })
       .sort((left, right) => left.created_at.localeCompare(right.created_at, 'en'))
       .slice(-COMMENTS_PER_ISSUE)
-      .map((comment) => ({
-        id: String(comment.id),
-        body: comment.body ?? '',
-        createdAt: comment.created_at,
-        ...(comment.user?.login ? { author: comment.user.login } : {}),
-      }));
+      .map(noteCommentOf);
   }
 
   /** The newest `ISSUES_PAGE_SIZE` issues that carry every label: one call. */
@@ -648,6 +662,137 @@ export function createIssueStore({
     });
   }
 
+  /** The stage of an issue: the one its site gives its status (FRU-369), else `stageForGithubIssue`. */
+  function stageOf(issue: Pick<IssueRow, 'state' | 'state_reason'>): NoteStage {
+    const key = githubStateKey(issue.state, issue.state_reason);
+
+    return key !== undefined && Object.hasOwn(stages, key)
+      ? (stages[key] as NoteStage)
+      : stageForGithubIssue(issue.state, issue.state_reason);
+  }
+
+  /**
+   * The issue that a write goes to (FRU-628), read by its number, or `undefined` when this repository
+   * holds no issue of that number with the `id` of the target: the route read the note there, so an
+   * issue that is gone (`410`), another issue, or a pull request is no note of this client.
+   *
+   * GitHub writes under the number of an issue, and finds no issue by its `id`. The number comes from
+   * the read of the route (`#12`), and the `id` must match: a write never goes to another issue.
+   */
+  async function issueOf(repository: string, target: ReplyTarget, identifier?: string): Promise<IssueRow | undefined> {
+    const number = numberOf(target.identifier ?? identifier);
+    if (number === undefined) throw new StoreError('GitHub writes under the number of an issue, and none was given');
+    let read: unknown;
+    try {
+      read = await call(repository, `/repos/${repository}/issues/${number}`);
+    } catch (error) {
+      if (error instanceof GithubResponseError && error.status === 410) return undefined;
+      throw error;
+    }
+    const issue = issueRowSchema.safeParse(read);
+    if (!issue.success) throw new StoreError('GitHub returned no issue');
+
+    return String(issue.data.id) === target.issue && issue.data.pull_request === undefined ? issue.data : undefined;
+  }
+
+  /** Writes a comment under an issue, and answers it as a read shows it. */
+  async function postComment(repository: string, number: number, body: string): Promise<NoteComment> {
+    const created = commentRowSchema.safeParse(
+      await call(repository, `/repos/${repository}/issues/${number}/comments`, { method: 'POST', body: { body } }),
+    );
+    if (!created.success) throw new StoreError('GitHub returned no comment');
+
+    return noteCommentOf(created.data);
+  }
+
+  /**
+   * Takes back a comment that must not stay (review of #996): deleted, or else said in the log with
+   * the issue and the comment, so that a person finds it. A new try of the author writes one more.
+   */
+  async function takeBack(
+    repository: string,
+    number: number,
+    id: string,
+    retract: () => Promise<boolean>,
+  ): Promise<void> {
+    if (await retract()) return;
+    console.error(`[fruitback] GitHub kept comment ${id} of ${repository}#${number}, which should have gone`);
+  }
+
+  /** Deletes a comment. `false`: GitHub refused, and the comment stays. */
+  async function deleteComment(repository: string, id: string): Promise<boolean> {
+    try {
+      await call(repository, `/repos/${repository}/issues/comments/${id}`, { method: 'DELETE' });
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Takes the text out of a comment of an edit that must not count, as Linear does (`retractEdit`):
+   * deleted, or else written again as `bare`, which holds nothing a read takes. `false`: GitHub refused
+   * both, and the comment holds the text still.
+   */
+  async function retract(repository: string, id: string, bare: string): Promise<boolean> {
+    if (await deleteComment(repository, id)) return true;
+    try {
+      await call(repository, `/repos/${repository}/issues/comments/${id}`, { method: 'PATCH', body: { body: bare } });
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * A comment of the author that changes the note (an edit, a move), kept only while the issue is
+   * open, as `commentWhileOpen` of Linear. GitHub has no lock either, so the issue is read again
+   * **after** the comment: an issue closed by then had its close before that read, the comment is
+   * taken back, and the answer is `not-open`. A close after that read comes after the comment, and a
+   * read keeps it, stopped at `closed_at`. A read of the issue that fails takes it back too, and fails.
+   */
+  async function commentWhileOpen(
+    repository: string,
+    issue: IssueRow,
+    body: string,
+    bare: string,
+  ): Promise<NoteComment | 'not-open'> {
+    if (!EDITABLE_STAGES.has(stageOf(issue))) return 'not-open';
+    const comment = await postComment(repository, issue.number, body);
+    let open: boolean;
+    try {
+      const now = issueRowSchema.safeParse(await call(repository, `/repos/${repository}/issues/${issue.number}`));
+      if (!now.success) throw new StoreError('GitHub returned no issue after the comment');
+      open = EDITABLE_STAGES.has(stageOf(now.data));
+    } catch (error) {
+      await takeBack(repository, issue.number, comment.id, () => retract(repository, comment.id, bare));
+      throw error instanceof StoreError ? error : new StoreError('GitHub did not say the state after the comment');
+    }
+    if (!open) {
+      if (!(await retract(repository, comment.id, bare))) throw new StoreError('GitHub kept a comment of a note done');
+
+      return 'not-open';
+    }
+
+    return comment;
+  }
+
+  /** Sets the state of an issue, and answers the stage it has now. */
+  async function setState(
+    repository: string,
+    number: number,
+    state: { state: 'open'; state_reason: 'reopened' } | { state: 'closed'; state_reason: 'not_planned' },
+  ): Promise<NoteStage> {
+    const moved = issueRowSchema.safeParse(
+      await call(repository, `/repos/${repository}/issues/${number}`, { method: 'PATCH', body: state }),
+    );
+    if (!moved.success) throw new StoreError('GitHub returned no issue after its change of state');
+
+    return stageOf(moved.data);
+  }
+
   return {
     name: 'github',
     stages: GITHUB_STAGES,
@@ -693,25 +838,125 @@ export function createIssueStore({
           ? await fetchComments(repository, issue.number, issue.comments)
           : undefined;
 
-        return noteIssueSchema.safeParse({
+        const candidate = {
           id: String(issue.id),
           identifier: `#${issue.number}`,
           url: issue.html_url,
           title: issue.title,
-          stage:
-            key !== undefined && Object.hasOwn(stages, key)
-              ? stages[key]
-              : stageForGithubIssue(issue.state, issue.state_reason),
+          stage: stageOf(issue),
           stateName: stateNameFor(issue.state, issue.state_reason),
           ...(statusSource === undefined || key === undefined ? {} : { status: `${statusSource}:${key}` }),
           updatedAt: issue.updated_at,
           ...(comments === undefined ? {} : { comments }),
           note,
-        });
+        };
+        // FRU-628: the text and the place of the newest edit and move of its author, written before the
+        // issue was closed, as for Linear. The body of the issue is the team's, and keeps the note sent.
+        const until = issue.closed_at ?? undefined;
+
+        return noteIssueSchema.safeParse(withMovedPlace(withEditedText(candidate, until), until));
       });
 
       return issues.flatMap((result): NoteIssue[] => (result.success ? [result.data] : []));
     },
+
+    // FRU-628: GitHub keeps the replies, the verdicts, the edits, the moves and the withdrawals of a note
+    // as comments of its issue, written with the token of the App: « Issues: Read and write ».
+    async reply(target, reply, client, policy) {
+      const repository = repositoryOf(client);
+      const issue = await issueOf(repository, target);
+      if (issue === undefined) return undefined;
+
+      return postComment(repository, issue.number, replyText(reply, policy.locale));
+    },
+
+    /**
+     * A verdict (FRU-294): the comment first, then « Still wrong » reopens the issue, in the order of
+     * Linear. A reopen that fails leaves a « wrong » comment on an issue still closed: the note reads as
+     * not confirmed, and a new try writes the comment again and reopens it.
+     */
+    async check(target, check, client, policy) {
+      const repository = repositoryOf(client);
+      const issue = await issueOf(repository, target);
+      if (issue === undefined) return undefined;
+      const comment = await postComment(repository, issue.number, checkText(check, policy.locale));
+      if (check.verdict === 'fixed') return { comment, stage: stageOf(issue) };
+
+      return { comment, stage: await setState(repository, issue.number, { state: 'open', state_reason: 'reopened' }) };
+    },
+
+    // FRU-628: the new text lives in a comment, as for Linear, and a read takes it from there.
+    editsInReplies: true,
+    async edit(target, edit, client, policy) {
+      const repository = repositoryOf(client);
+      const issue = await issueOf(repository, target, edit.identifier);
+      if (issue === undefined) return undefined;
+      const comment = await commentWhileOpen(
+        repository,
+        issue,
+        editText(edit, policy.locale, true),
+        editText(edit, policy.locale),
+      );
+
+      return comment === 'not-open' ? comment : { note: { ...edit.note, text: edit.text }, comment };
+    },
+
+    async move(target, move, client, policy) {
+      const repository = repositoryOf(client);
+      const issue = await issueOf(repository, target, move.identifier);
+      if (issue === undefined) return undefined;
+      const comment = await commentWhileOpen(
+        repository,
+        issue,
+        moveText(move, policy.locale, true),
+        moveText(move, policy.locale),
+      );
+
+      return comment === 'not-open'
+        ? comment
+        : { note: { ...move.note, anchor: move.anchor, viewport: move.viewport }, comment };
+    },
+
+    /**
+     * A withdrawal (FRU-605, FRU-628): the comment, then the issue is closed as « not planned ». As for
+     * an edit, the issue is read again after the comment: an issue the team closed meanwhile keeps its
+     * state, the comment is deleted, and the answer is `not-open`. A close that GitHub refuses deletes
+     * the comment too, so a new try does not pile comments up. Nothing of the note is deleted.
+     */
+    async withdraw(target, withdrawal, client, policy) {
+      const repository = repositoryOf(client);
+      const issue = await issueOf(repository, target, withdrawal.identifier);
+      if (issue === undefined) return undefined;
+      const text = withdrawText(withdrawal, policy.locale);
+      const comment = await commentWhileOpen(repository, issue, text, text);
+      if (comment === 'not-open') return comment;
+      let stage: NoteStage;
+      try {
+        stage = await setState(repository, issue.number, { state: 'closed', state_reason: 'not_planned' });
+      } catch (error) {
+        await takeBack(repository, issue.number, comment.id, () => deleteComment(repository, comment.id));
+        throw error instanceof StoreError ? error : new StoreError('GitHub did not close the issue');
+      }
+
+      return { comment, stage };
+    },
+  };
+}
+
+/** The number of an issue in its identifier (`#12`), or `undefined`. */
+function numberOf(identifier: string | undefined): number | undefined {
+  const match = /^#([1-9][0-9]{0,9})$/.exec(identifier ?? '');
+
+  return match === null ? undefined : Number(match[1]);
+}
+
+/** A comment of GitHub, as a read gives it. */
+function noteCommentOf(comment: z.infer<typeof commentRowSchema>): NoteComment {
+  return {
+    id: String(comment.id),
+    body: comment.body ?? '',
+    createdAt: comment.created_at,
+    ...(comment.user?.login ? { author: comment.user.login } : {}),
   };
 }
 

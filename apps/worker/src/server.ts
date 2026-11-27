@@ -10,6 +10,7 @@ import {
   recheckPending,
   sweepDoneNotices,
   sweepHeldNotes,
+  sweepDeletedNotes,
 } from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
@@ -213,6 +214,10 @@ export function startServer(env: WorkerEnv = process.env): Server {
         ),
         sweepHeldNotes(env).catch((error: unknown) =>
           console.error('[fruitback] a pass over the notes that wait for a member did not finish', error),
+        ),
+        // FRU-704: and the notes their visitors deleted, once the days of their site ran out.
+        sweepDeletedNotes(env).catch((error: unknown) =>
+          console.error('[fruitback] a pass over the notes their visitors deleted did not finish', error),
         ),
       ]).finally(() => (sweeping = false));
     }, DONE_SWEEP_MS);

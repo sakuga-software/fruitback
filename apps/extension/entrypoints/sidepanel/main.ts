@@ -4,6 +4,7 @@ import { storedLanguage } from '../../src/language.ts';
 import { followActionColor } from '../../src/action-color-browser.ts';
 import type { CheckVerdict } from '../../src/protocol.ts';
 import {
+  type MembersOnly,
   type NotesTab,
   type PanelNotes,
   type PanelOptions,
@@ -12,6 +13,8 @@ import {
   NO_WIDGET_WAIT_MS,
   PANEL_PORT,
   REPLY_PROBLEM,
+  latestOnly,
+  membersOnlyOf,
   notesOf,
   offersPopup,
   openOnRead,
@@ -27,7 +30,11 @@ import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type SiteNote, onTabPage, readSiteNotes } from '../../src/site-notes.ts';
 import { type SiteVerdictOutcome, sendSiteVerdict } from '../../src/site-check.ts';
 import { BADGE_REFRESH } from '../../src/badge.ts';
-import { readSite } from '../../src/sites.ts';
+import { readSite, rememberPreviews } from '../../src/sites.ts';
+import { probeRead } from '../../src/read-probe.ts';
+import { type CloudSeams, offerFor } from '../../src/cloud.ts';
+import { cloudEndpoint } from '../../src/popup-state.ts';
+import { signedInTo } from '../../src/account-state.ts';
 import {
   type TabCommandAnswer,
   type TabCommandArguments,
@@ -47,6 +54,9 @@ import type { TabCommand } from '../../src/protocol.ts';
  * click on the toolbar icon (`activeTab`). A site that is on has that access: any other tab reads as
  * « not on », which is what it is.
  *
+ * A read that failed for an extension-mode rule on the Fruitback of the build asks the worker the
+ * question of the popup (FRU-729): a site that its members read is said so, with the popup to sign in.
+ *
  * **What somebody types in a reply stays**: the page is drawn again at each change, and the text,
  * the place of the caret and the focus are put back.
  */
@@ -57,6 +67,9 @@ document.documentElement.lang = language();
 followActionColor(document);
 
 const app = document.querySelector('#app');
+
+/** The Fruitback of the build (`WXT_FRUITBACK_CLOUD`), as the popup has it. None for a self-hosted build. */
+const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
 
 /**
  * The tab the panel follows: its id and what the panel knows of it. `path`: the address of its page,
@@ -71,6 +84,8 @@ let followed:
       where?: string;
       siteWidget?: true;
       source?: { endpoint: string; site: string };
+      /** An extension-mode rule: its worker and client, and the page the widget reads (FRU-729). */
+      extension?: { endpoint: string; clientId: string; page: string };
     }
   | undefined;
 let notes: PanelNotes = 'reading';
@@ -164,6 +179,9 @@ async function look(): Promise<void> {
       // Team mode with no mount: the widget is the site's own, and answers the panel nothing.
       ...(site.mode === 'team' && site.mount === undefined ? { siteWidget: true as const } : {}),
       ...(source === undefined ? {} : { source }),
+      ...(site.mode === 'private'
+        ? { extension: { endpoint: site.endpoint, clientId: site.clientId, page: active.url } }
+        : {}),
     };
   }
   // Another tab: its own notes, from the start.
@@ -265,14 +283,17 @@ async function readNotes(waited = false): Promise<void> {
   clearTimeout(noWidgetWait);
   noWidgetWait = undefined;
   const reading = followed?.tabId;
-  const answer = await askOrNothing('notes');
+  const latest = await askNotes(waited);
+  // A newer read started while this one waited: the newer one draws (Kentō #73e393).
+  if (latest === undefined) return;
   if (followed?.tabId !== reading) {
     // The tab changed under the read: a row asked for on the tab of before opens nothing (review).
     pendingOpen = undefined;
 
     return;
   }
-  notes = notesOf(answer, waited);
+  const { answer } = latest.value;
+  notes = latest.value.notes;
   if (answer?.reading === 'no-widget' && !waited && noWidgetWait === undefined) {
     noWidgetWait = setTimeout(() => {
       if (followed?.tabId === reading) void readNotes(true);
@@ -298,6 +319,55 @@ async function readNotes(waited = false): Promise<void> {
       ?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(asked.open.id)}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   }
+}
+
+/**
+ * The answer of the widget to `notes`, and what the panel shows for it. A failed read of an
+ * extension-mode rule also asks the worker why (FRU-729). Only the latest read is drawn.
+ */
+const askNotes = latestOnly(async (waited: boolean) => {
+  const answer = await askOrNothing('notes');
+  const read = notesOf(answer, waited);
+  // FRU-729: the widget says `failed` for a site that its members read too. The worker says which.
+  const refused = read === 'failed' ? await whyFailed(followed?.extension) : undefined;
+
+  return { answer, notes: refused ?? read };
+});
+
+/**
+ * The question of the popup, for a failed read of an extension-mode rule (FRU-729): `undefined` keeps
+ * « could not be read ». Asked at each failed read: a sign-in in the popup changes the answer.
+ */
+async function whyFailed(
+  rule: { endpoint: string; clientId: string; page: string } | undefined,
+): Promise<MembersOnly | undefined> {
+  if (rule === undefined) return undefined;
+  const origin = new URL(rule.page).origin;
+
+  return membersOnlyOf(rule, CLOUD, {
+    probe: () =>
+      probeRead({ endpoint: rule.endpoint, clientId: rule.clientId }, rule.page, {
+        fetch: (url, init) => fetch(url, init),
+      }),
+    // FRU-735: as the popup asks it. A session that Fruitback ended is forgotten, and signs nobody in.
+    signedIn: () => signedInTo(CLOUD, sessions),
+    member: async () => (await offerFor(origin, cloudSeams())) !== undefined,
+  });
+}
+
+/** What `offerFor` needs, bound to this page's one `Sessions`, as `cloudSeams` of the popup. */
+function cloudSeams(): CloudSeams {
+  return {
+    endpoints: async () => Object.keys(await sessions.list()),
+    ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+    remember: rememberPreviews,
+    sessionOf: async (endpoint) => {
+      const held = (await sessions.list())[endpoint];
+
+      return held === undefined ? undefined : (held.epoch ?? '');
+    },
+  };
 }
 
 function state(): PanelState {
