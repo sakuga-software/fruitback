@@ -173,7 +173,7 @@ test('a right click on a row opens the menu of its task, and a priority is saved
   await p.getByRole('menuitem', { name: 'Priority' }).hover();
   await p.getByRole('menuitemradio', { name: 'High' }).click();
 
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { priority: 'high' } }]);
+  await expect.poll(() => sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { priority: 'high' } }]);
   await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('High');
 });
 
@@ -218,7 +218,7 @@ test('a member who may not add a label is told who does, and a refusal is said u
   await expect(p.getByRole('menuitemcheckbox', { name: 'New label…' })).toHaveCount(0);
   await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();
 
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
+  await expect.poll(() => sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
   await expect(row(p, 'The headline').getByRole('alert')).toContainText('no longer a member');
 });
 
@@ -260,7 +260,7 @@ test('a workspace past a hundred members offers every one of them, and a task go
   await expect(assignee.getByRole('menuitemradio')).toHaveCount(1 + 130);
   await assignee.getByRole('menuitemradio', { name: 'Person 130' }).click();
 
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a130' } }]);
+  await expect.poll(() => sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a130' } }]);
   await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Person 130');
   // Two pages of a hundred at most, the second from the hundredth member.
   expect(asked).toEqual(['organizationId=w1&limit=100&offset=0', 'organizationId=w1&limit=100&offset=100']);
@@ -286,7 +286,7 @@ test('the members that did not load are said in the menu, and « Try again » re
   await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
   await p.getByRole('menuitem', { name: 'Assignee' }).hover();
   await p.getByRole('menuitemradio', { name: 'Ben Martin' }).click();
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a2' } }]);
+  await expect.poll(() => sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { assignee: 'a2' } }]);
   await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Ben Martin');
 });
 
@@ -311,7 +311,7 @@ test('the labels that did not load are said in the menu, never « No label yet �
   await row(p, 'The headline').getByText('The headline').click({ button: 'right' });
   await p.getByRole('menuitem', { name: 'Labels' }).hover();
   await p.getByRole('menuitemcheckbox', { name: 'Bug' }).click();
-  expect(sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
+  await expect.poll(() => sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/task', body: { labels: ['l1'] } }]);
   await expect(row(p, 'The headline').locator('[data-task-marks]')).toContainText('Bug');
 });
 

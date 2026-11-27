@@ -1,6 +1,6 @@
 import { type NoteComment, type NoteIssue, type TaskIssue, anchorSelectorPath } from '@fruitback/shared';
 import { composes, elementsOf, typedInField } from '../keys';
-import { type FormEvent, type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { type Connector, call } from '../api';
 import { ago } from '../ago';
 import { ConnectorMark } from '../connector-marks';
@@ -122,16 +122,19 @@ export function TaskPanel({
   }, [id, base, attempt]);
 
   // Opened, the panel takes the focus, so that the keyboard reads it at once.
+  // FRU-736: a layout effect, as the keys below: in the commit that draws the panel.
   const open = id !== undefined;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) panel.current?.focus({ preventScroll: true });
   }, [open]);
 
   // Escape closes; the arrows go to the note above or under it (FRU-687). On the document, before
   // the keys of the selection on the window: Escape closes the panel first, and clears nothing else.
+  // FRU-736: a layout effect, so the panel listens from the commit that draws it. A passive effect
+  // ran up to 1.2 s later on a slow CPU (measured), and Escape in that time closed nothing.
   const keys = useRef({ previous, next, onStep, onClose });
   keys.current = { previous, next, onStep, onClose };
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || composes(event)) return;
