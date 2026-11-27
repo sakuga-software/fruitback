@@ -13,6 +13,7 @@ import {
   NO_WIDGET_WAIT_MS,
   PANEL_PORT,
   REPLY_PROBLEM,
+  latestOnly,
   membersOnlyOf,
   notesOf,
   offersPopup,
@@ -102,8 +103,6 @@ let checking: PanelOptions['checking'];
 const reopened: Record<string, string> = {};
 /** Each look at the tab counts one: an older one that answers late does not draw over a newer one. */
 let looks = 0;
-/** Each read of the notes counts one: the late answer of the worker to an older one draws nothing (FRU-729). */
-let notesReads = 0;
 /** The note a click on a pin asked to open, until a list that holds it is read. */
 let pendingOpen: string | undefined;
 /** The one more ask of a page that had no widget yet (`NO_WIDGET_WAIT_MS`). */
@@ -208,26 +207,18 @@ async function look(): Promise<void> {
 async function readNotes(waited = false): Promise<void> {
   clearTimeout(noWidgetWait);
   noWidgetWait = undefined;
-  notesReads += 1;
-  const mine = notesReads;
   const reading = followed?.tabId;
-  const answer = await askOrNothing('notes');
+  const latest = await askNotes(waited);
+  // A newer read started while this one waited: the newer one draws (Kentō #73e393).
+  if (latest === undefined) return;
   if (followed?.tabId !== reading) {
     // The tab changed under the read: a row asked for on the tab of before opens nothing (review).
     pendingOpen = undefined;
 
     return;
   }
-  const read = notesOf(answer, waited);
-  // FRU-729: the widget says `failed` for a site that its members read too. The worker says which.
-  const refused = read === 'failed' ? await whyFailed(followed?.extension) : undefined;
-  if (read === 'failed' && mine !== notesReads) return;
-  if (followed?.tabId !== reading) {
-    pendingOpen = undefined;
-
-    return;
-  }
-  notes = refused ?? read;
+  const { answer } = latest.value;
+  notes = latest.value.notes;
   if (answer?.reading === 'no-widget' && !waited && noWidgetWait === undefined) {
     noWidgetWait = setTimeout(() => {
       if (followed?.tabId === reading) void readNotes(true);
@@ -254,6 +245,19 @@ async function readNotes(waited = false): Promise<void> {
       ?.scrollIntoView({ block: 'nearest' });
   }
 }
+
+/**
+ * The answer of the widget to `notes`, and what the panel shows for it. A failed read of an
+ * extension-mode rule also asks the worker why (FRU-729). Only the latest read is drawn.
+ */
+const askNotes = latestOnly(async (waited: boolean) => {
+  const answer = await askOrNothing('notes');
+  const read = notesOf(answer, waited);
+  // FRU-729: the widget says `failed` for a site that its members read too. The worker says which.
+  const refused = read === 'failed' ? await whyFailed(followed?.extension) : undefined;
+
+  return { answer, notes: refused ?? read };
+});
 
 /**
  * The question of the popup, for a failed read of an extension-mode rule (FRU-729): `undefined` keeps

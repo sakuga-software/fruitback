@@ -239,6 +239,25 @@ export async function membersOnlyOf(
   return { members: memberRemedy(answer, { onCloud: true, signedIn, member }), closed: answer === 'members-only' };
 }
 
+/**
+ * Reads where only the latest one counts (Kentō #73e393): a read that a newer one overtook gives
+ * `undefined`, whatever it read (notes, a failure, a refusal). The newer read draws, not this one.
+ * The value is wrapped, so a read that answers `undefined` is still told from an overtaken one.
+ */
+export function latestOnly<A extends unknown[], T>(
+  work: (...args: A) => Promise<T>,
+): (...args: A) => Promise<{ value: T } | undefined> {
+  let started = 0;
+
+  return async (...args) => {
+    started += 1;
+    const mine = started;
+    const value = await work(...args);
+
+    return mine === started ? { value } : undefined;
+  };
+}
+
 /** Whether the notes are a refusal of a site that its members read (FRU-729). */
 export function isMembersOnly(notes: PanelNotes): notes is MembersOnly {
   return typeof notes === 'object' && !Array.isArray(notes);

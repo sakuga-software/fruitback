@@ -26,6 +26,7 @@ import {
   iconOpensPanel,
   keepPopupOnActionClick,
   setPanelOnClick,
+  latestOnly,
   membersOnlyOf,
   notesOf,
   offersPopup,
@@ -1087,6 +1088,52 @@ describe('a site of the Cloud that its members read, in extension mode (FRU-729)
     const root = panelPage(page(), options({ members: { sentence: NOT_A_MEMBER }, closed: true }, true));
     assert.equal(root.querySelector('.panel-members button'), null);
     assert.match(root.querySelector('.panel-members')?.textContent ?? '', /^Seuls les membres de ce site/);
+  });
+});
+
+describe('only the latest read of the notes is drawn (Kentō #73e393)', () => {
+  /** A read that answers when the test says so. */
+  const held = () => {
+    const answers: ((value: string) => void)[] = [];
+    const read = latestOnly(
+      (_name: string) =>
+        new Promise<string>((resolve) => {
+          answers.push(resolve);
+        }),
+    );
+
+    return { read, answers };
+  };
+
+  it('drops a slow read that succeeded, once a newer one started', async () => {
+    const { read, answers } = held();
+    const older = read('older');
+    const newer = read('newer');
+    // The newer read answers first, then the older one, with notes.
+    answers[1]?.('notes of now');
+    answers[0]?.('notes of before');
+
+    assert.deepEqual(await newer, { value: 'notes of now' });
+    assert.equal(await older, undefined);
+  });
+
+  it('drops a slow read that failed the same way, and keeps a read nobody overtook', async () => {
+    const { read, answers } = held();
+    const older = read('older');
+    const newer = read('newer');
+    answers[0]?.('failed');
+    answers[1]?.('notes of now');
+    assert.equal(await older, undefined);
+    assert.deepEqual(await newer, { value: 'notes of now' });
+
+    const alone = read('alone');
+    answers[2]?.('reload');
+    assert.deepEqual(await alone, { value: 'reload' });
+  });
+
+  it('tells a read that answered `undefined` from one that was overtaken', async () => {
+    const read = latestOnly(async () => undefined);
+    assert.deepEqual(await read(), { value: undefined });
   });
 });
 
