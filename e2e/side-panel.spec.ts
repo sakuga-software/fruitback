@@ -1,7 +1,8 @@
-import { expect } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
 import {
   OPEN_SIDEBAR,
   PLAYGROUND_ORIGIN,
+  addRule,
   clickThatClosesPopup,
   openBareSite,
   openPopup,
@@ -24,7 +25,7 @@ import {
   verdict,
   rowMeta,
 } from './side-panel.ts';
-import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN, noteWriters } from './worker-sessions.ts';
 
 /**
  * The side panel of the browser (FRU-296): its place in the manifest, the warnings Chrome shows for
@@ -40,6 +41,7 @@ declare const chrome: {
     getContexts(filter: { contextTypes: string[] }): Promise<{ documentUrl?: string }[]>;
   };
   management: { getPermissionWarningsByManifest(manifest: string): Promise<string[]> };
+  tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
 
 test('the manifest declares the panel, and Chrome shows no new warning for it', async ({ extension }) => {
@@ -544,4 +546,50 @@ test('a row of the panel wears the colour and the name of the status its pin wea
     { word: 'In review', fill: 'rgb(124, 58, 237)', text: 'rgb(255, 255, 255)', stage: pins[1]?.stage },
     { word: 'Waiting for the client', fill: 'rgb(254, 249, 195)', text: 'rgb(24, 24, 27)', stage: pins[0]?.stage },
   ]);
+});
+
+test('extension mode on a site of the Cloud that its members read: the panel says so, and opens the popup to sign in (FRU-729)', async ({
+  extension,
+}) => {
+  // Said, not read from the default: the site of the Fruitback of the build takes notes from its members.
+  await noteWriters('members');
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-members-only');
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
+
+  // The panel behind the site, as a tab that is not active: it follows the site's tab. The popup of
+  // this rule offers no « Open sidebar », and Playwright hands no `Page` for a real panel.
+  const url = `chrome-extension://${extension.id}/sidepanel.html`;
+  await extension.worker.evaluate(async (panelUrl) => {
+    await chrome.tabs.create({ url: panelUrl, active: false });
+  }, url);
+  let found: Page | undefined;
+  await expect.poll(() => (found = extension.context.pages().find((each) => each.url() === url))).toBeDefined();
+  const panel = found as Page;
+
+  // The line of the popup, not « could not be read » (the widget gives its host `failed` for it).
+  await expect(panel.locator('.panel-members [role="status"]')).toHaveText(
+    /^(Only the members of this site see its notes and leave one here\. Sign in to Fruitback|Seuls les membres de ce site voient ses notes et en laissent ici\. Connectez-vous à Fruitback)/,
+  );
+  await expect(panel.locator('.panel-failed')).toHaveCount(0);
+  // The site takes no note from here: no « Leave a note » that leads nowhere.
+  await expect(panel.locator('.panel-action')).toHaveCount(0);
+
+  // « Open Fruitback » opens the popup on the site, where « Sign in to Fruitback » is.
+  const popups = () =>
+    extension.worker.evaluate(async () =>
+      (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).map((context) => context.documentUrl),
+    );
+  await panel.locator('.panel-members button.panel-open-popup').click();
+  await expect.poll(popups).toEqual([`chrome-extension://${extension.id}/popup.html`]);
+  await expect
+    .poll(() =>
+      inTarget<boolean>(
+        page,
+        '/popup.html',
+        `[...document.querySelectorAll('button')].some((button) => /^(Sign in to Fruitback|Se connecter à Fruitback)$/.test(button.textContent ?? ''))`,
+      ).catch(() => false),
+    )
+    .toBe(true);
 });
