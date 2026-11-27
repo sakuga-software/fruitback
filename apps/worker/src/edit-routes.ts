@@ -116,9 +116,9 @@ async function replyAuthorOf(
  *   for the verdict of its author, and a closed note says nothing more. Read in the store, and again
  *   under the lock of the row in the worker's own store (`409 not-open`).
  * - **Where.** On a site with one place: the worker's own store replaces the text. An address keeps
- *   it the same way, and is told by `note.edited`, ids only. Linear gets a comment with the new text,
- *   and its description stays the team's; where the replies are hidden, no edit (`403
- *   edits-not-taken`): a read would show the text of before. GitHub takes no reply, and no edit.
+ *   it the same way, and is told by `note.edited`, ids only. Linear and GitHub (FRU-628) get a comment
+ *   with the new text, and the description of the issue stays the team's; where the replies are
+ *   hidden, no edit (`403 edits-not-taken`): a read would show the text of before.
  * - **History.** The text of before is not kept: a person may edit a note to take out what they
  *   should not have written. The reply says who edited it, and when.
  */
@@ -264,7 +264,7 @@ const WITHDRAW_LOCK_MS = 15_000;
  * - **Until when.** `new`, `todo` or `progress`: `409 not-open` after, with its stage.
  * - **Where.** On a site with one place whose store takes it (`takesWithdrawals`): the worker's own
  *   store, an address (which gets `note.withdrawn`), Linear (a reply, then the first `canceled`
- *   state). GitHub takes none (`403 withdrawals-not-taken`).
+ *   state), GitHub (a comment, then the issue closed as `not_planned`, FRU-628).
  * - **What.** The note goes to `closed`, with a reply that says who withdrew it. **Nothing is
  *   deleted**: the text, the replies and the issue stay, for the team.
  */

@@ -6,7 +6,7 @@ import { type World, callOn, signInTo, workspaceIn, worlds } from './console-wor
 import { resetMemoryLinear } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { StoreError } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 
 /**
@@ -252,5 +252,28 @@ describe('the write tools of /mcp (FRU-464)', () => {
     });
     assert.equal(revoked.status, 204);
     assert.equal((await writesOf(keyId)).length, AGENT_WRITE_LIMIT);
+  });
+});
+
+describe('the note reply_to_note goes under (FRU-628)', () => {
+  it('names the issue by its id and by the identifier the read gave it, for a store that writes by number', async () => {
+    const { world, shop, key } = await acme({ kept: true });
+    const { secret } = await key('write');
+    const id = await noteId(world, secret, shop.id);
+    const issue = await read(world, shop.id);
+    const store = world.context.store as NoteStore;
+    const targets: unknown[] = [];
+    world.context.store = {
+      ...store,
+      reply: async (target, ...rest) => {
+        targets.push(target);
+        return store.reply?.(target, ...rest);
+      },
+    };
+
+    const replied = await call(world, secret, 'reply_to_note', { id, body: 'Fixed in #42.' });
+
+    assert.equal(replied.body.result.isError, undefined, JSON.stringify(replied.body));
+    assert.deepEqual(targets, [{ issue: issue.id, clientId: shop.id, identifier: issue.identifier }]);
   });
 });
