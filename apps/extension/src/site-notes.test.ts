@@ -142,4 +142,11 @@ describe('the read of the notes of a whole site (FRU-307)', () => {
       `${ENDPOINT}/session/notes?site=a&limit=${SITE_PAGE_SIZE}`,
     );
   });
+
+  it('asks for the notes to check of the reader with `check=1` (FRU-734)', () => {
+    assert.equal(
+      siteNotesUrl(ENDPOINT, { site: 'a', check: true }),
+      `${ENDPOINT}/session/notes?site=a&limit=${SITE_PAGE_SIZE}&check=1`,
+    );
+  });
 });

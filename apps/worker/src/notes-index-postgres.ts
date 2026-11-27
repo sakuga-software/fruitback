@@ -365,14 +365,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .select({ site: note_index.site_id, notes: count() })
           .from(note_index)
           .where(
-            and(
-              eq(note_index.workspace_id, workspace),
-              eq(note_index.author_kind, 'member'),
-              eq(note_index.author_account_id, account),
-              eq(note_index.stage, 'done'),
-              // `false`: a read saw the replies of a place that takes a verdict, and none was « fixed ».
-              eq(note_index.confirmed, false),
-            ),
+            and(eq(note_index.workspace_id, workspace), eq(note_index.author_account_id, account), waitsForCheck()),
           )
           .groupBy(note_index.site_id),
       );
@@ -804,6 +797,15 @@ function ofSites(site: SQL<string>, only: readonly string[] | undefined) {
   return only.length === 0 ? sql`false` : inArray(site, [...only]);
 }
 
+/**
+ * A note that waits for the verdict of its author (FRU-295): a member left it, it is done, and a read
+ * saw the replies of a place that takes a verdict, with none « fixed » (`confirmed` is `false`).
+ * `toCheck` counts these, and a list with `toCheck` shows them (FRU-734).
+ */
+function waitsForCheck(): SQL | undefined {
+  return and(eq(note_index.author_kind, 'member'), eq(note_index.stage, 'done'), eq(note_index.confirmed, false));
+}
+
 function readable(sites: readonly string[] | undefined) {
   if (sites === undefined) return undefined;
 
@@ -821,6 +823,7 @@ function filtered(workspace: string, query: Omit<NoteQuery, 'limit'>, pending?: 
     query.site === undefined ? undefined : eq(note_index.site_id, query.site),
     query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
     query.unresolved === true ? notInArray(note_index.stage, [...RESOLVED_STAGES]) : undefined,
+    query.toCheck === true ? waitsForCheck() : undefined,
     query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
     query.since === undefined ? undefined : gte(note_index.created_at, query.since),
     query.onPages === true ? ne(note_index.page_url, NO_PAGE) : undefined,

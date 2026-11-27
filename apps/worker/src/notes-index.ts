@@ -287,6 +287,11 @@ export type NoteQuery = {
   onPages?: true;
   /** FRU-665: the archived tasks only. Absent: the notes that are not archived. */
   archived?: boolean;
+  /**
+   * FRU-734: the notes of `author` that wait for their verdict: done, and no reply of a place that
+   * takes a verdict says « fixed ». The rule of `toCheck`, so a list shows what the badge counts.
+   */
+  toCheck?: true;
   /** FRU-667: the notes whose stage is not one of `RESOLVED_STAGES` (done, closed). */
   unresolved?: boolean;
   /** FRU-655: the tasks of this account; `null`, the tasks of nobody. */

@@ -4078,7 +4078,10 @@ nothing more.
 
 ### The rules, in short
 
-- **`GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` is the list of FRU-244 for one site,
+- **`check=1` lists the notes of the reader that wait for their verdict** (FRU-734): `toCheck` of
+  `NoteQuery`, the predicate `waitsForCheck` that `NoteIndex.toCheck` counts with, so the side panel
+  lists what the badge counts. `check` says the stage: with `stage`, or a value other than `1`, `400`.
+- **`GET /session/notes?site=<id>&stage=&check=&q=&cursor=&limit=` is the list of FRU-244 for one site,
   with the session of the extension** (`session-notes.ts`). It calls the same `queryOf` and the
   same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{note,
   excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,

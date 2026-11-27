@@ -57,7 +57,8 @@ export type SiteNotesSeams = {
   fetcher?: typeof fetch;
 };
 
-export type SiteQuery = { site: string; q?: string; cursor?: string };
+/** `check`: the notes of the reader that wait for their verdict, as the badge counts them (FRU-734). */
+export type SiteQuery = { site: string; q?: string; cursor?: string; check?: true };
 
 /** One page of the notes of `site`, the newest first. Never rejects. */
 export async function readSiteNotes(endpoint: string, query: SiteQuery, seams: SiteNotesSeams): Promise<SiteRead> {
@@ -98,6 +99,7 @@ export function siteNotesUrl(endpoint: string, query: SiteQuery): string {
   const words = query.q?.trim();
   if (words !== undefined && words !== '') params.set('q', words);
   if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  if (query.check === true) params.set('check', '1');
 
   return `${endpoint}${SITE_NOTES_PATH}?${params.toString()}`;
 }

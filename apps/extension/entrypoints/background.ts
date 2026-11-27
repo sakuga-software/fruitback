@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { readAll, readFreshPreviews, readSite, rememberPreviews, replaceAll } from '../src/sites.ts';
 import { finishAdd, offerFor, refreshPreviews } from '../src/cloud.ts';
-import { createBadge } from '../src/badge.ts';
+import { BADGE_REFRESH, createBadge } from '../src/badge.ts';
 import { PREVIEWS_REFRESH_MS, touchesPreviews } from '../src/proven-previews.ts';
 import { accessOf, patternsOf } from '../src/access-return.ts';
 import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
@@ -323,6 +323,14 @@ export default defineBackground(() => {
           console.warn('[fruitback] could not decide whether to open the popup for the sign-in', error),
         );
       }
+
+      return false;
+    }
+
+    // FRU-734: a verdict from the side panel. A page of the extension only: a page of a site would
+    // ask for nothing, but nothing it says is read here.
+    if ((message as { type?: unknown } | null)?.type === BADGE_REFRESH) {
+      if (isExtensionPage(sender, browser.runtime.id, extensionRoot)) badgeActiveTab();
 
       return false;
     }

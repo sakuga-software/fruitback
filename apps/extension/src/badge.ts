@@ -19,6 +19,12 @@ import type { SiteConfig } from './sites.ts';
 export const BADGE_COLOR = '#5560c4';
 export const BADGE_TEXT_COLOR = '#ffffff';
 
+/**
+ * What a page of the extension sends after a verdict (FRU-734): the background counts the notes to
+ * check of the active tab again, before its alarm.
+ */
+export const BADGE_REFRESH = 'fruitback:badge-refresh';
+
 /** The text of the badge for a count: nothing for none or for no answer, `99+` above 99. */
 export function badgeText(count: number | undefined): string {
   if (count === undefined || !Number.isSafeInteger(count) || count <= 0) return '';

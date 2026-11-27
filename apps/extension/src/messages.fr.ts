@@ -441,6 +441,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The team says these are fixed. Do they look right to you?': 'L’équipe dit que c’est corrigé. Est-ce bon pour vous ?',
   'Looks fixed': 'C’est corrigé',
   'Still wrong': 'Toujours pas',
+  'On other pages · {count}': 'Sur d’autres pages · {count}',
+  'Notes to check on other pages': 'Notes à vérifier sur d’autres pages',
+  'Open on its page': 'Ouvrir sur sa page',
   'Your answer was not sent. Try again.': 'Votre réponse n’est pas partie. Réessayez.',
   'Too many requests just now. Try again in a minute.': 'Trop de demandes à l’instant. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then try again.':
