@@ -3,7 +3,7 @@ import { describe, it } from 'vitest';
 import { mutatedModule } from './conformance.fixture.ts';
 import { type World, callOn, memberOf, shareWith, signInTo } from './console-world.fixture.ts';
 import { noteIdOf } from './console-notes.ts';
-import { DAY_MS, type DeletedNotes } from './deleted-notes.ts';
+import { DAY_MS, type DeletedNotes, sweepAndForget } from './deleted-notes.ts';
 import { createPostgresDeletedNotes } from './deleted-notes-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { KEY_A, aVisitorSite } from './visitor-site.fixture.ts';
@@ -89,16 +89,26 @@ describe('the notes their visitors deleted (FRU-704)', () => {
     assert.equal(await count(world, 'SELECT count(*) AS count FROM note_versions'), 2);
 
     // Six days on, it is kept.
-    assert.equal(await deleted.sweep(now + 6 * DAY_MS), 0);
+    assert.equal((await deleted.sweep(now + 6 * DAY_MS)).erased, 0);
     assert.equal(await count(world, `SELECT count(*) AS count FROM note_index WHERE note_id = 'dn_1'`), 1);
 
-    assert.equal(await deleted.sweep(now + 8 * DAY_MS), 1);
+    assert.equal((await deleted.sweep(now + 8 * DAY_MS)).erased, 1);
 
     assert.equal(await count(world, `SELECT count(*) AS count FROM note_index WHERE note_id = 'dn_1'`), 0);
     assert.equal(await count(world, 'SELECT count(*) AS count FROM notes'), 0);
     assert.equal(await count(world, 'SELECT count(*) AS count FROM note_versions'), 0);
     assert.equal((await read()).has('dn_1'), false);
-    assert.equal(await deleted.sweep(now + 8 * DAY_MS), 0);
+    assert.equal((await deleted.sweep(now + 8 * DAY_MS)).erased, 0);
+  });
+
+  it('drops the cached read of the page of a note it erased, so its pin never shows again (review of #999)', async () => {
+    const { world, read, deleted } = await aDeletedNote();
+    // A read after the deletion: the page is cached with the note, which only the mark of its row hides.
+    assert.equal((await read()).has('dn_1'), false);
+
+    assert.equal(await sweepAndForget(deleted, world.context.kv, Date.now() + 31 * DAY_MS), 1);
+
+    assert.equal((await read()).has('dn_1'), false);
   });
 
   it('erases the words it keeps of a note of a tracker, and keeps its row so that the issue never shows again', async () => {
@@ -114,7 +124,7 @@ describe('the notes their visitors deleted (FRU-704)', () => {
       `INSERT INTO note_versions (id, site_id, note_id, workspace_id, kind, text, author_kind, at) VALUES ('ver_t', '${site}', 'dn_t', '${workspace}', 'edit', 'Before.', 'visitor', 1)`,
     );
 
-    assert.equal(await deleted.sweep(Date.now()), 1);
+    assert.equal((await deleted.sweep(Date.now())).erased, 1);
 
     const [row] = await rowsOf(
       world.database,
@@ -127,7 +137,7 @@ describe('the notes their visitors deleted (FRU-704)', () => {
     assert.notEqual(row?.erased_at, null);
     assert.equal(await count(world, `SELECT count(*) AS count FROM note_versions WHERE note_id = 'dn_t'`), 0);
     // Erased once: the next sweep leaves it, and nothing restores it.
-    assert.equal(await deleted.sweep(Date.now()), 0);
+    assert.equal((await deleted.sweep(Date.now())).erased, 0);
     assert.equal(await deleted.restore(workspace, site, 'dn_t', Date.now()), undefined);
     // Still marked deleted for the page, so its issue stays off it, and out of the lists of the console.
     assert.deepEqual([...(await world.context.noteIndex!.removed(workspace, site, ['dn_t']))], ['dn_t']);

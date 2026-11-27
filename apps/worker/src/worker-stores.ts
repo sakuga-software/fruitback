@@ -12,7 +12,7 @@ import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
-import type { DeletedNotes } from './deleted-notes.ts';
+import { type DeletedNotes, sweepAndForget } from './deleted-notes.ts';
 import { DEV_DATABASE_URL } from './postgres.ts';
 import {
   postgresAccountStore,
@@ -179,7 +179,9 @@ export async function sweepDeletedNotes(env: WorkerEnv, now: number = Date.now()
   const config = readConfig(env);
   if (!config.ok) return 0;
 
-  return (await deletedNotesFor(config.config)?.sweep(now)) ?? 0;
+  const deleted = deletedNotesFor(config.config);
+
+  return deleted === undefined ? 0 : sweepAndForget(deleted, kvFor(config.config), now);
 }
 
 /**
