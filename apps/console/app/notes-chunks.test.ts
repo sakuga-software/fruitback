@@ -64,6 +64,20 @@ describe('the notes read as the list scrolls (FRU-724)', () => {
     assert.equal('statuses' in appended(list(['a'], 'c1'), { notes: [] }), false);
   });
 
+  it('keeps the statuses of a site that a chunk reads the same, and takes those that changed (FRU-731)', () => {
+    // A row is drawn again when the statuses of its site are new ones: a chunk alone must not do it.
+    const status = (key: string, name = key) => ({ key, name, stage: 'new' as const });
+    const first = { ...list(['a'], 'c1'), statuses: { s1: [status('own:new')], s2: [status('own:todo')] } };
+    const more = appended(first, {
+      notes: [note('b')],
+      statuses: { s1: [status('own:new')], s2: [status('own:todo', 'To do')], s3: [status('own:done')] },
+    });
+
+    assert.equal(more.statuses?.s1, first.statuses.s1);
+    assert.deepEqual(more.statuses?.s2, [status('own:todo', 'To do')]);
+    assert.deepEqual(Object.keys(more.statuses ?? {}), ['s1', 's2', 's3']);
+  });
+
   it('reads no next notes past the notes it keeps: the bound', () => {
     const many = Array.from({ length: NOTES_KEPT - 1 }, (_, n) => `n${n}`);
 
