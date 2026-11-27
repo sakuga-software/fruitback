@@ -42,6 +42,9 @@ export type VisitorRight = 'never' | 'while-open';
 /** FRU-704: the notes a visitor leaves on a site in an hour, as the worker takes them. `0` is « No limit ». */
 export const VISITOR_NOTE_LIMITS = [0, 5, 10, 20, 50] as const;
 export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
+/** FRU-704: the days a note its visitor deleted is kept, as the worker offers them (`DELETED_NOTE_KEEPS`). */
+export const DELETED_NOTE_KEEPS = [7, 30, 90] as const;
+export type DeletedNoteKeep = (typeof DELETED_NOTE_KEEPS)[number];
 /**
  * Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it.
  *
@@ -101,6 +104,8 @@ export type Site = {
   holdVisitorNotes?: boolean;
   /** FRU-704: « Keep every version ». A worker of before sends nothing: off, what it did. */
   keepNoteVersions?: boolean;
+  /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept. A worker of before sends nothing. */
+  deletedNotesKeepDays?: DeletedNoteKeep;
   destination?: Destination;
   destinations?: Destination[];
   /**

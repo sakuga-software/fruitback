@@ -35,6 +35,7 @@ import {
   instanceAdminFor,
   mailerFor,
   noteVersionsFor,
+  deletedNotesFor,
   sessionStoreFor,
 } from './worker-stores.ts';
 import type { HeldNote } from './held-notes.ts';
@@ -74,6 +75,8 @@ export async function handleConsole(request: Request, pathname: string, seams: C
   const heldNotes = context.heldNotes ?? heldNotesFor(served);
   // FRU-704: the versions of a note, on its page in the console.
   const noteVersions = context.noteVersions ?? noteVersionsFor(served);
+  // FRU-704: a note its visitor deleted, on its page in the console, and its restore.
+  const deletedNotes = context.deletedNotes ?? deletedNotesFor(served);
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -245,6 +248,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(heldNotes === undefined ? {} : { heldNotes }),
         ...(sendHeld === undefined ? {} : { sendHeld }),
         ...(noteVersions === undefined ? {} : { noteVersions }),
+        ...(deletedNotes === undefined ? {} : { deletedNotes }),
         ...(done === undefined ? {} : { done }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),

@@ -16,6 +16,7 @@ import type { Mailer } from './mail.ts';
 import type { DoneNoticeSeams, DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
 import type { NoteVersions } from './note-versions.ts';
+import type { DeletedNotes } from './deleted-notes.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { Release } from './release.ts';
@@ -75,6 +76,8 @@ export type RequestContext = {
   heldNotes?: HeldNotes;
   /** The versions of the notes (FRU-704). A suite hands over one on PGlite. */
   noteVersions?: NoteVersions;
+  /** « Deleted notes » (FRU-704). A suite hands over one on PGlite. */
+  deletedNotes?: DeletedNotes;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
   /**

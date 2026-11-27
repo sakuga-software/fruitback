@@ -80,6 +80,7 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 0 as const,
       holdVisitorNotes: false,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
@@ -104,6 +105,7 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 0 as const,
       holdVisitorNotes: false,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
@@ -133,6 +135,7 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 10 as const,
       holdVisitorNotes: false,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
@@ -154,6 +157,7 @@ describe('the words people paste', () => {
       visitorDelete: 'while-open' as const,
       holdVisitorNotes: false,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 10 }).visitorNotesPerHour, 10);
     // « No limit » is no field: the route counts nothing.
@@ -174,6 +178,7 @@ describe('the words people paste', () => {
       visitorDelete: 'while-open' as const,
       visitorNotesPerHour: 10 as const,
       keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', holdVisitorNotes: true }).holdVisitorNotes, true);
     assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'anyone', holdVisitorNotes: false }), false);
@@ -192,6 +197,7 @@ describe('the words people paste', () => {
       visitorDelete: 'while-open' as const,
       visitorNotesPerHour: 10 as const,
       holdVisitorNotes: false,
+      deletedNotesKeepDays: 30 as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', keepNoteVersions: true }).keepNoteVersions, true);
     assert.equal('keepNoteVersions' in clientOf({ ...site, writers: 'anyone', keepNoteVersions: false }), false);

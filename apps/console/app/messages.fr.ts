@@ -779,6 +779,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'deleted the note': 'a supprimé la note',
   Before: 'Avant',
   'Its text then': 'Son texte à ce moment',
+  'Deleted notes': 'Notes supprimées',
+  'Kept, then gone for good': 'Gardées, puis effacées pour de bon',
+  '{count} days': '{count} jours',
+  'Its visitor deleted this note {when}. Fruitback erases it for good on {day}.':
+    'Son visiteur a supprimé cette note {when}. Fruitback l’efface pour de bon le {day}.',
+  'Its pin shows on its page again, closed.': 'Son repère revient sur sa page, fermé.',
+  'This note can no longer be restored: its days ran out.':
+    'Cette note ne peut plus être restaurée : son délai est passé.',
+  'The note was not restored. Try again in a moment.': 'La note n’a pas été restaurée. Réessayez dans un instant.',
   'Cannot be changed once sent': 'Ne se modifie plus une fois envoyée',
   'Editable while the note is open': 'Modifiable tant que la note est ouverte',
   'The order form rejects postcodes with a space.':

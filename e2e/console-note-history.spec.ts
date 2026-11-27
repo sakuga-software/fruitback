@@ -20,6 +20,8 @@ const NOTE = noteFixture({
 
 /** Two notes the worker keeps: one with two versions, and one with none. */
 async function worker(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
+  let restores = 0;
+  let restored = false;
   const row = (id: string, excerpt: string) => ({
     id,
     excerpt,
@@ -51,9 +53,9 @@ async function worker(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
       if (pathname === '/console/workspaces/w1/notes') {
         return route.fulfill({
           json: {
-            notes: [row('n1', NOTE.text), row('n2', 'The logo is blurry.')],
-            total: 2,
-            counts: { all: 2 },
+            notes: [row('n1', NOTE.text), row('n2', 'The logo is blurry.'), row('n3', 'The menu hides the cart.')],
+            total: 3,
+            counts: { all: 3 },
           },
         });
       }
@@ -79,6 +81,22 @@ async function worker(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
       }
       if (pathname === '/console/workspaces/w1/notes/n2') {
         return route.fulfill({ json: read('The logo is blurry.', []) });
+      }
+      // FRU-704: a note its visitor deleted, kept until a day, and its restore: refused once, then done.
+      if (pathname === '/console/workspaces/w1/notes/n3') {
+        return route.fulfill({
+          json: {
+            ...read('The menu hides the cart.', []),
+            ...(restored ? {} : { deleted: { at: '2026-11-25T10:00:00.000Z', until: '2026-12-25T10:00:00.000Z' } }),
+          },
+        });
+      }
+      if (pathname === '/console/workspaces/w1/notes/n3/restore') {
+        restores += 1;
+        if (restores === 1) return route.fulfill({ status: 503, json: { error: 'index-unavailable' } });
+        restored = true;
+
+        return route.fulfill({ status: 204, body: '' });
       }
 
       return undefined;
@@ -121,4 +139,23 @@ test('reads the history in French (FRU-704)', async ({ page }) => {
   await expect(history.getByRole('heading', { name: /Historique/ })).toBeVisible();
   await expect(history.locator('[data-task-version]').nth(1)).toContainText('Ben Martin a modifié la note');
   await expect(history.locator('[data-task-version]').nth(1)).toContainText('Avant');
+});
+
+test('the panel of a note its visitor deleted says until when it is kept, and restores it (FRU-704)', async ({
+  page,
+}) => {
+  await worker(page);
+  await page.goto(`${CONSOLE}/w/w1/notes?task=n3`);
+  const panel = page.getByRole('dialog', { name: /The menu hides the cart/ });
+  const deleted = panel.locator('[data-task-deleted]');
+
+  await expect(deleted).toContainText('Its visitor deleted this note');
+  await expect(deleted).toContainText('Fruitback erases it for good on 25 Dec');
+  // A refusal says why, and the note stays as it is.
+  await deleted.getByRole('button', { name: 'Restore' }).click();
+  await expect(deleted).toContainText('The note was not restored. Try again in a moment.');
+  await deleted.getByRole('button', { name: 'Restore' }).click();
+  await expect(panel.locator('[data-task-deleted]')).toHaveCount(0);
+  const results = await new AxeBuilder({ page }).include('[data-task-panel]').analyze();
+  expect(results.violations.map((each) => each.id)).toEqual([]);
 });
