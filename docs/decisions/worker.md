@@ -3805,7 +3805,11 @@ replies, and on a public site mounted by the extension with no session, only the
   and again after it (closed meanwhile: the comment is deleted, else written again with no text, and
   the route answers `409 not-open`). A read takes the text and the place of the newest such comment
   written before `closed_at` (`withEditedText`, `withMovedPlace`). `editsInReplies`: where the replies
-  are hidden, no edit and no move.
+  are hidden, no edit and no move. The limit of the read of Linear holds here too: a read takes the
+  newest `COMMENTS_PER_ISSUE` (20) comments, so an edit or a move older than them is not read, and the
+  note shows the text or the place it was sent with. A withdrawal comment holds neither the line of an
+  edit nor the one of a move, so a note reopened after it keeps its text and place
+  (test:`leaves the text and the place of a note reopened after a withdrawal as they were (review of #996)`).
 - **The number of the issue comes from the read, and its `id` must match.** GitHub writes under the
   number of an issue (`#12`), and its REST API finds no issue by its `id`. So `ReplyTarget` carries
   the `identifier` that the read gave (`writeReply`, the verdict, `reply_to_note` of `/mcp`), and an

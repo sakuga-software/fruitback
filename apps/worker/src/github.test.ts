@@ -1139,6 +1139,29 @@ describe('the writes of a person under a note (FRU-628)', () => {
       assert.deepEqual(writes(calls).slice(-1), ['DELETE /issues/comments/700']);
     });
 
+    it('leaves the text and the place of a note reopened after a withdrawal as they were (review of #996)', async () => {
+      // « Still wrong » can reopen an issue closed by a withdrawal: the withdrawal comment is then older
+      // than no close, and a read scans it. It holds neither the line of an edit nor the one of a move.
+      fakeGithub({
+        ...installation(),
+        'GET /repos/acme/site/issues': () => json(200, [row({ comments: 1, ...OPEN })]),
+        'GET /repos/acme/site/issues/12/comments': () =>
+          json(200, [
+            { id: 1, body: withdrawText(WITHDRAWAL, 'en'), created_at: '2026-09-14T10:00:00Z', user: { login: 'app' } },
+          ]),
+      });
+      const [issue] = await createGithubStore(CONFIG, { now: () => NOW }).findForPage(
+        { url: PAGE, clientId: 'acme' },
+        undefined,
+        POLICY,
+      );
+
+      assert.equal(issue?.note.text, NOTE.text);
+      assert.deepEqual(issue?.note.anchor, NOTE.anchor);
+      assert.deepEqual(issue?.note.viewport, NOTE.viewport);
+      assert.equal(issue?.comments?.length, 1);
+    });
+
     it('says in the log a comment that GitHub kept when it refused both the close and the delete (review of #996)', async () => {
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
       const refused = () => json(403, { message: 'Resource not accessible by integration' });
