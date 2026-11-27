@@ -1,3 +1,6 @@
+import type { Kv } from './kv.ts';
+import { invalidatePages } from './note-helpers.ts';
+
 /**
  * « Deleted notes » of the card « Safeguards » (FRU-704): what becomes of a note its visitor deleted
  * (FRU-702, `removed_at` of the index). The site keeps it `deletedNotesKeepDays` days (7, 30 or 90,
@@ -31,9 +34,24 @@ export type DeletedNotes = {
    * visitor deleted, or its days ran out.
    */
   restore(workspace: string, site: string, note: string, now: number): Promise<{ page: string } | undefined>;
-  /** Erases the deleted notes whose days ran out, `DELETED_SWEEP_BATCH` at most. Answers how many. */
-  sweep(now: number): Promise<number>;
+  /**
+   * Erases the deleted notes whose days ran out, `DELETED_SWEEP_BATCH` at most. Answers how many, and
+   * the pages of the notes that went whole, whose cached reads `sweepAndForget` drops.
+   */
+  sweep(now: number): Promise<{ erased: number; pages: string[] }>;
 };
+
+/**
+ * The sweep, then the cached reads of the pages of the notes that went whole (review of #999): a read
+ * cached before the sweep still holds the note, and only the mark of its row in the index hid it, so
+ * the pin would show again until the cache runs out. A note of a tracker keeps its mark: nothing to drop.
+ */
+export async function sweepAndForget(deleted: DeletedNotes, kv: Kv | undefined, now: number): Promise<number> {
+  const { erased, pages } = await deleted.sweep(now);
+  if (kv !== undefined && pages.length > 0) await invalidatePages(kv, pages);
+
+  return erased;
+}
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 

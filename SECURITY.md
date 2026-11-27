@@ -2807,7 +2807,10 @@ or 90, 30 by default as the mockup draws it, those of before included.
   that waited for it to be done. A note of a tracker lives in the tracker, the team's: the worker
   erases what it keeps of it (the excerpt, the digest of the browser key, the element, the versions,
   the address that waited) and keeps the row, with `erased_at`, so that its issue never shows on its
-  page again; the lists of the console leave it out. A visitor sends no file, so no file waits.
+  page again; the lists of the console leave it out. A visitor sends no file, so no file waits. The
+  cached reads of the pages of the notes that went whole are dropped after the sweep, since only the
+  mark of their row hid them there.
+  test:`drops the cached read of the page of a note it erased, so its pin never shows again (review of #999)`.
   test:`erases a note the worker keeps once the days of its site ran out: the note, its row, its versions`,
   test:`erases the words it keeps of a note of a tracker, and keeps its row so that the issue never shows again`,
   test:`keeps a deleted note of every site 30 days, then the sweep erases it` (on PGlite and on PostgreSQL).

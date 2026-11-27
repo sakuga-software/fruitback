@@ -82,6 +82,9 @@ function movesOf(
   };
 }
 
+/** The members or the labels before they are read: the same list at each render (FRU-731). */
+const NONE_YET: readonly never[] = [];
+
 /** The link of the widget that opens the note on its page (FRU-253). */
 function linkOf(note: IndexedNote): string {
   const opened = note.note ?? note.ref;
@@ -213,10 +216,10 @@ export function useTaskSeam({
   });
 
   const seam: TaskMenuSeam = {
-    people: known(people) ?? [],
+    people: known(people) ?? NONE_YET,
     peopleRead: typeof people === 'string' ? people : 'read',
     readPeople: () => void readPeople(),
-    labels: known(labels) ?? [],
+    labels: known(labels) ?? NONE_YET,
     labelsRead: typeof labels === 'string' ? labels : 'read',
     readLabels: () => void readLabels(),
     canAddLabel: manages,

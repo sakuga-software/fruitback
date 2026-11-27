@@ -44,8 +44,8 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await deleted.of('ws_acme', 'site_public', 'sd_1', Date.now()))?.until, deletedAt + 30 * DAY_MS);
 
       // Ten days on, it is kept; 31 days on, it goes, whole.
-      assert.equal(await deleted.sweep(Date.now()), 0);
-      assert.equal(await deleted.sweep(deletedAt + 31 * DAY_MS), 1);
+      assert.equal((await deleted.sweep(Date.now())).erased, 0);
+      assert.equal((await deleted.sweep(deletedAt + 31 * DAY_MS)).erased, 1);
       assert.deepEqual(await rowsOf(database, 'SELECT note_id FROM note_index'), []);
       assert.deepEqual(await rowsOf(database, 'SELECT id FROM notes'), []);
     });

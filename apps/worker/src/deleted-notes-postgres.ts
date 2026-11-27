@@ -68,6 +68,7 @@ export function createPostgresDeletedNotes(database: Database): DeletedNotes {
             place: note_index.place,
             kind: connectors.kind,
             reference: note_index.reference,
+            page: note_index.page_url,
           })
           .from(note_index)
           .innerJoin(sites, eq(sites.id, note_index.site_id))
@@ -75,7 +76,7 @@ export function createPostgresDeletedNotes(database: Database): DeletedNotes {
           .where(and(deleted, lte(note_index.removed_at, deadline(now))))
           .limit(DELETED_SWEEP_BATCH)
           .for('update', { of: note_index, skipLocked: true });
-        if (due.length === 0) return 0;
+        if (due.length === 0) return { erased: 0, pages: [] };
 
         const kept = due.flatMap((row) => {
           const id = keptRowOf(row.place, row.kind, row.reference);
@@ -118,7 +119,7 @@ export function createPostgresDeletedNotes(database: Database): DeletedNotes {
             .where(pairs(ofTracker));
         }
 
-        return due.length;
+        return { erased: due.length, pages: [...new Set(kept.map((row) => row.page))] };
       });
     },
   };

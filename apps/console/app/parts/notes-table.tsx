@@ -1,4 +1,14 @@
-import { type ReactNode, type RefObject, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type RefObject,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { STAGE_NAMES, type Stage } from '../stages';
 import { type Answer, type Connector, call } from '../api';
 import { ago, agoShort } from '../ago';
@@ -12,8 +22,8 @@ import { type StatusChoice } from '../note-status';
 import { type IndexedNote, type NotesAnswer, groupsOf } from './notes-model';
 import { Author, NoteStatus, PlaceCell, excerptOf } from './note-parts';
 import { TaskMarks } from './task-marks';
-import { TaskMenuContext, useTaskMenu } from './task-menu';
-import { SelectTask, TaskSelectionContext, useSelectRow } from './task-selection';
+import { TaskMenuContext, type TaskMenuSeam, useTaskMenu } from './task-menu';
+import { SelectTask, type TaskSelection, TaskSelectionContext, useSelectRow } from './task-selection';
 import { isBareShortcut } from '../keys';
 
 /**
@@ -61,14 +71,20 @@ const LINE = 'flex h-[calc(var(--spacing-row)-1px)] min-w-0 items-center';
 const REVEALED =
   'opacity-0 [tr:hover_&]:opacity-100 [tr:focus-within_&]:opacity-100 [tr:is([data-selected=true],[data-open=true])_&]:opacity-100 pointer-coarse:opacity-100';
 
-export function NoteRow({
+/**
+ * A row of the list. FRU-731: it is drawn again only when one of its props changes, so a chunk of
+ * notes added at the end of the list draws its own rows, and not the rows above it. What it reads of
+ * the contexts comes from `useSteadyContexts`; `selected` and `selectedWith` are what it shows of the
+ * selection.
+ */
+export const NoteRow = memo(function NoteRow({
   note,
   open = false,
   seesTracker,
   origin,
   source,
   manages,
-  retry,
+  base,
   onSent,
   onStatusSaved,
   statuses,
@@ -77,6 +93,10 @@ export function NoteRow({
   note: IndexedNote;
   /** Its page is in the panel beside the list (FRU-687): the row is marked. */
   open?: boolean;
+  /** Its box is ticked. A change draws the row again: its box, its colour and its menu say it. */
+  selected: boolean;
+  /** The selected notes, when this note is one of several of them: its menu acts on all of them. */
+  selectedWith: readonly IndexedNote[] | undefined;
   /** The column « Went to » is there: the worker tells a guest nothing of where a note went (FRU-244). */
   seesTracker: boolean;
   /** The origin of the site of the note, when the sites were read. */
@@ -84,12 +104,13 @@ export function NoteRow({
   /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
   source: Connector | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: true } | { ok: false; status: number; error: string }>;
+  /** `/console/workspaces/<id>`: « Send again » posts the note to `…/notes/<id>/retry`. */
+  base: string;
   onSent: () => void;
-  /** A status saved from the drop: the list is read again, and the focus follows the row. */
-  onStatusSaved: () => void;
+  /** A status saved from the drop, by the id of its note: the list is read again, and the focus follows the row. */
+  onStatusSaved: (note: string) => void;
   statuses: readonly StatusChoice[] | undefined;
-  choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
+  choose: (note: IndexedNote, status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
 }) {
   useLocale();
   const [sending, setSending] = useState(false);
@@ -109,7 +130,7 @@ export function NoteRow({
   async function send() {
     setSending(true);
     setRefused(undefined);
-    const sent = await retry();
+    const sent = await call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`);
     setSending(false);
     if (!sent.ok) return setRefused(writeProblemOf(sent, failureOf(sent)));
     onSent();
@@ -139,8 +160,8 @@ export function NoteRow({
             <NoteStatus
               note={note}
               statuses={statuses}
-              choose={choose}
-              onSaved={onStatusSaved}
+              choose={(status) => choose(note, status)}
+              onSaved={() => onStatusSaved(note.id)}
               onRefused={setStatusRefused}
               bare
             />
@@ -212,7 +233,7 @@ export function NoteRow({
       </td>
     </tr>
   );
-}
+});
 
 /**
  * The text of a note (FRU-685): at 500, on one line, cut with « … ». A press opens its page in the
@@ -222,12 +243,12 @@ function NoteTitle({ note, children }: { note: IndexedNote; children: string }) 
   const seam = useContext(TaskMenuContext);
   const words = 'block min-w-0 truncate font-medium text-ink';
   if (seam?.openTask === undefined) return <span className={words}>{children}</span>;
-  const open = seam.openTask;
 
   return (
     // The text it shows is its name: a name of its own would not be the words a person sees (WCAG 2.5.3).
+    // The seam of the press: a row is not drawn again for each render of the screen (FRU-731).
     <TextButton
-      onClick={() => open(note)}
+      onClick={() => seam.openTask?.(note)}
       data={{ 'data-note-title': '' }}
       className={`${words} block min-w-[80px] shrink [&:hover]:underline [&:hover]:decoration-1 [&:hover]:underline-offset-[3px]`}
     >
@@ -365,92 +386,167 @@ export function NotesTable({
   const list = useRef<HTMLDivElement>(null);
   useRowKeys(list);
   const columns = seesTracker ? 8 : 7;
+  const { seam, selection, rowSelection } = useSteadyContexts();
+  // The screen gives new functions at each of its renders: the rows take the same ones, which call the latest.
+  const steadyChoose = useLatestCall(choose);
+  const steadySent = useLatestCall(onSent);
+  const steadyStatusSaved = useLatestCall(onStatusSaved);
 
   return (
-    // The list goes from one edge of the screen to the other, as the mockup draws it.
-    <div aria-busy={reading} className="@container -mx-[clamp(16px,4vw,48px)]">
-      <div ref={list} role="region" aria-label={t('Notes')} tabIndex={-1} className="kit-notes-list outline-none">
-        <table
-          className={[
-            'w-full table-fixed border-separate border-spacing-0 text-table',
-            '[&_td]:p-0 [&_td]:align-top [&_td]:border-b [&_td]:border-line/60',
-            '[&_tbody_tr[data-note]:hover]:bg-hover [&_tbody_tr[data-note]:focus-within]:bg-hover',
-            '[&_tr:is([data-selected=true],[data-open=true])]:bg-selected [&_tr:is([data-selected=true],[data-open=true]):hover]:bg-selected',
-            '[&_tr:is([data-selected=true],[data-open=true])>td:first-child]:shadow-[inset_2px_0_0_var(--color-accent)]',
-            // What takes the focus is scrolled to under the heads, never behind them (FRU-586).
-            '[&_:is(a,button,input,[tabindex])]:scroll-mt-[calc(var(--kit-pinned-top,0px)+80px)]',
-          ].join(' ')}
-        >
-          {/* The heads of the columns are for a screen reader: their width is the one of the column. */}
-          <thead>
-            <tr>
-              {(
-                [
-                  ['lead', t('Status')],
-                  ['note', t('Note')],
-                  ['path', t('Page')],
-                  ['site', t('Site')],
-                  ...(seesTracker ? [['place', t('Went to')] as const] : []),
-                  ['author', t('Left by')],
-                  ['when', t('When')],
-                  ['actions', t('Actions')],
-                ] as const
-              ).map(([column, words]) => (
-                <th key={column} scope="col" className={`h-0 overflow-hidden p-0 ${COLUMNS[column]}`}>
-                  <span className="sr-only">{words}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          {/* FRU-551: a group per status, its head the drop, the name and the notes of the
-            whole list in it. A group that goes on to the next page has its head there too. */}
-          {groupsOf(notes).map((group) => {
-            const shut = folded.has(group.stage);
-
-            return (
-              <tbody key={group.stage} data-group={group.stage} data-folded={shut}>
-                <tr className="kit-table-group">
-                  <th
-                    scope="colgroup"
-                    colSpan={columns}
-                    className="sticky top-[var(--kit-pinned-top,0px)] z-1 border-b border-line bg-subtle p-0 text-left font-normal"
-                  >
-                    <GroupHead
-                      stage={group.stage}
-                      notes={group.notes}
-                      count={counts.byStage?.[group.stage]}
-                      shut={shut}
-                      onFold={(next) => onFold(group.stage, next)}
-                      onAdd={onAdd === undefined ? undefined : () => onAdd(group.stage)}
-                    />
-                  </th>
+    <TaskMenuContext.Provider value={seam}>
+      <TaskSelectionContext.Provider value={selection}>
+        {/* The list goes from one edge of the screen to the other, as the mockup draws it. */}
+        <div aria-busy={reading} className="@container -mx-[clamp(16px,4vw,48px)]">
+          <div ref={list} role="region" aria-label={t('Notes')} tabIndex={-1} className="kit-notes-list outline-none">
+            <table
+              className={[
+                'w-full table-fixed border-separate border-spacing-0 text-table',
+                '[&_td]:p-0 [&_td]:align-top [&_td]:border-b [&_td]:border-line/60',
+                '[&_tbody_tr[data-note]:hover]:bg-hover [&_tbody_tr[data-note]:focus-within]:bg-hover',
+                '[&_tr:is([data-selected=true],[data-open=true])]:bg-selected [&_tr:is([data-selected=true],[data-open=true]):hover]:bg-selected',
+                '[&_tr:is([data-selected=true],[data-open=true])>td:first-child]:shadow-[inset_2px_0_0_var(--color-accent)]',
+                // What takes the focus is scrolled to under the heads, never behind them (FRU-586).
+                '[&_:is(a,button,input,[tabindex])]:scroll-mt-[calc(var(--kit-pinned-top,0px)+80px)]',
+              ].join(' ')}
+            >
+              {/* The heads of the columns are for a screen reader: their width is the one of the column. */}
+              <thead>
+                <tr>
+                  {(
+                    [
+                      ['lead', t('Status')],
+                      ['note', t('Note')],
+                      ['path', t('Page')],
+                      ['site', t('Site')],
+                      ...(seesTracker ? [['place', t('Went to')] as const] : []),
+                      ['author', t('Left by')],
+                      ['when', t('When')],
+                      ['actions', t('Actions')],
+                    ] as const
+                  ).map(([column, words]) => (
+                    <th key={column} scope="col" className={`h-0 overflow-hidden p-0 ${COLUMNS[column]}`}>
+                      <span className="sr-only">{words}</span>
+                    </th>
+                  ))}
                 </tr>
-                {shut
-                  ? null
-                  : group.notes.map((note) => (
-                      <NoteRow
-                        key={`${note.id} ${note.status ?? note.stage}`}
-                        note={note}
-                        open={note.id === opened}
-                        seesTracker={seesTracker}
-                        origin={originOf(note.site.id)}
-                        source={sourceOf(note)}
-                        manages={manages}
-                        retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
-                        statuses={statuses?.[note.site.id]}
-                        choose={(status) => choose(note, status)}
-                        onSent={onSent}
-                        onStatusSaved={() => onStatusSaved(note.id)}
-                      />
-                    ))}
-              </tbody>
-            );
-          })}
-        </table>
-      </div>
-    </div>
+              </thead>
+              {/* FRU-551: a group per status, its head the drop, the name and the notes of the
+            whole list in it. A group that goes on to the next page has its head there too. */}
+              {groupsOf(notes).map((group) => {
+                const shut = folded.has(group.stage);
+
+                return (
+                  <tbody key={group.stage} data-group={group.stage} data-folded={shut}>
+                    <tr className="kit-table-group">
+                      <th
+                        scope="colgroup"
+                        colSpan={columns}
+                        className="sticky top-[var(--kit-pinned-top,0px)] z-1 border-b border-line bg-subtle p-0 text-left font-normal"
+                      >
+                        <GroupHead
+                          stage={group.stage}
+                          notes={group.notes}
+                          count={counts.byStage?.[group.stage]}
+                          shut={shut}
+                          onFold={(next) => onFold(group.stage, next)}
+                          onAdd={onAdd === undefined ? undefined : () => onAdd(group.stage)}
+                        />
+                      </th>
+                    </tr>
+                    {shut
+                      ? null
+                      : group.notes.map((note) => (
+                          <NoteRow
+                            key={`${note.id} ${note.status ?? note.stage}`}
+                            note={note}
+                            open={note.id === opened}
+                            {...rowSelection(note)}
+                            seesTracker={seesTracker}
+                            origin={originOf(note.site.id)}
+                            source={sourceOf(note)}
+                            manages={manages}
+                            base={base}
+                            statuses={statuses?.[note.site.id]}
+                            choose={steadyChoose}
+                            onSent={steadySent}
+                            onStatusSaved={steadyStatusSaved}
+                          />
+                        ))}
+                  </tbody>
+                );
+              })}
+            </table>
+          </div>
+        </div>
+      </TaskSelectionContext.Provider>
+    </TaskMenuContext.Provider>
   );
 }
+
+/** The same function at each render, which calls the latest `call`. */
+function useLatestCall<Args extends unknown[], Result>(call: (...args: Args) => Result): (...args: Args) => Result {
+  const latest = useRef(call);
+  latest.current = call;
+
+  return useCallback((...args: Args) => latest.current(...args), []);
+}
+
+/**
+ * The same object at each render while `keys` stay the same, whose fields are the ones of the latest
+ * `value`: a function read from it at a press is the one of the last render. Nothing it gives at a
+ * render may differ from the latest value unless a key, or a prop of the row, changed with it.
+ */
+function useSteady<Value extends object>(value: Value, keys: readonly unknown[]): Value {
+  const latest = useRef(value);
+  latest.current = value;
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => new Proxy(value, { get: (_value, name) => Reflect.get(latest.current, name) }), keys);
+}
+
+/**
+ * The contexts of the menus and of the selection, as the rows read them (FRU-731). The screen makes
+ * them again at each of its renders, and a new chunk of notes is one: a row that read them would be
+ * drawn again with every chunk. The rows read steady ones instead, made again only when what a menu
+ * shows changes (the members, the labels and whether they were read). What a row shows of the
+ * selection is in its props (`rowSelection`); a press reads the latest selection.
+ */
+function useSteadyContexts(): {
+  seam: TaskMenuSeam | undefined;
+  selection: TaskSelection | undefined;
+  rowSelection: (note: IndexedNote) => { selected: boolean; selectedWith: readonly IndexedNote[] | undefined };
+} {
+  const seam = useContext(TaskMenuContext);
+  const selection = useContext(TaskSelectionContext);
+  const steadySeam = useSteady(seam ?? NO_SEAM, [
+    seam === undefined,
+    seam?.people,
+    seam?.peopleRead,
+    seam?.labels,
+    seam?.labelsRead,
+    seam?.canAddLabel,
+    seam?.openTask === undefined,
+    seam?.copy === undefined,
+  ]);
+  const steadySelection = useSteady(selection ?? NO_SELECTION, [selection === undefined]);
+
+  return {
+    seam: seam === undefined ? undefined : steadySeam,
+    selection: selection === undefined ? undefined : steadySelection,
+    rowSelection: (note) => {
+      const selected = selection?.has(note.id) === true;
+
+      return {
+        selected,
+        selectedWith: selected && selection !== undefined && selection.notes.length > 1 ? selection.notes : undefined,
+      };
+    },
+  };
+}
+
+/** What `useSteady` holds while the screen gives no context: never read, as the rows get `undefined`. */
+const NO_SEAM = {} as TaskMenuSeam;
+const NO_SELECTION = {} as TaskSelection;
 
 /**
  * The head of a group (FRU-685): the box of its tasks, the chevron that folds it, its drop, its name
