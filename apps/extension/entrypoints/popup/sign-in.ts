@@ -5,6 +5,7 @@ import { t } from '../../src/i18n.ts';
 import { consoleOf, rememberConsole, requestWorkerAccess } from '../../src/connect-browser.ts';
 import { type StartStop, startSignIn } from '../../src/connect-loop.ts';
 import { type AccountState } from '../../src/popup-state.ts';
+import { accountOf as accountStateOf } from '../../src/account-state.ts';
 import { type Account, problem, signInStop, signedOut } from '../../src/popup-view.ts';
 import { hostOf } from '../../src/kit.ts';
 
@@ -24,19 +25,9 @@ export function unreachableScreen(account: Account | undefined): HTMLElement {
   });
 }
 
-/**
- * The session of the account of this build's Fruitback, as the popup found it.
- *
- * Asked only when there is one: `ensureAccess` answers from the grant it holds while that is fresh,
- * and refreshes it otherwise. A refusal forgets the session (`session.ts`), so `ended` is said once.
- */
-export async function accountOf(held: Record<string, StoredSession>): Promise<AccountState> {
-  if (CLOUD === undefined || held[CLOUD]?.account !== true) return 'none';
-  const access = await sessions.ensureAccess(CLOUD).catch(() => undefined);
-  if (access === undefined || (!access.ok && access.reason === 'unavailable')) return 'unreachable';
-  if (!access.ok) return access.reason === 'session-revoked-or-expired' ? 'ended' : 'none';
-
-  return 'ok';
+/** The session of the account of this build's Fruitback, as the popup found it (`account-state.ts`). */
+export function accountOf(held: Record<string, StoredSession>): Promise<AccountState> {
+  return accountStateOf(CLOUD, held, sessions);
 }
 
 /** The person in the head and the foot: the account of this build's Fruitback, when it is held. */
