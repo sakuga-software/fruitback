@@ -150,7 +150,7 @@ test('the panel of a note its visitor deleted says until when it is kept, and re
   const deleted = panel.locator('[data-task-deleted]');
 
   await expect(deleted).toContainText('Its visitor deleted this note');
-  await expect(deleted).toContainText('Fruitback erases it for good on Dec 25');
+  await expect(deleted).toContainText('Fruitback erases it for good on 25 Dec');
   // A refusal says why, and the note stays as it is.
   await deleted.getByRole('button', { name: 'Restore' }).click();
   await expect(deleted).toContainText('The note was not restored. Try again in a moment.');
