@@ -387,6 +387,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Close the sidebar': 'Fermer le panneau',
   'Fruitback is not on for this page.': 'Fruitback n’est pas activé sur cette page.',
   'Turn it on from the Fruitback button in the toolbar.': 'Activez-le depuis le bouton Fruitback de la barre d’outils.',
+  // FRU-729: the panel of a site that its members read, where the popup cannot be opened from it.
+  'Do it from the Fruitback button in the toolbar.': 'Faites-le depuis le bouton Fruitback de la barre d’outils.',
   // FRU-299: « Notes on this page ».
   You: 'Vous',
   Anonymous: 'Anonyme',
