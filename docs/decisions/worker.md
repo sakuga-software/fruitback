@@ -5621,3 +5621,206 @@ a container, the statements counted in the log of the server: 50 workspaces of 2
 member with 20 views (10 000 members, 200 000 views). 60 calls after 10, three runs: `GET …/views`
 1.9 to 2.3 ms median, 2.6 to 3.3 ms p95, 2 statements (`reach`, then the views). The plan finds the
 member by `member_userId_idx` and the views by `saved_views_by_member` (0.04 ms of execution).
+
+## The settings of a destination (FRU-739, a framing)
+
+Mathieu asked on 2026-11-27 to set, destination by destination, what a note becomes when it arrives:
+the status it arrives in, the title and the description, the assignee, the capture joined by default,
+and the technical details that go with it. Labels, a priority, a project or a milestone by default
+may follow. This section is the framing, written before any code. The orchestrator decided where the
+settings live and what a template may touch on 2026-11-28. The board is
+[`design/destination-settings/`](../../design/destination-settings/destination-settings.html), and the
+tickets are at the end.
+
+### The rules, in short
+
+- **The block of the note never changes.** A description of a tracker ends with the JSON block of the
+  whole note (`buildNoteBlock`). A read parses that block back (`parseNoteFromDescription`), and the
+  read of Linear finds the notes of a client by a term that the block holds. A template, and every
+  setting below, changes only the lines a person reads above the block. The anchor, the DOM path, the
+  component, the viewport and the browser stay in the block, whatever is hidden from the text.
+- **The settings live in `connectors.settings`**, the JSON column that already holds `showComments`
+  and `stages` (FRU-102). No new table. A setting of the connector applies to every place it sends to.
+  A setting that names something of one place (a state, a person, a label of one Linear team, a
+  milestone of one repository) is kept under the key of that place, `places["<team>"]` or
+  `places["<team>/<project>"]`, and wins over the setting of the connector. Two sites that send to the
+  same team share it.
+- **The screen shows only what the tool can do.** Each kind of connector declares what it takes
+  (`capabilities`, below). A setting the tool does not take is not drawn, and the worker refuses it on
+  save. Slack and an address of your own have no status, no assignee and no label.
+- **A setting changes the notes that come after it.** The worker reads the settings when it creates
+  the issue, and never writes an issue again because a setting changed.
+- **Owners and admins set them** (`manage-workspace`), in a panel « Settings » of a destination, opened
+  from its row in the tab « Destinations » of a site and from the panel of the connector. The panel
+  says that the settings are shared by every site that sends to this place.
+- **A setting that fails at the tracker does not lose the note.** A state that was removed, a person
+  who left the team, a label that cannot be created: the issue is created without it, the log says
+  which setting failed, and the destination shows « Action required » with the cause (FRU-640). A
+  refusal of the whole issue keeps answering `502`, as today.
+- **`docs/privacy.md` and `SECURITY.md` change with each setting that changes what is sent.** Turning
+  a detail or the capture off removes it from the text of the issue and from the files sent, not from
+  the block. `privacy.md` says what the product does today, so the pull request that ships a setting
+  writes it there (FRU-744 for the template and the details), never a framing.
+
+### What exists today
+
+Measured on `main` at `581d4f86`.
+
+- **No connector sends a status, an assignee, a priority or a milestone.** Every issue arrives in the
+  default state of the tool. The labels are the labels of the read (`fruitback`, `fruitback:<client>`,
+  `buildIssueLabels`), never labels of the team.
+- **The title and the description come from one codec**, `markdown-description.ts` of
+  `packages/shared`. `buildIssueTitle` takes the first line of the note, 80 characters at most.
+  `buildIssueMetadata` writes the lines « Page », « Element » (selector and tag), « Component » (when the
+  build gave one), « Viewport », « Reported by » and « Client ». `buildIssueDescription` puts the text,
+  those lines, the caption and the block, in that order. Jira writes the same in ADF
+  (`trackers/jira-adf.ts`), and Slack writes its own message (`trackers/slack.ts`). The DOM path, the
+  user agent and the address of a picture are only in the block.
+- **The per-connector settings are Linear's only.** `GET` and `POST …/connectors/<id>/settings` answer
+  a Linear connector and nobody else (`console-connectors.ts`). Slack keeps which notes it posts in its
+  sealed credential, chosen when it is connected.
+- **A destination is a place, and only that.** `site_destinations` holds the connector, the team or the
+  repository, the project, a label, and the `private` flag. `setDestinations` writes the whole list
+  again at each save, so a setting kept on a row would have to make the round trip of every save.
+- **The capture is taken in the browser.** The extension joins a capture of the element when the
+  element is chosen (`element.png`, 24 px around it), and offers the visible window or an area on
+  demand. The widget of a script joins nothing unless the site gives `captureScreenshot`, and the
+  reporter turns it on. A note does not say whether a file is the element or the window.
+- **The stage of an issue comes from the tracker.** The type of a Linear state, the category of a Jira
+  status, the type of a ClickUp status, `state` of GitHub and GitLab, the completion of an Asana task.
+  The statuses of a site re-attach a state to a stage ([statuses.md](statuses.md)).
+
+### What each tool takes
+
+| Setting                  | Linear    | GitHub            | GitLab            | Jira               | ClickUp        | Asana     | Slack   | Address | Fruitback |
+| ------------------------ | --------- | ----------------- | ----------------- | ------------------ | -------------- | --------- | ------- | ------- | --------- |
+| Status of arrival        | state     | no                | no                | a transition after | status         | section   | no      | no      | later     |
+| Title and description    | yes       | yes               | yes               | yes, in ADF        | yes            | yes, text | message | no      | no        |
+| Assignee                 | yes       | yes               | yes               | yes                | yes            | yes       | no      | no      | later     |
+| Capture by default       | yes       | no file           | yes               | yes                | yes            | yes       | yes     | links   | no file   |
+| Technical details        | yes       | yes               | yes               | yes                | yes            | yes       | yes     | no      | no        |
+| Labels, priority, others | all three | labels, milestone | labels, milestone | labels, priority   | tags, priority | tags      | no      | no      | later     |
+
+- **An address of your own receives the whole note**, as `rest-connector.md` says: the contract of
+  that body is the note, so nothing of it is hidden.
+- **Fruitback keeps its notes in the worker**, and a task already has a status, an assignee, a
+  priority and labels (FRU-652). Defaults for a new task are a setting of the site, not of a connector.
+  They are out of this framing.
+- **GitHub takes no file** (`store.ts`): the capture is not sent there today, and the setting is not
+  drawn.
+- **Jira creates an issue in the first status of its workflow.** Another status is a transition, made
+  right after the create. A transition that the workflow refuses leaves the issue where it is, and
+  says so.
+
+### Each setting
+
+**The status of arrival.** A list of the states of the place, read from the tracker as the screen of
+the statuses of a site reads them (`trackerStates`), with the stage that each one maps to beside its
+name. Empty, the default of the tool, as today. The stage of the note is then whatever the tracker says
+at the next read: a note that arrives in « Todo » is « To do » at once, and leaves the filters of the
+new notes. The panel says so under the list.
+
+**The title and the description.** Two fields, with variables in double braces:
+
+| Variable                                          | What it writes                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `{{note}}`, `{{note.first_line}}`                 | the text, all of it or its first line                               |
+| `{{page.url}}`, `{{page.path}}`, `{{page.title}}` | the page                                                            |
+| `{{element}}`                                     | the selector and the tag, as the line « Element » writes them       |
+| `{{component}}`, `{{file}}`                       | the component and its file and line, when the build gave them       |
+| `{{reporter}}`                                    | the name, and the address when the note has one, as « Reported by » |
+| `{{viewport}}`, `{{browser}}`                     | the size of the window; the browser, only when `env` was sent       |
+| `{{site}}`, `{{client}}`                          | the address of the site, its client id                              |
+
+- **No logic**: no condition, no loop, no filter. A variable the list does not have is refused on save,
+  with its name.
+- **An empty variable writes nothing, and a line that is left empty is removed.** So « Component ·
+  {{component}} » goes away on a production build. A title that comes out empty takes the title of
+  today.
+- **Empty fields are the codec of today.** The title is cut at the length of the tool (80 for Linear,
+  250 for Jira, ClickUp and Asana). The block is written after the description, always.
+- **The words of the template are the team's**: `FRUITBACK_TEAM_LOCALE` does not translate them. The
+  values of the variables are the note's, as today.
+- **A preview** under the fields fills them with a note of example, so the person sees what an issue
+  will read before saving.
+
+**The assignee.** A list of the people of the place, read from the tracker (the members of a Linear
+team, the assignable people of a repository or a project), and « Nobody ». An issue is assigned
+when it is created. A person the tracker refuses leaves the issue unassigned, and the destination says
+so.
+
+**The capture by default.** « Join a capture » on or off, and « The element » or « The visible
+window ». It is a default of the composer: the person can still add or remove a file. It reaches the
+browser in `destinations` of the read, beside `canAttach` (FRU-332, `destinations.ts`), so each place
+says its own default: a change of the protocol, for a ticket of its own. Off, no capture is joined unless the person adds one. The worker does
+not filter the files: it cannot tell a capture from a file the person chose.
+
+**The technical details.** Five boxes, each one a line of the description: « Element » (the
+selector), « Component » (the component and the file), « Viewport », « Browser » (when the site sent
+`env`), and « Reported by ». The DOM path is in the block only, today and after. A box unticked removes
+its line from the text, and its variable writes nothing in a template. The block keeps every field.
+
+**Labels, a priority, a milestone.** A setting of the place, in the same panel, for the tools that
+take them. The labels of the read (`fruitback`, `fruitback:<client>`) stay: a GitHub read finds the notes
+by them.
+
+### The data
+
+```ts
+// connectors.settings, beside showComments and stages
+type DestinationSettings = {
+  template?: { title?: string; description?: string }; // 200 and 4,000 characters at most
+  details?: { element?: boolean; component?: boolean; viewport?: boolean; browser?: boolean; reporter?: boolean };
+  capture?: { join: boolean; area: 'element' | 'window' };
+  places?: Record<string, PlaceSettings>; // 200 places at most, keyed `<team>` or `<team>/<project>`
+};
+type PlaceSettings = {
+  state?: string; // the id of a state, a status, a section; a transition for Jira
+  assignee?: string; // the id of the person at the tracker
+  labels?: string[]; // 10 at most
+  priority?: string;
+  milestone?: string;
+};
+```
+
+- **Every field is optional, and an absent field is the behaviour of today.** A worker of before reads
+  the column with `readConnectorSettings`, which keeps `showComments` and `stages` and ignores the
+  rest. A save from a worker of before would drop the new fields, so the route that writes them keeps
+  every field it does not change.
+- **The worker checks each value against what the kind takes**, and against the tracker when it is an
+  id (a state, a person, a label): the list the console offers is the list the worker accepts.
+
+### The decisions
+
+The orchestrator decided where the settings live, what a template touches, and that hiding a detail
+hides only the text. It took the five recommendations below on 2026-11-28.
+
+1. **A setting of a place is shared by every site that sends there.** It is the convention of a team
+   in its tool, and a site that wants other settings sends to another project or another team. The
+   panel says it.
+2. **« Capture by default » is for the extension first.** The widget of a script joins a capture only
+   through `captureScreenshot`, which the site gives, and its reporter already turns it on. The widget
+   can follow when it takes captures of its own.
+3. **A template replaces the lines of the details.** A template that wants « Component » writes
+   `{{component}}`, and the boxes then only empty the variables. Without a template, the boxes remove
+   the lines of today.
+4. **The defaults of a task that Fruitback keeps (status, assignee) are not here.** They are a setting
+   of the site, in a ticket of their own: Fruitback is not a connector, and has no `connectors.settings`.
+5. **A refused status, assignee or label makes the destination « Action required »**, with the cause,
+   until a save of the settings. It is the only way the team learns that its issues lost a setting.
+
+### The tickets
+
+One ticket per setting, and one per group of tools where the API differs. FRU-743 comes first.
+
+| Ticket  | What                                                                                        | Critical |
+| ------- | ------------------------------------------------------------------------------------------- | -------- |
+| FRU-743 | The base: `connectors.settings` for every kind, the panel « Settings », « Action required » | yes      |
+| FRU-744 | The template of the title and the description, and the boxes of the details                 | yes      |
+| FRU-745 | The status of arrival in Linear                                                             | no       |
+| FRU-746 | The status of arrival in Jira (a transition), ClickUp and Asana (a section)                 | no       |
+| FRU-747 | The assignee by default in Linear, GitHub and GitLab                                        | no       |
+| FRU-748 | The assignee by default in Jira, ClickUp and Asana                                          | no       |
+| FRU-749 | Labels, a priority and a milestone by default                                               | no       |
+| FRU-750 | The capture joined by default, in the extension                                             | yes      |
+| FRU-751 | The defaults of a task that Fruitback keeps, a setting of the site (decision 4)             | yes      |
