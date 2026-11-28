@@ -168,6 +168,28 @@ describe('a task written by hand with no site (FRU-672)', () => {
     assert.equal(await rail(bob.token), 3);
   });
 
+  it('is counted by no site: the counts of each site leave it out', async () => {
+    const { world, alice, workspace, site, call } = await acme();
+    const made = await call('POST', '/notes', alice.token, { title: 'Renew the domain', status: 'own:done' });
+    const index = world.context.noteIndex;
+    assert.ok(index !== undefined);
+    // As if a read had said that its verdict waits, as for a note of a page of hers.
+    await rowsOf(world.database, `UPDATE note_index SET confirmed = false WHERE site_id IN ('', '${site}')`);
+    await rowsOf(
+      world.database,
+      `UPDATE note_index SET stage = 'done', author_kind = 'member', author_account_id = '${alice.id}'`,
+    );
+
+    const summary = await index.summary(workspace);
+    assert.deepEqual([...summary.keys()], [site]);
+    assert.deepEqual([...(await index.toCheck(workspace, alice.id)).entries()], [[site, 1]]);
+    // The list still has it, with the notes of the site.
+    assert.equal(
+      (await call('GET', '/notes', alice.token)).body.notes.some((note: { id: string }) => note.id === made.body.id),
+      true,
+    );
+  });
+
   it('stays when a site goes, and goes with its workspace', async () => {
     const { world, alice, workspace, site, call, ids } = await acme();
     const made = await call('POST', '/notes', alice.token, { title: 'Renew the domain' });

@@ -357,3 +357,33 @@ test('a guest is offered no task of the whole workspace (FRU-672)', async ({ pag
   await dialog.getByRole('button', { name: 'Create the task' }).click();
   await expect.poll(() => sent.at(-1)?.body).toEqual({ site: 's1', title: 'Check the footer', status: 'own:new' });
 });
+
+test('a member of a workspace with no site yet writes tasks of the workspace, from the head and from a group (FRU-672)', async ({
+  page: p,
+}) => {
+  const sent = await worker(p, { sites: [] });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(p.locator('tr', { hasText: 'The price' })).toBeVisible();
+
+  const head = p.locator('tbody[data-group="new"] .kit-table-group');
+  await head.getByRole('button', { name: 'New task in New' }).click();
+  const dialog = p.getByRole('dialog', { name: 'New task' });
+  // The workspace is the one choice: no choice of the site to make.
+  await expect(dialog.getByRole('button', { name: /Site/ })).toHaveCount(0);
+  await dialog.getByLabel('Title').fill('Buy the domain');
+  await dialog.getByLabel('Title').press('Enter');
+  await expect.poll(() => sent.at(-1)?.body).toEqual({ title: 'Buy the domain', status: 'own:new' });
+  await p.keyboard.press('Escape');
+
+  await expect(p.getByRole('button', { name: 'New task', exact: true })).toBeEnabled();
+});
+
+test('a guest with no site has no « New task » to press (FRU-672)', async ({ page: p }) => {
+  await worker(p, { sites: [], role: 'guest' });
+  await p.goto(`${CONSOLE}/w/w1/notes`);
+  await expect(p.locator('tr', { hasText: 'The price' })).toBeVisible();
+  await expect(p.getByRole('button', { name: 'New task', exact: true })).toBeDisabled();
+  await expect(
+    p.locator('tbody[data-group="new"] .kit-table-group').getByRole('button', { name: 'New task in New' }),
+  ).toHaveCount(0);
+});

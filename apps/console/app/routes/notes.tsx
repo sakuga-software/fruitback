@@ -677,9 +677,10 @@ export default function Notes() {
                     folded={folded}
                     onFold={fold}
                     opened={opened}
-                    // FRU-685: « + » in the head of a group, a new task of its stage.
+                    // FRU-685: « + » in the head of a group, a new task of its stage. FRU-672: a member
+                    // with no site yet writes a task of the workspace, as with « New task ».
                     onAdd={
-                      typeof sites === 'object' && sites.length > 0
+                      typeof sites === 'object' && (sites.length > 0 || seesTracker)
                         ? (stage) =>
                             create.open({
                               ...(siteInView === undefined ? {} : { site: siteInView }),
