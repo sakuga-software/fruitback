@@ -191,8 +191,9 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
     assert.ok(calls.includes('POST /feedback/issue_7/withdraw'), JSON.stringify(calls));
   });
 
-  it('makes no key, and sends none, for a mount whose host names the reporter or carries the calls', async () => {
+  it('makes no key, and sends none, for a mount whose host carries the calls', async () => {
     const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
     const sent: TransportRequest[] = [];
     const transport = async (request: TransportRequest): Promise<TransportResponse> => {
       sent.push(request);
@@ -200,11 +201,45 @@ describe('a visitor known by the key of their browser, through init (FRU-700)', 
       return { ok: true, status: 200, body: readOf(aNote({ mine: true }), true) };
     };
     await threadOf(page, { transport });
-    const headers = pageFetch(readOf(aNote({ mine: true }), true));
-    await threadOf(page, { identityToken: () => 'token.1' });
 
     assert.equal(sent[0]?.headers[VISITOR_HEADER], undefined);
-    assert.equal(headers[0]?.[VISITOR_HEADER], undefined);
-    assert.equal(page.view.localStorage.getItem(`${VISITOR_KEY_PREFIX}site_acme`), null);
+  });
+});
+
+describe('a visitor the site signs, through init (FRU-706)', () => {
+  it('sends the key of this browser beside the token, for the worker to fall back on', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    const headers = pageFetch(readOf(aNote()));
+    await threadOf(page, { identityToken: () => 'token.1' });
+
+    assert.equal(headers[0]?.Authorization, 'Bearer token.1');
+    assert.equal(headers[0]?.[VISITOR_HEADER], 'K'.repeat(43));
+  });
+
+  it('shows « You » and what a visitor may do on a note of a person the site signed', async () => {
+    const page = mounted();
+    pageFetch(
+      JSON.stringify({
+        issues: [aNote({ mine: true, editable: true, withdrawable: true })],
+        identified: true,
+        visitor: 'signed',
+      }),
+    );
+    const root = await threadOf(page, { identityToken: () => 'token.1' });
+
+    assert.equal(root.querySelector('.fruitback-thread-you')?.textContent, 'You');
+    assert.equal(
+      root.querySelector('.fruitback-thread-you-may')?.textContent,
+      'You can edit or delete it until a member picks it up.',
+    );
+  });
+
+  it('shows no chip for a token the worker does not say is a visitor of the site', async () => {
+    const page = mounted();
+    pageFetch(readOf(aNote({ mine: true }), true));
+    const root = await threadOf(page, { identityToken: () => 'token.1' });
+
+    assert.equal(root.querySelector('.fruitback-thread-you'), null);
   });
 });

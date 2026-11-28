@@ -65,13 +65,13 @@ An extension-mode reviewer is not verified either: verification comes from the s
 holds, and only the relay carries it. Their name on a note is self-declared, exactly as a visitor's
 on a public site: `reporter.verified` is the worker's word and it withholds it.
 
-The token that a host's own backend mints has nothing to verify it on a site of the console.
-`init({ identityToken })` still sends what it returns, but a site of the console has no secret of its
-own. Measured on 2026-10-16: a note sent with such a token answers `401 invalid-identity`, so a site
-that hands one to the widget plants nothing, and a read of a site that everyone reads answers as if no
-token were sent. Before 0.3.0, a client of
-`FRUITBACK_CLIENTS` had that secret, and « a site with its own login » ran public mode with
-`read: 'authenticated'`. Whether a site of the console gets such a secret is not decided.
+The token that a host's own backend mints is verified with the key of the site: « Signed by
+your site » in the tab « Access », where anybody may leave a note. `init({ identityToken })` sends it,
+the reporter is _verified_, and the notes of that person are theirs on every device. On a site that
+does not sign, or with a token that does not verify, the worker falls back on the key of the browser:
+the note is taken, as a claim. [Identified reporters](install/identified-reporters.md) says how. Before
+0.3.0, a client of `FRUITBACK_CLIENTS` had such a secret, and « a site with its own login » ran public
+mode with `read: 'authenticated'`. A site that only its members read still takes a session only.
 
 ## Extension mode is not going away
 

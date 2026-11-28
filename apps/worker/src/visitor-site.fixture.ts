@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import type { Note } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type handleRequest as realHandle, handleRequest } from './app.ts';
-import { WORKER, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import { WORKER, type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import { signIdentityToken } from './identity.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import type { NoteIndex } from './notes-index.ts';
@@ -27,7 +28,13 @@ export const PAGE = 'https://acme.dev/pricing';
 export const KEY_A = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 export const KEY_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 
-/** Who calls: the key of a browser, a session of the extension, or both. */
+/**
+ * FRU-706: the key that seals the keys of the sites, in a world whose site signs its visitors. A value
+ * of a test, in a public repository: it seals nothing anywhere else.
+ */
+export const SECRETS_KEY = 'test-only-key-that-seals-the-keys-of-the-sites';
+
+/** Who calls: the key of a browser, a session of the extension or a token of the site, or both. */
 export type Who = { key?: string; token?: string };
 
 export type Answer = { status: number; body: Record<string, any> };
@@ -52,10 +59,15 @@ export async function aVisitorSite(
     storeOf?: (world: World) => NoteStore;
     /** The index of the notes of the world, or another in its place (FRU-702: one that fails). */
     indexOf?: (index: NoteIndex) => NoteIndex;
+    /**
+     * FRU-706: the site recognises its visitors by a token its backend signs, with a key the owner
+     * makes in the console (`siteKey`). The world seals it with `SECRETS_KEY`.
+     */
+    signed?: boolean;
   } = {},
 ) {
   const handle = options.handle ?? handleRequest;
-  const world = await open();
+  const world = await open(options.signed === true ? { env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } } : {});
   const store = (options.storeOf ?? ((each: World) => createPostgresNoteStore(each.database)))(world);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
@@ -66,6 +78,30 @@ export async function aVisitorSite(
   const bobToken = await sessionOf(world, bob.id, workspace);
   // The owner moves a note in the console: a role that manages the sites.
   const aliceToken = await sessionOf(world, alice.id, workspace);
+  // FRU-706: the owner makes the key of the site, then says the site signs its visitors, as the console does.
+  let siteKey: string | undefined;
+  if (options.signed === true) {
+    const made = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites/${site}/identity-key`, {
+      token: alice.token,
+    });
+    assert.equal(made.status, 201, await made.clone().text());
+    siteKey = ((await made.json()) as { key: string }).key;
+    const set = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+      token: alice.token,
+      body: { url: ORIGIN, visibility: 'everyone', writers: 'anyone', visitorIdentity: 'signed' },
+    });
+    assert.equal(set.status, 201, await set.clone().text());
+  }
+  /** FRU-706: a token the backend of the site mints for `sub`, valid for a minute unless `exp` says. */
+  const signedAs = (sub: string, claims: { exp?: number; name?: string; key?: string } = {}) =>
+    signIdentityToken(
+      {
+        sub,
+        exp: claims.exp ?? Math.floor(Date.now() / 1000) + 60,
+        ...(claims.name === undefined ? {} : { name: claims.name }),
+      },
+      claims.key ?? siteKey ?? 'a-site-that-signs-nobody-has-no-key-0123456789',
+    );
 
   /** A call of the page: the key of the browser when given, a session of the extension when given. */
   const call = async (method: string, path: string, who: Who = {}, body?: unknown): Promise<Answer> => {
@@ -144,5 +180,23 @@ export async function aVisitorSite(
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
   };
 
-  return { world, store, workspace, site, bobToken, call, send, read, mine, noteOf, edit, withdraw, moveTo, handle };
+  return {
+    world,
+    store,
+    workspace,
+    site,
+    alice,
+    bobToken,
+    siteKey,
+    signedAs,
+    call,
+    send,
+    read,
+    mine,
+    noteOf,
+    edit,
+    withdraw,
+    moveTo,
+    handle,
+  };
 }

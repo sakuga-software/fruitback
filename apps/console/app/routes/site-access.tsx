@@ -18,7 +18,15 @@ import { useSite } from './site-frame';
 
 const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace changes who sees the notes.'),
+  // FRU-706: « Signed by your site » takes the key of the site first.
+  'identity-key-required': msg('Make the key of the site before you save « Signed by your site ».'),
+  'identity-keys-unavailable': msg('This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.'),
 };
+const KEY_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only an owner or an admin of the workspace makes the key of a site.'),
+  'identity-keys-unavailable': msg('This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.'),
+};
+const KEY_NOT_MADE = msg('The key was not made. Try again.');
 const ACCESS_NOT_CHANGED = msg('Who sees the notes did not change. Try again.');
 
 /**
@@ -38,6 +46,9 @@ export default function SiteAccessPage() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
+  // FRU-706: the key of the site the worker just made, shown this once, and gone with the page.
+  const [madeKey, setMadeKey] = useState<string | undefined>();
+  const [making, setMaking] = useState(false);
   const host = siteName(site.origin);
   // The frame holds another site (a read again, « Save », a link to another site): a draft nobody
   // changed follows it, and one changed and not saved stays (`draftAfter`).
@@ -52,6 +63,23 @@ export default function SiteAccessPage() {
     setSaved(false);
     setProblem(undefined);
     setDraft(next);
+  }
+
+  async function makeKey() {
+    if (making) return;
+    setProblem(undefined);
+    setSaved(false);
+    setMaking(true);
+    const answer = await call<{ key?: unknown }>(
+      'POST',
+      `/console/workspaces/${workspace.id}/sites/${site.id}/identity-key`,
+    );
+    setMaking(false);
+    if (!answer.ok) return setProblem(problemOf(answer, KEY_PROBLEMS, KEY_NOT_MADE));
+    const key = answer.data?.key;
+    if (typeof key !== 'string' || key === '') return setProblem(KEY_NOT_MADE);
+    setMadeKey(key);
+    setSite((current) => ({ ...current, identityKey: 'set' }));
   }
 
   async function save() {
@@ -75,7 +103,8 @@ export default function SiteAccessPage() {
       (body.visitorNotesPerHour !== undefined && data.visitorNotesPerHour !== body.visitorNotesPerHour) ||
       (body.holdVisitorNotes !== undefined && data.holdVisitorNotes !== body.holdVisitorNotes) ||
       (body.keepNoteVersions !== undefined && data.keepNoteVersions !== body.keepNoteVersions) ||
-      (body.deletedNotesKeepDays !== undefined && data.deletedNotesKeepDays !== body.deletedNotesKeepDays)
+      (body.deletedNotesKeepDays !== undefined && data.deletedNotesKeepDays !== body.deletedNotesKeepDays) ||
+      (body.visitorIdentity !== undefined && data.visitorIdentity !== body.visitorIdentity)
     ) {
       return setProblem(ACCESS_NOT_CHANGED);
     }
@@ -116,7 +145,15 @@ export default function SiteAccessPage() {
         <div className="flex min-w-0 flex-col gap-[16px]">
           <AccessLevels host={host} access={draft} disabled={!manages || busy} onChange={change} />
           <VisitorRights access={draft} disabled={!manages || busy} onChange={change} />
-          <VisitorRecognition />
+          <VisitorRecognition
+            access={draft}
+            disabled={!manages || busy}
+            onChange={change}
+            keyState={site.identityKey ?? 'unavailable'}
+            madeKey={madeKey}
+            making={making}
+            onMakeKey={() => void makeKey()}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-[16px]">
           <VisitorPreview access={draft} />

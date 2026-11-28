@@ -162,6 +162,17 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * site of a workspace where anybody writes says it. Absent: none is kept.
    */
   keepNoteVersions?: true;
+  /**
+   * FRU-706: how a visitor with no account is recognised. Only a site of a workspace where anybody
+   * writes says it, and only such a site falls back on the key of the browser when a token is no
+   * identity (`visitorOf` of `app.ts`). `signed` comes with the key of the site.
+   */
+  visitorIdentity?: 'browser' | 'signed';
+  /**
+   * FRU-706: the key of the site, sealed with `FRUITBACK_SECRETS_KEY`, as the accounts keep it.
+   * `app.ts` opens it into `identitySecret` for the request that names the site, and drops it.
+   */
+  sealedIdentityKey?: string;
 };
 export type ClientMap = Record<string, ClientConfig>;
 
@@ -301,6 +312,11 @@ export type ClientPolicy = {
   /** Who may write on this client (FRU-330). `authenticated` answers 401 without a session. */
   write: WriteAccess;
   /**
+   * FRU-706: how a visitor with no account is recognised, on a site of a workspace where anybody
+   * writes: `ClientConfig.visitorIdentity`. Absent anywhere else.
+   */
+  visitorIdentity?: 'browser' | 'signed';
+  /**
    * The language the issue description is written in (FRU-39), for the team that triages it.
    *
    * Worker-wide: it comes from `FRUITBACK_TEAM_LOCALE` and no client overrides it, because a
@@ -416,6 +432,7 @@ export function resolveClient({
       read: client.read ?? fallback.read,
       // Never inherited: only a site of a workspace closes its writes (FRU-330).
       write: client.write ?? 'public',
+      ...(client.visitorIdentity === undefined ? {} : { visitorIdentity: client.visitorIdentity }),
       locale: fallback.locale,
       ...(sessionSecret !== undefined && client.workspace !== undefined
         ? {

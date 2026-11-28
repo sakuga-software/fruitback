@@ -771,6 +771,23 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Reject: 'Rejeter',
   'Hold new visitor notes': 'Retenir les nouvelles notes des visiteurs',
   'A member approves before they are sent': 'Un membre les approuve avant leur envoi',
+  // FRU-706: « Signed by your site », and the key of the site.
+  'This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.':
+    'Cette instance ne garde aucune clé de site : FRUITBACK_SECRETS_KEY n’est pas défini.',
+  'Copy the key now: Fruitback shows it only once, and keeps it sealed.':
+    'Copiez la clé maintenant : Fruitback ne l’affiche qu’une fois, et la garde scellée.',
+  'Your backend signs a short token with the key of the site. A new key stops the one before.':
+    'Votre backend signe un jeton court avec la clé du site. Une nouvelle clé arrête la précédente.',
+  'Make the key of the site, then save. Your backend signs a short token with it.':
+    'Créez la clé du site, puis enregistrez. Votre backend signe un jeton court avec elle.',
+  'Make a new key': 'Créer une nouvelle clé',
+  Docs: 'Documentation',
+  'Make the key': 'Créer la clé',
+  'Make the key of the site before you save « Signed by your site ».':
+    'Créez la clé du site avant d’enregistrer « Signé par votre site ».',
+  'Only an owner or an admin of the workspace makes the key of a site.':
+    'Seul un propriétaire ou un admin de l’espace crée la clé d’un site.',
+  'The key was not made. Try again.': 'La clé n’a pas été créée. Réessayez.',
   // FRU-704: « Keep every version », and the history of a note in its panel.
   'Keep every version': 'Garder chaque version',
   'Edits and deletions stay in the history': 'Les modifications et les suppressions restent dans l’historique',

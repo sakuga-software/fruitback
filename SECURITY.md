@@ -2691,8 +2691,9 @@ them by a key that their browser holds, and by nothing else.
 - What the key is. 32 random bytes that the widget makes at the first note a visitor sends with no
   account, keeps in the `localStorage` of the page under the id of the site, and sends in the
   header `X-Fruitback-Visitor` with each call. **It is not a proof of who somebody is**: any script of
-  the page reads it, and whoever holds it is taken for this browser. A widget that a site mounts with
-  an identity token, or that the extension carries, makes none.
+  the page reads it, and whoever holds it is taken for this browser. A widget that the extension
+  carries makes none. A widget that a site mounts with an identity token keeps one too: a
+  token that the worker does not take falls back on it, below.
 - What the worker keeps. A SHA-256 digest of the key and of the site, in `note_index.author_visitor`,
   for a note of a visitor only. Never the key. The same key gives another digest on another site, so
   a digest read from the database opens nothing elsewhere.
@@ -2708,8 +2709,9 @@ them by a key that their browser holds, and by nothing else.
   that route:
   - the author the index keeps must be `visitor:<digest>` of this key on this site, else `403
     not-allowed`; a member of the team is refused too;
-  - no key, or a key of another shape, is `401 identity-required`; a request with a token is never
-    read as a visitor, so a session that ended is told so;
+  - no key, or a key of another shape, is `401 identity-required`; a session of the worker is never
+    read as a visitor, even one that ended, so it is told so; a token of a site is read as in the
+    next section;
   - the site must let its visitors edit, « While open » in the tab « Access » (`visitorEdit`, read by
     `visitorMay`; only a site that takes the notes of anybody has it), else `403 not-allowed`;
   - the note must be open, read in the store for the request and again under the lock of the row,
@@ -2746,6 +2748,53 @@ them by a key that their browser holds, and by nothing else.
   and `visitor-delete.test.ts`, and the case that holds it fails.
 - CORS. The header is not safelisted, so `Access-Control-Allow-Headers` lists it. A read of a
   visitor who sent a note is then preflighted, as a read with a token is.
+
+### A visitor the site signs (FRU-706)
+
+A site whose people sign in to its own app can say who its visitor is: « Signed by your site » in the
+tab « Access ». Their notes are theirs on every device, with the rights of a visitor known by their
+browser, and no more.
+
+- The key of the site. An owner or an admin makes it in the tab « Access »
+  (`POST /console/workspaces/<id>/sites/<id>/identity-key`, `manage-sites`): 32 random bytes. The
+  answer holds it **once**, with `Cache-Control: no-store`; no route gives it again, and the list of
+  the sites says only `set`, `none` or `unavailable`. The worker keeps it sealed with
+  `FRUITBACK_SECRETS_KEY` (AES-256-GCM, `secrets.ts`), as the keys of the connectors: a copy of the
+  database holds no key that signs. A new key replaces the one before at once. No new secret of the
+  instance: a worker with no `FRUITBACK_SECRETS_KEY` keeps no key of a site, and the console says so.
+  test:`shows the key once, to a role that manages the sites, and says only that there is one after`.
+- What the backend of the site signs. A JWT HS256 with the key of the site: `sub` (who the visitor is
+  for the site), `exp`, and optionally `name` and `email`, as `docs/install/identified-reporters.md`
+  shows. The widget sends it in `Authorization` (`init({ identityToken })`), never in the note. The
+  verifier is the one above: `HS256` asserted, `exp` required, constant time, 4 KiB at most.
+- What it opens. The worker keeps a SHA-256 digest of the site and of `sub`, with another prefix than
+  the key of a browser, in `note_index.author_visitor`; never `sub`. That digest opens the notes of
+  this person on this site, on every device, while they are open: `mine`, the edit and the deletion,
+  with every guard of the edit and of the deletion above (the setting of the site, the stage, the
+  replies of a minute). A note of another person of the site, or of a browser, is never theirs.
+  test:`gives the notes of a signed person to them on every device, and to nobody else`,
+  test:`lets the signed person edit and delete their open note from another device, and nobody else`.
+- A person the site signed is a visitor all the same: the safeguards of the site count them by their
+  digest (the notes of the hour, « Hold new visitor notes »). The reporter in the tracker is the one
+  the token names, `verified`, as for any token a site signs.
+  test:`counts the notes of a signed person by the hour on every device, as a visitor`,
+  test:`names the person as the site signed them, and says so in the read`.
+- A token that does not verify gives nothing more than the key of the browser. On a site where
+  anybody writes, a token that expired, that another key signed, or that a site sends after it
+  stopped signing, is no identity: the request is read as if it had no token, and the key of the
+  browser decides, a claim with no `verified`. A session of the worker is never read so: one that
+  ended is still told `401`. test:`falls back on the key of the browser for a token that expired, with no right more`,
+  test:`falls back on the key of the browser for a token signed with another key`,
+  test:`still tells a session of the worker that expired that it ended: it is never read as a visitor`,
+  test:`falls back on the key of the browser once the site stops signing, and recognises nobody by a token`.
+- A key that does not open (a database restored on an instance with another `FRUITBACK_SECRETS_KEY`)
+  is no key: the site recognises its visitors by their browser.
+  test:`knows a visitor by their browser on a worker that cannot open the key of the site`.
+- It is the word of the site. Whoever holds the key of the site signs any `sub`, so a site that
+  leaks it lets anybody act on the open notes of its signed visitors, on that site only. The key opens
+  nothing of the workspace, no other site, and no session: a token of a site is never a member.
+- Each guard is taken out of a copy of its module in `visitor-signed.test.ts`, and the case that
+  holds it fails.
 
 ### The versions of a note (FRU-704)
 
@@ -2824,13 +2873,14 @@ many notes a visitor with no account may leave there in an hour: « No limit »,
 /feedback` counts them before anything is written; over it, `429 visitor-limit` with the limit, and
 the widget says « Send it again later » with the text kept.
 
-- Who is counted. A caller with no token, on a site that takes the notes of anybody. A session of a
-  member, a token that the site signs, a site of its members only and a client of
+- Who is counted. A caller with no token, on a site that takes the notes of anybody, and a person
+  the site signed, by their digest. A session of a member, a token that a site signs where it does
+  not recognise its visitors that way, a site of its members only and a client of
   `FRUITBACK_CLIENTS` are not counted.
   test:`never counts a member of the workspace, after a visitor spent the hour`.
   A visitor is what `attributionFor` names one, after the token was read: a token that does not
-  verify is refused with `401` before the count, never taken for a member.
-  test:`lets no token that does not verify pass the count: it is refused, and writes nothing (review of #984)`.
+  verify is counted as the browser it came with, never taken for a member.
+  test:`lets no token that does not verify pass the count: it counts as the browser it came with, and writes nothing (review of #984, FRU-706)`.
 - Two counts, by site. The key of the browser (its digest, `visitorDigestOf`) at the limit, and the
   address at three times it, as the people of one office share an address. Over either one refuses;
   with no key the address counts alone, so a visitor who clears their key meets it.

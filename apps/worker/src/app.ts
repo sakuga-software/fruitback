@@ -1,6 +1,12 @@
 import { json } from './http.ts';
 import type { NoteIssue, NoteReporter } from '@fruitback/shared';
-import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
+import {
+  type IdentityResult,
+  readBearerToken,
+  signedWith,
+  stripClaimedVerification,
+  verifyIdentityToken,
+} from './identity.ts';
 import {
   type ClientConfig,
   type ClientMap,
@@ -42,7 +48,8 @@ import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import { placedAt, routingFailure, targetsOf } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
-import { visitorAuthor, visitorDigestOf, visitorMay } from './visitor-key.ts';
+import { signedVisitorDigestOf, visitorAuthor, visitorDigestOf, visitorMay } from './visitor-key.ts';
+import { open } from './secrets.ts';
 
 import {
   accountStoreFor,
@@ -136,23 +143,76 @@ async function hidesTracker(request: Request, config: Served, policy: ClientPoli
 
 /**
  * Who reads, as `NoteIndex.authors` names an author (FRU-700): the account of a session of the
- * workspace of the site, or else `visitor:<digest>` of the key of this browser for this site, or
- * `undefined`. `by` says which. A session wins: a member is never read as the browser they use.
+ * workspace of the site, or else the visitor of this request (`visitorOf`, FRU-706): `visitor:<digest>`
+ * of the person the site signed, or of the key of this browser. `undefined` for anybody else. `by` says
+ * which. A session wins: a member is never read as the browser they use.
  */
 async function readerOf(
   request: Request,
   policy: ClientPolicy,
   site: string,
-): Promise<{ author: string; by: 'account' | 'browser' } | undefined> {
+): Promise<{ author: string; by: 'account' | Visitor['by'] } | undefined> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token !== undefined && policy.sessions !== undefined) {
     const verified = await verifyForClient(token, policy);
     const account = verified?.ok === true && verified.session === true ? verified.reporter.id : undefined;
     if (account !== undefined) return { author: account, by: 'account' };
   }
+  const visitor = await visitorOf(request, policy, site);
+
+  return visitor === undefined ? undefined : { author: visitorAuthor(visitor.digest), by: visitor.by };
+}
+
+/** A visitor with no account, as the index names them (FRU-700, FRU-706): a digest, and how it was made. */
+export type Visitor = { digest: string; by: 'browser' | 'signed' };
+
+/**
+ * The visitor of this request on `site` (FRU-700, FRU-706), or `undefined`: the one function that says
+ * who a visitor is, for the read, the note, the batch, the hour, the hold, the edit and the withdrawal.
+ *
+ * - **Signed by the site**: a token that verifies with the key of a site that recognises its visitors
+ *   that way (`visitorIdentity: 'signed'`). The digest of its `sub`, the same on every device.
+ * - **The key of the browser**: no token; or, on a site of a workspace where anybody writes, a token
+ *   that is no identity (`isNoIdentity`): signed by no key of the site, expired, or forged. It falls
+ *   back on the key, with nothing more than the key gives.
+ * - **Nobody**: a session of the worker, valid or ended (a member, and one that ended is told `401`),
+ *   and on any other client a request with a token, as before FRU-706.
+ */
+async function visitorOf(
+  request: Request,
+  policy: ClientPolicy,
+  site: string | undefined,
+): Promise<Visitor | undefined> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token !== undefined) {
+    if (site === undefined || site === '') return undefined;
+    const verified = await verifyForClient(token, policy);
+    if (verified?.ok === true) {
+      const sub = verified.reporter.id;
+      if (verified.session === true || policy.visitorIdentity !== 'signed' || sub === undefined) return undefined;
+
+      return { digest: signedVisitorDigestOf(site, sub), by: 'signed' };
+    }
+    if (!(await isNoIdentity(token, policy))) return undefined;
+  }
   const digest = visitorDigestOf(request, site);
 
-  return digest === undefined ? undefined : { author: visitorAuthor(digest), by: 'browser' };
+  return digest === undefined ? undefined : { digest, by: 'browser' };
+}
+
+/**
+ * Whether a token that did not verify is no identity at all (FRU-706), so the request is read as if it
+ * had none: on a site of a workspace where anybody writes (`visitorIdentity` set), a token that the
+ * worker key did not sign. A site that stopped signing, a token that expired and a forged one all fall
+ * back on the key of the browser, as the ticket asks. A session of the worker that ended stays a
+ * session, and is told so: the extension asks for a sign-in again, never writes as a visitor.
+ *
+ * WARNING: the caller verified the token already and it failed. This never makes a token count.
+ */
+async function isNoIdentity(token: string, policy: ClientPolicy): Promise<boolean> {
+  if (policy.visitorIdentity === undefined) return false;
+
+  return policy.sessions === undefined || !(await signedWith(token, policy.sessions.secret));
 }
 
 /**
@@ -171,7 +231,7 @@ async function notesOfReader(
   site: string | undefined,
   issues: readonly NoteIssue[],
   noteIndex: NoteIndex | undefined,
-): Promise<{ notes: Set<string>; by?: 'account' | 'browser' }> {
+): Promise<{ notes: Set<string>; by?: 'account' | Visitor['by'] }> {
   if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) {
     return { notes: new Set() };
   }
@@ -652,7 +712,7 @@ async function routed(
     signsNotes,
     attributionFor,
     chosenPlace,
-    visitorOf: visitorDigestOf,
+    visitorOf,
     visitorMay,
     done,
     // FRU-721: when the widget was last seen on a site, by which way.
@@ -851,6 +911,12 @@ async function replyAuthorFor(
   }
 
   const verified = await verifyForClient(token, policy);
+  // FRU-706: a token that is no identity, on a site where anybody writes, is a visitor with no token.
+  if (verified?.ok !== true && (await isNoIdentity(token, policy))) {
+    return policy.read === 'public'
+      ? { ok: true, author: { kind: 'visitor', ...(typed === undefined ? {} : { name: typed }) }, account: false }
+      : { ok: false, status: 401, reason: 'identity-required' };
+  }
   if (verified === undefined) return { ok: false, status: 401, reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, status: 401, reason: verified.reason };
   // FRU-330: a site whose notes are « Members only » takes a reply of a session only, as a note.
@@ -974,6 +1040,7 @@ class SiteUnread extends Error {
 async function namedClient(
   clientNamed: (site: string) => Promise<ClientConfig | undefined>,
   clientId: string | undefined,
+  secretsKey: string | undefined,
 ): Promise<ClientMap> {
   const id = normalizeClientId(clientId);
   let client: ClientConfig | undefined;
@@ -984,7 +1051,21 @@ async function namedClient(
     throw error;
   }
 
-  return id === undefined || client === undefined ? {} : { [id]: client };
+  return id === undefined || client === undefined ? {} : { [id]: withIdentityKey(client, secretsKey) };
+}
+
+/**
+ * The client of a site with the key its backend signs visitors with (FRU-706), opened for this request
+ * only: `identitySecret`, which `verifyForClient` reads first. The sealed value goes. A key that does
+ * not open (no `FRUITBACK_SECRETS_KEY`, or another one) gives no key: the visitors of the site are known
+ * by their browser, and a token of the site falls back on it.
+ */
+function withIdentityKey(client: ClientConfig, secretsKey: string | undefined): ClientConfig {
+  const { sealedIdentityKey, ...rest } = client;
+  if (sealedIdentityKey === undefined) return rest;
+  const key = secretsKey === undefined ? undefined : open(sealedIdentityKey, secretsKey);
+
+  return key === undefined ? { ...rest, visitorIdentity: 'browser' } : { ...rest, identitySecret: key };
 }
 
 /**
@@ -1028,7 +1109,7 @@ async function routeFor(request: Request, config: Served, clientId: string | und
 
   return resolveClient({
     // FRU-495: on a worker with accounts, the one site the request names, never every site.
-    clients: clientNamed === undefined ? config.clients : await namedClient(clientNamed, clientId),
+    clients: clientNamed === undefined ? config.clients : await namedClient(clientNamed, clientId, config.secretsKey),
     clientId,
     origin: request.headers.get('Origin'),
     fallback: {
@@ -1170,18 +1251,21 @@ async function attributionFor(
   | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
 > {
   const token = readBearerToken(request.headers.get('Authorization'));
-  if (token === undefined) {
+  const verified = token === undefined ? undefined : await verifyForClient(token, policy);
+  // FRU-706: on a site where anybody writes, a token that is no identity falls back on the key of the
+  // browser: the note is the note of a visitor, a claim, as with no token. Nothing more is given.
+  if (token === undefined || (verified?.ok !== true && (await isNoIdentity(token, policy)))) {
     // FRU-330: a site whose notes are « Members only » refuses a note with no session, with the
     // answer of a read that it refuses.
     if (policy.write === 'authenticated') {
       return { ok: false, error: 'identity-required', reason: 'identity-required' };
     }
 
-    // FRU-704: the one answer that names a visitor. A token that does not verify never gets this far.
+    // FRU-704: the one answer that names a visitor. A token that does not verify gets here only as
+    // no identity (FRU-706).
     return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script', account: false, visitor: true };
   }
 
-  const verified = await verifyForClient(token, policy);
   if (verified === undefined) return { ok: false, error: 'invalid-identity', reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, error: 'invalid-identity', reason: verified.reason };
   // A token that a site signs names nobody of the workspace: it is no session (FRU-330).
@@ -1194,8 +1278,9 @@ async function attributionFor(
     channel: verified.session === true ? 'extension' : 'script',
     // A session of an account (FRU-238): `postFeedback` reads it again before it writes.
     account: verified.session === true && verified.account === true,
-    // A token the worker verified: a session, or a page that signs its reporter. Not counted (FRU-704).
-    visitor: false,
+    // A session is not counted (FRU-704). FRU-706: a person the site signed, on a site that recognises
+    // its visitors that way, is a visitor all the same: counted by the hour and held, by their digest.
+    visitor: verified.session !== true && policy.visitorIdentity === 'signed',
   };
 }
 

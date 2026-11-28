@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { type Access, type Level, LEVELS, levelOf, visitorReplies, withLevel } from '../access-policy';
 import {
   DELETED_NOTE_KEEPS,
@@ -10,7 +10,8 @@ import {
   type Writers,
 } from '../api';
 import { msg, t } from '../i18n';
-import { Choice, PickCards, StatusDot, Toggle } from '../ui';
+import { copyText } from '../problems';
+import { Button, Choice, LinkButton, PickCards, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 
 /**
@@ -20,8 +21,8 @@ import { useLocale } from '../use-locale';
  * no setting of the worker holds is written as words, not drawn as a list that could change it.
  *
  * The card « Safeguards » (FRU-704) grows one line by safeguard, each with its pull request: « Notes
- * per visitor » first. Drawn and not chosen: the level « Collaborate » (FRU-707) and the two ways to
- * recognise a visitor that come later (FRU-705, FRU-706).
+ * per visitor » first. Drawn and not chosen: the level « Collaborate » (FRU-707) and the way to
+ * recognise a visitor that comes later (FRU-705). « Signed by your site » is chosen since FRU-706.
  */
 
 /** The icons of the tab, drawn as every icon of the console: a grid of 24, a stroke of 2. */
@@ -342,12 +343,38 @@ export function VisitorRights({
   );
 }
 
+/** FRU-706: the page of the guides that says how the backend of a site signs a visitor. */
+const SIGNING_GUIDE = 'https://fruitback.com/install/identified-reporters.html';
+
 /**
- * « How a visitor is recognised »: a key kept in the browser, the one way today (FRU-700). The other
- * two come later (FRU-705, FRU-706): drawn, and not chosen. Nothing here is stored.
+ * The card « How a visitor is recognised » (FRU-706). « This browser » and « Signed by your site » can
+ * be chosen; « A confirmed e-mail » comes with FRU-705. « Signed by your site » takes the key of the
+ * site, which this card makes (`onMakeKey`) and shows once, the moment it is made (`madeKey`): the
+ * worker keeps it sealed and never gives it again. Where only members write, no visitor is recognised,
+ * and the card is drawn and disabled.
  */
-export function VisitorRecognition() {
+export function VisitorRecognition({
+  access,
+  disabled,
+  onChange,
+  keyState,
+  madeKey,
+  making,
+  onMakeKey,
+}: {
+  access: Access;
+  disabled: boolean;
+  onChange: (access: Access) => void;
+  keyState: 'set' | 'none' | 'unavailable';
+  /** The key just made, shown this once. */
+  madeKey: string | undefined;
+  making: boolean;
+  onMakeKey: () => void;
+}) {
   useLocale();
+  const [copied, setCopied] = useState<'none' | 'yes' | 'refused'>('none');
+  const writes = access.writers === 'anyone';
+  const unavailable = keyState === 'unavailable';
   const ways = [
     {
       id: 'browser',
@@ -368,17 +395,21 @@ export function VisitorRecognition() {
       icon: 'key',
       title: t('Signed by your site'),
       detail: t('Your backend signs who the visitor is. For logged-in users of your app.'),
-      later: true,
+      later: unavailable,
     },
   ] as const;
+  const signing = writes && access.visitorIdentity === 'signed';
 
   return (
     <AccessCard id="recognition" icon="key" title={t('How a visitor is recognised')}>
       <PickCards
         label={t('How a visitor is recognised')}
         layout="rows"
-        value="browser"
-        onChange={() => undefined}
+        value={writes ? access.visitorIdentity : 'browser'}
+        disabled={disabled || !writes}
+        onChange={(chosen) => {
+          if (chosen === 'browser' || chosen === 'signed') onChange({ ...access, visitorIdentity: chosen });
+        }}
         options={ways.map((way) => ({
           value: way.id,
           label: way.later ? `${way.title} · ${t('Later')}` : way.title,
@@ -387,6 +418,56 @@ export function VisitorRecognition() {
           disabled: way.later,
         }))}
       />
+      <div className="flex flex-col gap-[8px] border-t border-line px-[16px] py-[10px]" data-signing-key>
+        {unavailable ? (
+          <p className="text-hint text-muted">
+            {t('This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.')}
+          </p>
+        ) : null}
+        {signing && madeKey !== undefined ? (
+          <>
+            <p className="text-small font-semibold text-ink">
+              {t('Copy the key now: Fruitback shows it only once, and keeps it sealed.')}
+            </p>
+            <div className="flex flex-wrap items-center gap-[10px]">
+              <code
+                data-secret
+                className="min-w-0 flex-[1_1_240px] rounded-control bg-chip px-[12px] py-[8px] font-mono text-tiny break-all"
+              >
+                {madeKey}
+              </code>
+              <Button
+                tone="outline"
+                onClick={() => void copyText(madeKey).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
+              >
+                {copied === 'yes' ? t('Copied') : t('Copy the key')}
+              </Button>
+            </div>
+            {copied === 'refused' ? (
+              <p role="alert" className="text-hint text-muted">
+                {t('The browser refused the copy. Select the key above and copy it by hand.')}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {signing && madeKey === undefined ? (
+          <p className="text-hint text-muted">
+            {keyState === 'set'
+              ? t('Your backend signs a short token with the key of the site. A new key stops the one before.')
+              : t('Make the key of the site, then save. Your backend signs a short token with it.')}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
+          {signing && !unavailable ? (
+            <Button tone="outline" disabled={disabled || making} onClick={onMakeKey}>
+              {keyState === 'set' || madeKey !== undefined ? t('Make a new key') : t('Make the key')}
+            </Button>
+          ) : null}
+          <LinkButton href={SIGNING_GUIDE} newTab>
+            {t('Docs')}
+          </LinkButton>
+        </div>
+      </div>
     </AccessCard>
   );
 }

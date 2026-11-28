@@ -401,7 +401,8 @@ export function elementOf(note: Pick<Note, 'anchor' | 'source'>): { selector: st
 /**
  * The author of a note, from what the worker verified when it took it. `visitor`: the digest of the
  * key of the browser that sent it (FRU-700), kept for a note of a visitor only: a note that a session
- * or a token signs has its author already.
+ * signs has its author already. FRU-706: a note that a token of the site signs keeps the digest of the
+ * person it names, on a site that recognises its visitors that way, and is still `site`.
  */
 export function authorOf(
   note: Note,
@@ -412,5 +413,5 @@ export function authorOf(
     return visitor === undefined ? { kind: 'visitor' } : { kind: 'visitor', visitor };
   if (session && note.reporter.id !== undefined) return { kind: 'member', account: note.reporter.id };
 
-  return { kind: 'site' };
+  return visitor === undefined ? { kind: 'site' } : { kind: 'site', visitor };
 }

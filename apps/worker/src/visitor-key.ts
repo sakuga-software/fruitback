@@ -38,6 +38,16 @@ export function visitorDigestOf(request: Request, site: string | undefined): str
   return createHash('sha256').update(`fruitback-visitor\n${site}\n${key}`).digest('base64url');
 }
 
+/**
+ * The digest of a visitor the site signed (FRU-706): `sub` of a token that verified with the key of
+ * `site`. The same person gives the same digest on every device, so their notes are theirs everywhere.
+ * Another prefix than the key of a browser: a `sub` written like a key never gives the digest of that
+ * key, and a key never opens the notes of a signed visitor.
+ */
+export function signedVisitorDigestOf(site: string, sub: string): string {
+  return createHash('sha256').update(`fruitback-signed-visitor\n${site}\n${sub}`).digest('base64url');
+}
+
 /** The author of a note of a visitor, as `NoteIndex.authors` names it and a route compares it. */
 export function visitorAuthor(digest: string): string {
   return `${VISITOR_AUTHOR_PREFIX}${digest}`;

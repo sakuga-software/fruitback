@@ -27,8 +27,14 @@ const SITES = [
     keepNoteVersions: true,
     // FRU-704: « Deleted notes », 30 days for a new site.
     deletedNotesKeepDays: 30,
+    // FRU-706: known by their browser, and no key of the site yet, on a worker that keeps one.
+    visitorIdentity: 'browser',
+    identityKey: 'none',
   },
 ];
+
+/** FRU-706: a key as the worker makes one, of a test: it signs nothing. */
+const SITE_KEY = 'test-only-key-of-a-site-0123456789abcdefghi';
 
 type Worker = {
   posted: Record<string, unknown>[];
@@ -37,17 +43,27 @@ type Worker = {
   ofBefore?: boolean;
   /** FRU-704: a worker that answers the site without the notes of a visitor in an hour it was sent. */
   dropsLimit?: boolean;
+  /** FRU-706: how many keys of a site the worker made. */
+  keys: number;
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
-  const worker: Worker = { posted: [] };
+  const worker: Worker = { posted: [], keys: 0 };
   const answer = (pathname: string, route: Route) => {
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
+    // FRU-706: the key of the site, in this answer only.
+    if (pathname === '/console/workspaces/w1/sites/s2/identity-key' && route.request().method() === 'POST') {
+      worker.keys += 1;
+
+      return json({ key: SITE_KEY }, 201);
+    }
     // The worker answers the site that exists to the add of its address, changed (FRU-504).
     if (pathname === '/console/workspaces/w1/sites' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       worker.posted.push(body);
       if (worker.refuses !== undefined) return json({ error: worker.refuses }, 403);
+      // FRU-706: « Signed by your site » takes the key of the site first.
+      if (body.visitorIdentity === 'signed' && worker.keys === 0) return json({ error: 'identity-key-required' }, 400);
       const site = SITES.find((each) => each.origin === body.url);
       // Another site than the one of the page: this one was not changed.
       if (worker.answersAnother === true) return json({ ...site, ...body, id: 'another', origin: body.url }, 201);
@@ -150,7 +166,8 @@ test('an owner reaches the tab from the page of a site, and reads its access as 
     ['Change the status', 'Never', 'Never'],
     ['See the tracker and assignee', 'Hidden', 'Hidden'],
   ]);
-  // The browser is the one way today; the two others are drawn and not chosen.
+  // The browser is chosen. A worker of before keeps no key of a site: « Signed by your site » cannot
+  // be chosen there (FRU-706), and the e-mail comes later (FRU-705).
   const ways = card(page, 'How a visitor is recognised').getByRole('radio');
   await expect(ways).toHaveCount(3);
   await expect(ways.nth(0)).toBeChecked();
@@ -216,6 +233,8 @@ test('a level fills the table, a cell changed says « Custom », and « Save » 
       keepNoteVersions: false,
       // Nor « Deleted notes »: it kept a deleted note as long as the note, read as the longest choice.
       deletedNotesKeepDays: 90,
+      // Nor how a visitor is recognised (FRU-706): by their browser, what it did.
+      visitorIdentity: 'browser',
     },
   ]);
 
@@ -377,6 +396,43 @@ test('« Keep every version » is on for a new site, sent where anybody writes, 
   await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
   expect(worker.posted.at(-1)).not.toHaveProperty('keepNoteVersions');
   await expectNoViolation(page, 'the card « Safeguards » with « Keep every version »');
+});
+
+test('« Signed by your site » makes the key of the site, shows it once, and is sent where anybody writes (FRU-706)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
+  const recognition = card(page, 'How a visitor is recognised');
+  await expect(recognition.getByRole('radio', { name: 'This browser' })).toBeChecked();
+  await expect(recognition.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+    'href',
+    'https://fruitback.com/install/identified-reporters.html',
+  );
+
+  await recognition.getByText('Signed by your site', { exact: true }).click();
+  await expect(recognition.getByRole('radio', { name: 'Signed by your site' })).toBeChecked();
+  // No key yet: the worker refuses the save, and says why; what was chosen stays.
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByText('Make the key of the site before you save « Signed by your site ».')).toBeVisible();
+  await expect(recognition.getByRole('radio', { name: 'Signed by your site' })).toBeChecked();
+
+  await recognition.getByRole('button', { name: 'Make the key' }).click();
+  await expect(recognition.locator('[data-secret]')).toHaveText(SITE_KEY);
+  await expect(recognition).toContainText('Copy the key now: Fruitback shows it only once, and keeps it sealed.');
+  await expect(recognition.getByRole('button', { name: 'Make a new key' })).toBeVisible();
+  await expectNoViolation(page, 'the card « How a visitor is recognised » with the key shown once');
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.keys).toBe(1);
+  expect(worker.posted.at(-1)).toMatchObject({ writers: 'anyone', visitorIdentity: 'signed' });
+
+  // Where only members write, no visitor is recognised: nothing is sent, and the card is disabled.
+  await levels(page).getByText('Read only', { exact: true }).click();
+  await expect(recognition.getByRole('radio', { name: 'Signed by your site' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).not.toHaveProperty('visitorIdentity');
 });
 
 test('« Deleted notes » keeps 30 days by default, is sent where anybody writes, and said « n/a » where only members do (FRU-704)', async ({

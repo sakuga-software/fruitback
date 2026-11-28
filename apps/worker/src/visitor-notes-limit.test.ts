@@ -47,20 +47,22 @@ describe('the notes of a visitor in an hour (FRU-704)', () => {
     }
   });
 
-  it('lets no token that does not verify pass the count: it is refused, and writes nothing (review of #984)', async () => {
+  it('lets no token that does not verify pass the count: it counts as the browser it came with, and writes nothing (review of #984, FRU-706)', async () => {
     const { world, site, call, noteOf } = await aVisitorSite();
     await rowsOf(world.database, `UPDATE sites SET visitor_notes_per_hour = 5 WHERE id = '${site}'`);
     for (let index = 0; index < 5; index += 1) await call('POST', '/feedback', { key: KEY_A }, noteOf(`vt_${index}`));
     assert.equal((await call('POST', '/feedback', { key: KEY_A }, noteOf('vt_refused'))).status, 429);
 
+    // FRU-706: on a site where anybody writes, a token that is no identity falls back on the key of the
+    // browser, which is counted: the limit holds it as it holds the browser alone.
     for (const token of ['junk', 'not.a.session', 'eyJhbGciOiJIUzI1NiJ9.e30.c2lnbmF0dXJl']) {
       const forged = await call('POST', '/feedback', { key: KEY_A, token }, noteOf(`vt_${token}`));
-      assert.equal(forged.status, 401, `${token}: ${JSON.stringify(forged.body)}`);
+      assert.deepEqual([forged.status, forged.body.error], [429, 'visitor-limit'], token);
       const batch = await call('POST', '/feedback', { key: KEY_A, token }, [
         noteOf(`vtb_${token}_1`),
         noteOf(`vtb_${token}_2`),
       ]);
-      assert.equal(batch.status, 401, `${token}: ${JSON.stringify(batch.body)}`);
+      assert.deepEqual([batch.status, batch.body.error], [429, 'visitor-limit'], token);
     }
     assert.equal(await notesInStore(world), 5);
   });

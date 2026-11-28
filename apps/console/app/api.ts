@@ -39,6 +39,9 @@ export type Visibility = 'members' | 'everyone';
 export type Writers = 'members' | 'anyone';
 /** What a visitor may do to a note of their own (FRU-703): change its text, or take it back. */
 export type VisitorRight = 'never' | 'while-open';
+
+/** FRU-706: how a visitor with no account is recognised, as the worker stores it. */
+export type VisitorIdentity = 'browser' | 'signed';
 /** FRU-704: the notes a visitor leaves on a site in an hour, as the worker takes them. `0` is « No limit ». */
 export const VISITOR_NOTE_LIMITS = [0, 5, 10, 20, 50] as const;
 export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
@@ -106,6 +109,16 @@ export type Site = {
   keepNoteVersions?: boolean;
   /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept. A worker of before sends nothing. */
   deletedNotesKeepDays?: DeletedNoteKeep;
+  /**
+   * FRU-706: « How a visitor is recognised »: the key of their browser, or a token the backend of the
+   * site signs. A worker of before sends nothing: the browser, what it did.
+   */
+  visitorIdentity?: VisitorIdentity;
+  /**
+   * FRU-706: whether the site has a key its backend signs visitors with (`set`), none yet (`none`), or
+   * whether this instance keeps none (`unavailable`). Never the key: the worker gives it once.
+   */
+  identityKey?: 'set' | 'none' | 'unavailable';
   destination?: Destination;
   destinations?: Destination[];
   /**

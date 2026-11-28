@@ -77,7 +77,9 @@ describe('a visitor deletes their open note (FRU-702)', () => {
     assert.equal((await withdraw(issue, {})).status, 401);
     assert.equal((await withdraw(issue, { key: 'not-a-key' })).status, 401);
     assert.equal((await withdraw(issue, { token: bobToken })).status, 403);
-    assert.equal((await withdraw(issue, { key: KEY_A, token: 'not.a.session' })).status, 401);
+    // FRU-706: a token that is no identity gives nothing more than the browser it came with.
+    assert.equal((await withdraw(issue, { key: KEY_B, token: 'not.a.session' })).status, 403);
+    assert.equal((await withdraw(issue, { token: 'not.a.session' })).status, 401);
 
     assert.equal((await read({ key: KEY_B })).get('vd_1')?.stage, 'new');
     assert.equal((await read({ key: KEY_B })).get('vd_1')?.withdrawable, undefined);

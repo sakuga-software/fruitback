@@ -292,6 +292,13 @@ The table `done_notices` keeps one row for each note that waits:
 
 ### What the worker keeps besides the note
 
+- The key of a site that signs its visitors, « Signed by your site » in the tab « Access »:
+  sealed with `FRUITBACK_SECRETS_KEY`, in `sites.identity_key`, until a new key replaces it or the site
+  goes. It is a secret of the site, about no person. The token the backend of the site signs is never
+  kept: the worker reads `sub`, `name` and `email` from it when a note comes, as for every token a site
+  signs, and keeps a digest of `sub` with the site in the index, so that the notes of the person are
+  theirs on every device. The tracker gets the name and the address the token gives, as the reporter.
+
 - No access log. The worker writes to its output at boot, on a configuration problem and on a
   failed request. It does not log the requests it serves. Your reverse proxy probably does: its
   access log holds the address of every visitor that loaded a pin, and you set its retention.
@@ -441,23 +448,23 @@ site from it, and reads the list of the notes from it. The row is written when t
 again each time a read of the page asks the store; a note planted before the index is written at
 the first read of its page, with what that read says.
 
-| Column                       | What it holds                                                                                                                                                   |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `site_id`, `workspace_id`    | The site of the note and its workspace.                                                                                                                         |
-| `note_id`                    | The id the widget gave the note.                                                                                                                                |
-| `page_url`                   | The address of the page, as the worker canonicalised it.                                                                                                        |
-| `excerpt`                    | The first 64 characters of the text, never more, spaces and line breaks made one space, cut between two characters. For a person to tell one note from another. |
-| `stage`                      | The stage the store last said, and `checked_at` when it said it.                                                                                                |
-| `channel`                    | `script` or `extension`: whether a session of an extension signed the note. Empty for a note from before the index.                                             |
-| `author_kind`                | `visitor`, `site` (a token the site signed), `member` (a session of the workspace) or `verified` (a note from before the index whose reporter was verified).    |
-| `author_account_id`          | The account of a member who left the note. Empty for everyone else, and emptied when the account is removed.                                                    |
-| `author_visitor`             | For a note of a visitor, a SHA-256 digest of the key of their browser and of the site. Never the key. Empty for everyone else, and for a note sent with no key. |
-| `removed_at`                 | When the visitor who left the note deleted it from the page. The note and its row stay, closed, for the team. Empty for every other note.                       |
-| `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                   |
-| `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                       |
-| `created_at`                 | When the worker took the note.                                                                                                                                  |
-| `confirmed`                  | Whether the newest verdict in the replies of the note is « looks fixed », as the last read that saw them said it. Empty until one did. No name, no text.        |
-| `selector`, `component`      | The element of the note: its selector, shadow hosts included, and the name of its component when the build gave one. Code of the site, no text of the note.     |
+| Column                       | What it holds                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site_id`, `workspace_id`    | The site of the note and its workspace.                                                                                                                                                                                                                                                   |
+| `note_id`                    | The id the widget gave the note.                                                                                                                                                                                                                                                          |
+| `page_url`                   | The address of the page, as the worker canonicalised it.                                                                                                                                                                                                                                  |
+| `excerpt`                    | The first 64 characters of the text, never more, spaces and line breaks made one space, cut between two characters. For a person to tell one note from another.                                                                                                                           |
+| `stage`                      | The stage the store last said, and `checked_at` when it said it.                                                                                                                                                                                                                          |
+| `channel`                    | `script` or `extension`: whether a session of an extension signed the note. Empty for a note from before the index.                                                                                                                                                                       |
+| `author_kind`                | `visitor`, `site` (a token the site signed), `member` (a session of the workspace) or `verified` (a note from before the index whose reporter was verified).                                                                                                                              |
+| `author_account_id`          | The account of a member who left the note. Empty for everyone else, and emptied when the account is removed.                                                                                                                                                                              |
+| `author_visitor`             | For a note of a visitor, a SHA-256 digest of the key of their browser and of the site. Never the key. For a person the site signed (`author_kind` `site`), a digest of the id the site gave them and of the site, never the id. Empty for everyone else, and for a note sent with no key. |
+| `removed_at`                 | When the visitor who left the note deleted it from the page. The note and its row stay, closed, for the team. Empty for every other note.                                                                                                                                                 |
+| `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                                                                                                                                             |
+| `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                                                                                                                                                 |
+| `created_at`                 | When the worker took the note.                                                                                                                                                                                                                                                            |
+| `confirmed`                  | Whether the newest verdict in the replies of the note is « looks fixed », as the last read that saw them said it. Empty until one did. No name, no text.                                                                                                                                  |
+| `selector`, `component`      | The element of the note: its selector, shadow hosts included, and the name of its component when the build gave one. Code of the site, no text of the note.                                                                                                                               |
 
 A note of 64 characters or fewer is in the index whole, as its excerpt: that is what « the first
 64 characters » means for a short note.
@@ -615,8 +622,9 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   it with each call to the worker, which keeps only a digest of it in the index. It names nobody:
   it only lets the worker tell this browser's notes from the others, to mark them « You ». It stays
   until the site or the visitor clears the storage of the site. Any script of the page can read it,
-  and whoever has it is taken for this browser. A widget that a site mounts with an identity token,
-  or that the extension carries, makes none.
+  and whoever has it is taken for this browser. A widget that the extension carries makes none. A
+  widget that a site mounts with an identity token keeps one too: a token that the worker
+  does not take falls back on it.
 - `localStorage`, under `fruitback:notify-ask`: the answer to « Want to know when it's fixed? »,
   `yes`, or `no` and its day. Never the address. After « Notify me » the widget asks no more in
   this browser on this site; after « No thanks » it asks again after 30 days.

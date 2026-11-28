@@ -192,6 +192,8 @@ const SITE_WITH_DESTINATION = {
   hold_visitor_notes: sites.hold_visitor_notes,
   keep_note_versions: sites.keep_note_versions,
   deleted_notes_keep_days: sites.deleted_notes_keep_days,
+  visitor_identity: sites.visitor_identity,
+  identity_key: sites.identity_key,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -1742,6 +1744,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         holdVisitorNotes,
         keepNoteVersions,
         deletedNotesKeepDays,
+        visitorIdentity,
       },
     ) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
@@ -1767,6 +1770,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               // FRU-704: on unless the caller says, as the mockup draws it.
               keep_note_versions: keepNoteVersions ?? true,
               deleted_notes_keep_days: deletedNotesKeepDays ?? DEFAULT_DELETED_NOTE_KEEP,
+              // FRU-706: the key of the browser unless the caller says. The key of the site is never written here.
+              visitor_identity: visitorIdentity ?? 'browser',
               created_at: Date.now(),
             })
             .onConflictDoUpdate({
@@ -1783,6 +1788,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
                 ...(holdVisitorNotes === undefined ? {} : { hold_visitor_notes: holdVisitorNotes }),
                 ...(keepNoteVersions === undefined ? {} : { keep_note_versions: keepNoteVersions }),
                 ...(deletedNotesKeepDays === undefined ? {} : { deleted_notes_keep_days: deletedNotesKeepDays }),
+                ...(visitorIdentity === undefined ? {} : { visitor_identity: visitorIdentity }),
               },
             })
             .returning({
@@ -1798,6 +1804,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               hold_visitor_notes: sites.hold_visitor_notes,
               keep_note_versions: sites.keep_note_versions,
               deleted_notes_keep_days: sites.deleted_notes_keep_days,
+              visitor_identity: sites.visitor_identity,
+              identity_key: sites.identity_key,
             }),
         );
 
@@ -1816,6 +1824,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             hold_visitor_notes: site.hold_visitor_notes,
             keep_note_versions: site.keep_note_versions,
             deleted_notes_keep_days: site.deleted_notes_keep_days,
+            visitor_identity: site.visitor_identity,
+            identity_key: site.identity_key,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,
@@ -1976,6 +1986,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         const set = await db
           .update(sites)
           .set({ tracker_colours: on })
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+          .returning({ id: sites.id });
+
+        return set.length === 1;
+      });
+    },
+
+    async setSiteIdentityKey(workspace, site, sealed) {
+      return run(async (db) => {
+        const set = await db
+          .update(sites)
+          .set({ identity_key: sealed })
           .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
           .returning({ id: sites.id });
 

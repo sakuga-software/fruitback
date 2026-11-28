@@ -81,6 +81,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
@@ -89,6 +90,8 @@ describe('the words people paste', () => {
       write: 'public',
       visitorEdit: 'never',
       visitorDelete: 'never',
+      // FRU-706: a site where anybody writes says how it recognises a visitor.
+      visitorIdentity: 'browser',
     });
     assert.equal(clientOf({ ...site, visibility: 'everyone', writers: 'anyone' }).read, 'public');
   });
@@ -106,6 +109,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     const table = (['members', 'everyone'] as const).flatMap((visibility) =>
       (['members', 'anyone'] as const).map((writers) => [
@@ -136,6 +140,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     const open = clientOf({ ...site, writers: 'anyone', visitorEdit: 'while-open', visitorDelete: 'never' });
     assert.equal(open.visitorEdit, 'while-open');
@@ -158,6 +163,7 @@ describe('the words people paste', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', visitorNotesPerHour: 10 }).visitorNotesPerHour, 10);
     // « No limit » is no field: the route counts nothing.
@@ -179,10 +185,40 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 10 as const,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', holdVisitorNotes: true }).holdVisitorNotes, true);
     assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'anyone', holdVisitorNotes: false }), false);
     assert.equal('holdVisitorNotes' in clientOf({ ...site, writers: 'members', holdVisitorNotes: true }), false);
+  });
+
+  it('gives the routes the sealed key of a site only where it signs its visitors and anybody writes (FRU-706)', () => {
+    const site = {
+      id: 'site_1',
+      workspaceId: 'ws_1',
+      origin: 'https://acme.dev',
+      destinations: [],
+      notifyDone: false,
+      visibility: 'everyone' as const,
+      visitorEdit: 'while-open' as const,
+      visitorDelete: 'while-open' as const,
+      visitorNotesPerHour: 10 as const,
+      holdVisitorNotes: false,
+      keepNoteVersions: false,
+      deletedNotesKeepDays: 30 as const,
+      identityKey: 'v1.sealed',
+    };
+    const signed = clientOf({ ...site, writers: 'anyone', visitorIdentity: 'signed' });
+    assert.deepEqual([signed.visitorIdentity, signed.sealedIdentityKey], ['signed', 'v1.sealed']);
+    // A site that stopped signing keeps its key in the row, and gives it to no route.
+    const browser = clientOf({ ...site, writers: 'anyone', visitorIdentity: 'browser' });
+    assert.deepEqual([browser.visitorIdentity, 'sealedIdentityKey' in browser], ['browser', false]);
+    // « Signed by your site » with no key is the browser.
+    const { identityKey: _key, ...keyless } = site;
+    assert.equal(clientOf({ ...keyless, writers: 'anyone', visitorIdentity: 'signed' }).visitorIdentity, 'browser');
+    // A site of its members only has no visitor: neither field.
+    const closed = clientOf({ ...site, writers: 'members', visitorIdentity: 'signed' });
+    assert.deepEqual(['visitorIdentity' in closed, 'sealedIdentityKey' in closed], [false, false]);
   });
 
   it('tells the routes to keep every version only where a visitor writes and the site keeps them (FRU-704)', () => {
@@ -198,6 +234,7 @@ describe('the words people paste', () => {
       visitorNotesPerHour: 10 as const,
       holdVisitorNotes: false,
       deletedNotesKeepDays: 30 as const,
+      visitorIdentity: 'browser' as const,
     };
     assert.equal(clientOf({ ...site, writers: 'anyone', keepNoteVersions: true }).keepNoteVersions, true);
     assert.equal('keepNoteVersions' in clientOf({ ...site, writers: 'anyone', keepNoteVersions: false }), false);

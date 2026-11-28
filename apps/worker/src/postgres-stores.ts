@@ -126,6 +126,7 @@ export function accountStoreOn(database: Database): AccountStore {
     siteStatusNotes: true,
     siteTrackerColours: true,
     setSiteTrackerColours: true,
+    setSiteIdentityKey: true,
     putSiteStatus: true,
     orderSiteStatuses: true,
     removeSiteStatus: true,

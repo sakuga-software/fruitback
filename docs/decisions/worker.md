@@ -1734,10 +1734,8 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **Measured then, decided since: a site for members took a note that had no session.** The
   visibility is the rule of the reads. FRU-330 made the writes a setting of such a site: see « Who
   can leave a note » below.
-- **Not decided: the token signed by the site.** A site that has its own login signs a token with
-  the `identitySecret` of its client, in `FRUITBACK_CLIENTS`. A site of the console has no secret.
-  A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
-  changes it. `docs/modes.md` says what holds today.
+- **The token signed by the site: a key for each site** (FRU-706), « Signed by your site ». See « A
+  visitor the site signs » below. `docs/modes.md` says what holds for a host.
 
 ## A visitor known by the key of their browser (FRU-700)
 
@@ -1801,6 +1799,55 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   opens nothing elsewhere. It is held by a unit case, since the first wall holds every route.
 - **Why no salt of the worker.** The key has 256 random bits: no list of guesses reaches it, and
   a secret of the worker would make the digests change with it.
+
+## A visitor the site signs (FRU-706)
+
+### The rules, in short
+
+- **`sites.visitor_identity`: `browser` or `signed`**, the card « How a visitor is recognised » of the
+  tab « Access ». `browser` by default, for the sites of before too (`0062`). « A confirmed e-mail »
+  comes with FRU-705. `clientOf` says it only where `writers` is `anyone`: a site of members has no
+  visitor.
+- **`sites.identity_key`: the key of the site, sealed** with `FRUITBACK_SECRETS_KEY` (`seal` of
+  `secrets.ts`), as the keys of the connectors. Decision of the orchestrator, 2026-11-28: HMAC-SHA256
+  with a secret for each site, shown once by the console, on the signed reporter that exists already,
+  and no new secret of the instance. `POST …/sites/<id>/identity-key` (`manage-sites`) makes 32
+  random bytes, keeps them sealed and answers them once; the list says `set`, `none` or
+  `unavailable`, never the key. `addSite` never writes it.
+- **`signed` takes a key first**: `POST …/sites` answers `400 identity-key-required` for a site with
+  no key, and `identity-keys-unavailable` on a worker with no `FRUITBACK_SECRETS_KEY`. A row that says
+  `signed` with no key is `browser` (`clientOf`).
+- **`app.ts` opens the key for the request that names the site** (`withIdentityKey` of `namedClient`):
+  it becomes the `identitySecret` of the client, which `verifyForClient` already read first for a token
+  of a site (FRU-9). The sealed value goes. A key that does not open is no key: `browser`.
+- **`visitorOf` of `app.ts` is the one function that says who a visitor is**, for the read, the note,
+  the batch, the hour, the hold, the edit and the withdrawal (`CallerChecks.visitorOf`):
+  - a token that verifies with the key of a site that signs: `signedVisitorDigestOf(site, sub)`, a
+    SHA-256 with another prefix than the key of a browser, by `signed`;
+  - no token, or on a site where anybody writes a token that is no identity (`isNoIdentity`: the
+    worker key did not sign it): the key of the browser, by `browser`;
+  - a session of the worker, valid or ended: nobody. A member is never a visitor, and one whose
+    session ended is told `401`, as before.
+- **A token that is no identity falls back on the key of the browser** in `attributionFor` and
+  `replyAuthorFor` too: the note is a claim, counted as a visitor's. That is the criterion of the
+  ticket. It replaces, on a site where anybody writes, the `401 invalid-identity` of a token that does
+  not verify: a site that stopped signing, or a token that expired, must not cost a note.
+- **A person the site signed is a visitor**: `attributionFor` says `visitor: true`, so the hour and
+  the hold count them, by their digest. `authorOf` keeps `site` as the kind, with the digest, and
+  `NoteIndex.authors` reads `site` rows as it reads `visitor` rows.
+- **The read says `visitor: 'signed'`** beside `identified: true`, and the widget shows such a reader
+  as a visitor (« You »). The widget keeps the key of the browser beside the token, to fall back on.
+
+### The reasons
+
+- **Why the digest and not `sub`.** The index needs only to compare; a `sub` is an id of the site's
+  own users, and a copy of the database should not list them. The site is in the digest for the
+  reason of FRU-700.
+- **Why another prefix.** A `sub` is any text: one written like a key of a browser must not give the
+  digest of that key. `visitor-signed.test.ts` plants the same prefix and sees the notes of the
+  browser opened.
+- **Why the fallback is limited to the sites where anybody writes.** Elsewhere a note needs a
+  session, and a token that does not verify keeps its `401`, as FRU-330 says.
 
 ## Who can leave a note (FRU-330)
 
