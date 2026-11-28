@@ -513,7 +513,10 @@ function issueOf(row: NoteRow, comments: NoteComment[] | undefined): NoteIssue |
  * database stops at the cap of each note on `note_comments_by_note`: a note with a thousand replies
  * sends twenty, and not a thousand for `threadsOf` to drop.
  */
-async function repliesOf(run: Database['run'], rows: readonly { id: number }[]): Promise<Map<number, NoteComment[]>> {
+export async function repliesOf(
+  run: Database['run'],
+  rows: readonly { id: number }[],
+): Promise<Map<number, NoteComment[]>> {
   if (rows.length === 0) return new Map();
   const newest = (db: Db) =>
     db

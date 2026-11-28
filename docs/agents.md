@@ -44,16 +44,16 @@ claude mcp add --transport http fruitback https://<your worker>/mcp \
 Then ask it, for example: « List the notes of the site `<site id>` with fruitback, and fix the ones
 on the pricing page. » It has these tools:
 
-| Tool                                                                                     | Right | What it does                                                                                                                                        |
-| ---------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_notes({ site, stage?, status?, since?, q?, cursor?, limit?, …filters of a task })` | read  | The notes of a site, newest first, each whole: text, page, element, component, file and line, picture, replies, status, and the fields of its task. |
-| `get_note({ id })`                                                                       | read  | One note, by the `id` that `list_notes` gives.                                                                                                      |
-| `notes_as_text({ site, page? })`                                                         | read  | The notes of a page or of a site as Markdown, each line of a reviewer quoted.                                                                       |
-| `reply_to_note({ id, body })`                                                            | write | A reply in the thread of the note. The reviewer reads « Agent » beside the name of the key.                                                         |
-| `set_note_status({ id, status })`                                                        | write | A status of the site (`own:<key>`), for a note that Fruitback keeps. A note in a tracker takes its tracker's status.                                |
-| `task_choices({})`                                                                       | read  | The labels of the workspace, and the members a task can be given to, with their ids.                                                                |
-| `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`                    | write | The status, the assignee, the priority, the due day and the labels of a task that Fruitback keeps.                                                  |
-| `create_task({ site, title, text?, status?, assignee?, priority?, dueOn?, labels? })`    | write | A task with no page and no pin, as « New task » of the console writes it, with its fields.                                                          |
+| Tool                                                                                     | Right | What it does                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_notes({ site, stage?, status?, since?, q?, cursor?, limit?, …filters of a task })` | read  | The notes of a site and its tasks written by hand, newest first, each whole: text, page, element, component, file and line, picture, replies, status, and the fields of its task. `kind` tells a `note` from a `task`. |
+| `get_note({ id })`                                                                       | read  | One note, by the `id` that `list_notes` gives.                                                                                                                                                                         |
+| `notes_as_text({ site, page? })`                                                         | read  | The notes of a page or of a site as Markdown, each line of a reviewer quoted.                                                                                                                                          |
+| `reply_to_note({ id, body })`                                                            | write | A reply in the thread of the note. The reviewer reads « Agent » beside the name of the key.                                                                                                                            |
+| `set_note_status({ id, status })`                                                        | write | A status of the site (`own:<key>`), for a note that Fruitback keeps. A note in a tracker takes its tracker's status.                                                                                                   |
+| `task_choices({})`                                                                       | read  | The labels of the workspace, and the members a task can be given to, with their ids.                                                                                                                                   |
+| `update_task({ id, status?, assignee?, priority?, dueOn?, labels? })`                    | write | The status, the assignee, the priority, the due day and the labels of a task that Fruitback keeps.                                                                                                                     |
+| `create_task({ site, title, text?, status?, assignee?, priority?, dueOn?, labels? })`    | write | A task with no page and no pin, as « New task » of the console writes it, with its fields.                                                                                                                             |
 
 A key writes 30 times a minute at most.
 
@@ -98,7 +98,18 @@ A task that an agent puts in To do starts no agent: an agent cannot start itself
 
 `update_task` and `set_note_status` change a task written by hand as they change a note that
 Fruitback keeps. `get_note` reads it as `{ task }`, and `notes_as_text` of a whole site lists it under
-« Tasks with no page »; `list_notes` lists the notes of the pages only.
+« Tasks with no page ».
+
+`list_notes` lists the tasks written by hand with the notes of the pages, newest first, and its
+filters take both. Each entry says what it is in `kind`:
+
+- `kind: "note"`: a note of a page. Its text, its page and its element are in `note`, and its fields
+  in `task`, as above.
+- `kind: "task"`: a task written by hand, as `get_note` gives it. What was written (`title`, `text`,
+  its author in `reporter`) is in `task`, and its fields in `fields`. It has no `note`: no page, no
+  element and no pin.
+
+Read `kind` before you read `task`: the same name holds the fields of a note, and the text of a task.
 
 On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status`,
 `update_task` and `create_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept

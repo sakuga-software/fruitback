@@ -5506,7 +5506,8 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `agent_writes` (`task`, `status`), and one charge of the limit for the call.
 - **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
   `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`
-  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `3` since `create_task`.
+  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `3` since `create_task`, and `4`
+  since FRU-708.
 - **`create_task` writes a task by hand (FRU-657) as the console does**: `readNewTask`, then
   `createTask` of the accounts, with the member of the key as its author. Before them, an argument it
   does not take is refused, not dropped: an agent that sends `due` for `dueOn` would read a task with
@@ -5518,8 +5519,38 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
 - **`update_task` and `set_note_status` take a task written by hand**: its page is `NO_PAGE`, so no
   store of the notes holds it; `setTaskFields` then `setNoteStatus` of the accounts write it, with
   the member of the key and `manages: true`, in the order and with the answers of a note.
-  `list_notes` still lists the notes of the pages only: a task in it would need a shape of its own
-  beside a note, which is a change of the contract of its own.
+  `list_notes` lists them since FRU-708 (below).
+
+## The tasks written by hand in `list_notes` (FRU-708)
+
+### The rules, in short
+
+- **`list_notes` lists the tasks written by hand with the notes of the pages**, in the order of the
+  index, newest first. The index already holds them (`page_url` is `NO_PAGE`), so its filters (the
+  stage, `since`, `q`, and the filters of a task of FRU-655) take them as they take a note, and
+  `limit` and `next` count them. Before FRU-708 the read of the pages left them out, and an agent
+  that went through its tasks with `list_notes` never saw the ones a person wrote: a page of the
+  index that held 50 tasks answered no entry, and a `next`.
+- **Each entry says its kind**: `kind: 'note'` for a note of a page, `kind: 'task'` for a task
+  written by hand. A task is the object `get_note` gives as `{ task }`: what was written in `task`
+  (`fruitback.task`), and its fields in `fields`. A note keeps its shape, with its fields in `task`.
+  The shape of `get_note` stays as it was, with `kind` added, so a reader reads the same object in
+  both tools.
+- **Considered: one shape for both**, a task with its fields in `task` and what was written in
+  `note`. Refused: `note` is a note of a page for every reader (a pin, a page, an element), and a
+  task has none of them. `kind` costs one field, and keeps the shape of `get_note`.
+- **The tasks of a page of the index are read at once**, by `readTasks` of the accounts: three
+  statements whatever their number (the rows of the index, the rows of the notes, and the newest
+  replies of each, through `repliesOf` of the store of the notes). `readTask` is `readTasks` of one
+  task, so `get_note` reads the same object. Measured on PGlite, a page of 50 tasks: 13 statements
+  and 8 to 27 ms for the call; one `readTask` for each task made 160 statements and 33 to 104 ms.
+  `notes_as_text` of a whole site reads its tasks the same way.
+- **`verifiedOnly` reads a task as a note**: by the `verified` of its `reporter`. The worker writes
+  it from the session, so every task it wrote passes; a row whose author is no longer the worker's
+  word does not, in `list_notes`, `get_note` and `notes_as_text`.
+- **`status` filters a task by its `status`**, `own:<key>`, after the page of the index, as for a
+  note.
+- **`TOOLS_VERSION` is `4`**: `list_notes` answers what it did not answer before.
 
 ## A task written by hand (FRU-657)
 

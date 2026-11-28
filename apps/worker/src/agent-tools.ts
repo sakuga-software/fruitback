@@ -5,6 +5,7 @@ import {
   TASK_TITLE_MAX_LENGTH,
   type TaskIssue,
   feedbackText,
+  isTaskIssue,
   tasksText,
 } from '@fruitback/shared';
 import { type AccountStore, type AgentWrite, can } from './accounts.ts';
@@ -47,6 +48,8 @@ import { TASK_PRIORITIES, type TaskChange, type TaskFields, readNewTask, readTas
  *   still says if more wait.
  * - **A key whose member does not see the tracker reads no reference of it**, as a guest in the
  *   console (FRU-250).
+ * - **`list_notes` lists the tasks written by hand with the notes** (FRU-708), from the worker's store
+ *   as `get_note` reads one, each entry with its `kind`.
  * - **The tools of a task follow the module** (FRU-659): on a worker that keeps no task (FRU-651),
  *   `task_choices`, `set_note_status`, `update_task` and `create_task` are not given. The reads still give the
  *   fields of a task kept before, as the list of the console does.
@@ -63,6 +66,7 @@ export type AgentToolsContext = {
     | 'labels'
     | 'membersOf'
     | 'readTask'
+    | 'readTasks'
     | 'createTask'
     | 'setNoteStatus'
   >;
@@ -124,7 +128,7 @@ export function agentTools(context: AgentToolsContext): McpTool[] {
     {
       name: 'list_notes',
       description:
-        'The notes of one site, newest first, each with its whole content: text, page, element, component, file and line, picture, replies, stage, status and reporter.',
+        'The notes of one site and its tasks written by hand, newest first, each with its whole content: text, page, element, component, file and line, picture, replies, stage, status and reporter. `kind` tells them apart: `note` (its fields in `task`) or `task` (what was written in `task`, its fields in `fields`).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -341,14 +345,21 @@ async function siteOf(context: AgentToolsContext, id: unknown): Promise<Site | u
   };
 }
 
-/** Whether the key reads this note: on a site that everyone reads, `verifiedOnly` keeps a known person's. */
-function readable(context: AgentToolsContext, site: Site, issue: NoteIssue): boolean {
-  return !(context.grant.verifiedOnly && site.publicRead && issue.note.reporter?.verified !== true);
+/**
+ * Whether the key reads this note or this task written by hand: on a site that everyone reads,
+ * `verifiedOnly` keeps a known person's. The worker writes the author of a task from the session,
+ * `verified`, so the rule keeps every task it wrote, and none whose row says otherwise.
+ */
+function readable(context: AgentToolsContext, site: Site, issue: NoteIssue | TaskIssue): boolean {
+  const reporter = isTaskIssue(issue) ? issue.task.reporter : issue.note.reporter;
+
+  return !(context.grant.verifiedOnly && site.publicRead && reporter?.verified !== true);
 }
 
 /**
  * A note as an agent reads it: the issue as `GET /feedback` gives it, with `id` for `get_note`
  * and its site. The id of the issue in its tracker is `issueId`, for a key that sees the tracker.
+ * `kind: 'note'` tells it from a task written by hand in `list_notes` (FRU-708).
  */
 function noteView(
   site: Site,
@@ -359,6 +370,7 @@ function noteView(
   const { id: issueId, ...fields } = seesTracker ? issue : withoutTrackerStatus(withoutTracker(issue, issue.note.id));
 
   return {
+    kind: 'note',
     id: noteIdOf(site.id, issue.note.id),
     site: site.id,
     ...(seesTracker ? { issueId } : {}),
@@ -379,7 +391,8 @@ function taskView(task: TaskFields): Omit<TaskFields, 'position'> {
 
 /**
  * FRU-657: a task written by hand, as `noteView` gives a note: `id` for `get_note`, and its site. Its
- * `task` is what the person wrote (`fruitback.task`), so its fields are under `fields`.
+ * `task` is what the person wrote (`fruitback.task`), so its fields are under `fields`. `kind: 'task'`
+ * tells it from a note in `list_notes` (FRU-708).
  */
 function handwrittenView(
   site: Site,
@@ -390,6 +403,7 @@ function handwrittenView(
   const { id: issueId, ...rest } = seesTracker ? issue : withoutTracker(issue, issue.task.id);
 
   return {
+    kind: 'task',
     id: noteIdOf(site.id, issue.task.id),
     site: site.id,
     ...(seesTracker ? { issueId } : {}),
@@ -481,16 +495,39 @@ function listNotes(
     });
     if (args.status !== undefined && typeof args.status !== 'string') return { ok: false, error: 'Invalid status.' };
     const status = args.status;
-    const issues = (await contentOf(site, listed.notes)).filter(
-      (issue) => readable(context, site, issue) && (status === undefined || issue.status === status),
+    const issues = new Map((await contentOf(site, listed.notes)).map((issue) => [issue.note.id, issue]));
+    // FRU-708: the tasks written by hand of this page of the index, from the worker's store, as
+    // `get_note` reads one, in three statements. The index already filtered them with the notes.
+    const handwritten = new Map(
+      (
+        await context.accounts.readTasks(
+          site.workspace,
+          site.id,
+          listed.notes.filter((note) => note.pageUrl === NO_PAGE).map((note) => note.note),
+        )
+      ).map((task) => [task.task.id, task]),
     );
-    const tasks = new Map(listed.notes.map((note) => [note.note, note.kept?.task]));
+    const notes = listed.notes.flatMap((note) => {
+      const fields = note.kept?.task;
+      if (note.pageUrl === NO_PAGE) {
+        const task = handwritten.get(note.note);
+        if (task === undefined || !readable(context, site, task) || (status !== undefined && task.status !== status))
+          return [];
+
+        return [handwrittenView(site, task, seesTracker, fields)];
+      }
+      const issue = issues.get(note.note);
+      if (issue === undefined || !readable(context, site, issue) || (status !== undefined && issue.status !== status))
+        return [];
+
+      return [noteView(site, issue, seesTracker, fields)];
+    });
 
     return {
       ok: true,
       content: {
         site: site.id,
-        notes: issues.map((issue) => noteView(site, issue, seesTracker, tasks.get(issue.note.id))),
+        notes,
         ...(listed.next === undefined ? {} : { next: cursorOf(listed.next) }),
       },
     };
@@ -507,7 +544,7 @@ function getNote(context: AgentToolsContext, seesTracker: boolean, args: Record<
     // FRU-657: a task written by hand, from the worker's store, as `{ task }`.
     if (page === NO_PAGE) {
       const task = await context.accounts.readTask(site.workspace, site.id, key.note);
-      if (task === undefined) return { ok: false, error: NO_NOTE };
+      if (task === undefined || !readable(context, site, task)) return { ok: false, error: NO_NOTE };
       const fields = await context.noteIndex.taskOf(site.workspace, site.id, key.note);
 
       return { ok: true, content: { task: handwrittenView(site, task, seesTracker, fields) } };
@@ -558,12 +595,14 @@ function notesAsText(
     }
     // FRU-658: the tasks written by hand of the site, after the pages, under a heading of their own.
     const handwritten = (
-      await Promise.all(
-        listed.notes
-          .filter((note) => note.pageUrl === NO_PAGE)
-          .map((note) => context.accounts.readTask(site.workspace, site.id, note.note)),
+      await context.accounts.readTasks(
+        site.workspace,
+        site.id,
+        listed.notes.filter((note) => note.pageUrl === NO_PAGE).map((note) => note.note),
       )
-    ).flatMap((task) => (task === undefined ? [] : [seesTracker ? task : withoutTracker(task, task.task.id)]));
+    ).flatMap((task) =>
+      readable(context, site, task) ? [seesTracker ? task : withoutTracker(task, task.task.id)] : [],
+    );
     const text = [
       ...[...byPage].map(([page, notes]) =>
         feedbackText(

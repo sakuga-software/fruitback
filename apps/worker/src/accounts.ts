@@ -1007,6 +1007,11 @@ export type AccountStore = {
    */
   readTask(workspace: string, site: string, note: string, who?: { account: string }): Promise<TaskIssue | undefined>;
   /**
+   * The tasks written by hand of these notes (FRU-708), in their order, as `readTask` reads each, in
+   * three statements whatever their number. A note that is no such task is left out.
+   */
+  readTasks(workspace: string, site: string, notes: readonly string[], who?: { account: string }): Promise<TaskIssue[]>;
+  /**
    * Changes several tasks the worker keeps at once (FRU-656), in one transaction: every task is
    * checked as `setNoteStatus` and `setTaskFields` check one, with the same rights, and one refusal
    * changes none of them. `change.status` is a key of the worker's store that the site of every task

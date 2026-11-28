@@ -2307,7 +2307,12 @@ seen » is shown to owners and admins only.
   list of the extension leaves it out; and no tool of `/mcp` reads a page for it, or replies or sets
   a status there. `get_note` reads it from the store of the worker, with the rights of the key.
   test:`shows no pin: no read of a page and no list of the extension holds it`,
-  test:`is read by get_note of /mcp as a task, and left out of the notes that list_notes reads`.
+  test:`is read by get_note of /mcp as a task, and listed by list_notes with the notes, as a task`.
+- `list_notes` of `/mcp` lists it with the notes of its site, with `kind: 'task'`, for a key
+  that names the site, as `get_note` already gave it: it reads nothing that `get_note` did not. On a
+  site that everyone reads, a key with `verifiedOnly` reads only a task whose author the worker wrote
+  from the session (`verified`), as for a note.
+  test:`gives a task whose row names no known person to no key that reads the known people only`.
 - On a worker that keeps no task (`FRUITBACK_TASKS=off`) the route is `403 tasks-off`, and a
   suspended workspace writes nothing: the route is a write of the console, behind its one guard.
 
