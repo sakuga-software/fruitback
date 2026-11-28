@@ -1,5 +1,17 @@
 # @fruitback/react
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies [87b59e4]
+- Updated dependencies [0dcf745]
+- Updated dependencies [2a54654]
+- Updated dependencies [5925594]
+- Updated dependencies [cdc234d]
+- Updated dependencies [57a3835]
+  - @fruitback/widget@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes
