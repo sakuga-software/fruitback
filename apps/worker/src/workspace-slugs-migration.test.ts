@@ -9,12 +9,12 @@ import { migrate } from './postgres-migrate.ts';
 import { RESERVED_SLUGS, readWorkspaceSlug, slugFromName } from './workspace-slug.ts';
 
 /**
- * `0062_workspace_slugs` (FRU-715) on a database that holds workspaces already: each one gets the short
+ * `0063_workspace_slugs` (FRU-715) on a database that holds workspaces already: each one gets the short
  * name read in its name, as `slugFromName` reads it for a new workspace, unique, and of the form that
  * `readWorkspaceSlug` takes. On PGlite and on a real PostgreSQL alike.
  */
 
-const MIGRATION = readFileSync(new URL('../drizzle/0062_workspace_slugs.sql', import.meta.url), 'utf8');
+const MIGRATION = readFileSync(new URL('../drizzle/0063_workspace_slugs.sql', import.meta.url), 'utf8');
 
 const { opening } = databasesOfACase();
 
@@ -37,7 +37,7 @@ for (const { label, open, skip } of DATABASES) {
   describe(`the short names of the workspaces of before, on ${label} (FRU-715)`, { skip: skip !== false }, () => {
     it('reads a short name in each name, unique, and the store answers it', async () => {
       const database = await opening(open);
-      await migrate(database, migrationsThrough('0061_deleted_notes_keep_days'));
+      await migrate(database, migrationsThrough('0062_tasks_with_no_site'));
       for (const [id, name, at] of WORKSPACES) {
         await rowsOf(
           database,

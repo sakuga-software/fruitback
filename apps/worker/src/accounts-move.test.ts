@@ -219,7 +219,7 @@ for (const { label, open, skip } of DATABASES) {
       const { database } = await databaseOfBefore(open);
       const accounts = createPostgresAccountStore(database);
 
-      // FRU-715: `0062_workspace_slugs` then reads a short name in each name.
+      // FRU-715: `0063_workspace_slugs` then reads a short name in each name.
       assert.deepEqual(await accounts.memberships('acc_alice'), [
         { workspace: { id: 'ws_acme', name: 'Acme', slug: 'acme' }, role: 'owner' },
         { workspace: { id: 'ws_odd', name: 'Odd', slug: 'odd' }, role: 'owner' },
@@ -293,7 +293,7 @@ for (const { label, open, skip } of DATABASES) {
           `SELECT id, name, slug, logo, metadata, (extract(epoch FROM "createdAt") * 1000)::bigint::text AS created
              FROM "organization" ORDER BY id`,
         ),
-        // The slug is the id after this move; `0062_workspace_slugs` (FRU-715) then reads it in the name.
+        // The slug is the id after this move; `0063_workspace_slugs` (FRU-715) then reads it in the name.
         [
           { id: 'ws_acme', name: 'Acme', slug: 'acme', logo: null, metadata: null, created: String(THEN + 20) },
           { id: 'ws_odd', name: 'Odd', slug: 'odd', logo: null, metadata: null, created: String(THEN + 22) },

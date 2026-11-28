@@ -159,10 +159,12 @@ INSERT INTO note_comments (note_id, author, body, created_at) VALUES
 INSERT INTO kv (key, value, expires_at) VALUES
   ('fruitback:drill:count', '3', 1);
 
--- The index of the notes (FRU-237): a note that went to a connector, and one the worker keeps.
+-- The index of the notes (FRU-237): a note that went to a connector, and one the worker keeps. And
+-- a task of the workspace with no site (FRU-672): `site_id` is '', and `site_ref`, computed, is NULL.
 INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, channel, author_kind, author_account_id, place, connector_id, reference, reference_url, created_at, checked_at) VALUES
   ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'new', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
-  ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'done', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);
+  ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'done', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3),
+  ('', 'task_drill1', 'ws_drill1', '', 'Renew the domain.', 'todo', NULL, 'member', 'acc_drill1', 'fruitback', NULL, 'FB-90', NULL, 4, 4);
 
 -- Who to tell when a note is done (FRU-604): the account of a member, and the address that a
 -- visitor gave for one note, which a read is sending now (`claimed_until`). Not a real address.

@@ -1,5 +1,5 @@
 {
-  "id": "dd8f3b46-5d9a-4d7e-8ca2-e8583c123e42",
+  "id": "5adbf5f3-25bb-44d3-b0be-78e6ea6d4059",
   "prevId": "fb2e3187-5a2e-40c6-8880-7de22e7153b1",
   "version": "7",
   "dialect": "postgresql",
@@ -1939,6 +1939,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "site_ref": {
+          "name": "site_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "generated": {
+            "as": "NULLIF(site_id, '')",
+            "type": "stored"
+          }
+        },
         "note_id": {
           "name": "note_id",
           "type": "text",
@@ -2091,6 +2101,21 @@
         }
       },
       "indexes": {
+        "note_index_by_site_ref": {
+          "name": "note_index_by_site_ref",
+          "columns": [
+            {
+              "expression": "site_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "note_index_by_workspace": {
           "name": "note_index_by_workspace",
           "columns": [
@@ -2211,12 +2236,12 @@
         }
       },
       "foreignKeys": {
-        "note_index_site_id_fkey": {
-          "name": "note_index_site_id_fkey",
+        "note_index_site_ref_fkey": {
+          "name": "note_index_site_ref_fkey",
           "tableFrom": "note_index",
           "tableTo": "sites",
           "columnsFrom": [
-            "site_id"
+            "site_ref"
           ],
           "columnsTo": [
             "id"
@@ -3914,74 +3939,6 @@
             "site_id",
             "source",
             "key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.workspace_former_slugs": {
-      "name": "workspace_former_slugs",
-      "schema": "",
-      "columns": {
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "until": {
-          "name": "until",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "workspace_former_slugs_by_workspace": {
-          "name": "workspace_former_slugs_by_workspace",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "workspace_former_slugs_workspace_id_fkey": {
-          "name": "workspace_former_slugs_workspace_id_fkey",
-          "tableFrom": "workspace_former_slugs",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "workspace_former_slugs_pkey": {
-          "name": "workspace_former_slugs_pkey",
-          "columns": [
-            "slug"
           ]
         }
       },

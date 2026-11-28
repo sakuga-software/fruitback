@@ -81,7 +81,6 @@ import {
   last_seen,
   labels,
   note_index,
-  note_comments,
   note_labels,
   notes,
   oauth_clients,
@@ -105,18 +104,9 @@ import {
   parseTask,
 } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import {
-  COMMENTS_PER_ISSUE,
-  NO_PAGE,
-  identifierFor,
-  isSameNote,
-  keptRowOf,
-  readJson,
-  stageOf,
-  threadsOf,
-  widgetIdOf,
-} from './note-rows.ts';
+import { NO_PAGE, NO_SITE, identifierFor, isSameNote, keptRowOf, readJson, stageOf, widgetIdOf } from './note-rows.ts';
 import { excerptOf } from './notes-index.ts';
+import { repliesOf } from './notes-postgres.ts';
 import { changedTaskFields, ownStatusName } from './note-events.ts';
 import { queueTaskEvents } from './note-events-postgres.ts';
 import { StoreError } from './store.ts';
@@ -382,11 +372,32 @@ export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
     workspace,
     ids.map((row) => row.id),
   );
+  // FRU-672: the tasks of the workspace itself, which no site names. Their rows of the index go with
+  // the workspace, by its foreign key.
+  const own = await db
+    .select({ place: note_index.place, reference: note_index.reference })
+    .from(note_index)
+    .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, NO_SITE)));
+  const rows = own.flatMap((row) => {
+    const id = keptRowOf(row.place, null, row.reference);
+
+    return id === undefined ? [] : [id];
+  });
+  if (rows.length > 0) await db.delete(notes).where(and(inArray(notes.id, rows), eq(notes.client_id, NO_SITE)));
   await db.delete(organization).where(eq(organization.id, workspace));
 }
 
-/** Whether `site` is a site of `workspace`, read in the transaction of `db`, and held until it ends. */
+/**
+ * Whether `site` is a site of `workspace`, read in the transaction of `db`, and held until it ends.
+ * FRU-672: `NO_SITE` is the site of the tasks of the workspace itself, which has no row to hold and no
+ * status of its own: it is there when the workspace is.
+ */
 async function siteHeld(db: Db, workspace: string, site: string): Promise<boolean> {
+  if (site === NO_SITE) {
+    const found = await db.select({ id: organization.id }).from(organization).where(eq(organization.id, workspace));
+
+    return found.length === 1;
+  }
   const rows = await db
     .select({ id: sites.id })
     .from(sites)
@@ -780,6 +791,83 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
       return 'set';
     });
+
+  /** FRU-708: the tasks written by hand of `noteIds`, in their order, as `readTask` reads one. */
+  const readTasks: AccountStore['readTasks'] = async (workspace, site, noteIds, who) => {
+    const asked = [...new Set(noteIds)];
+    if (asked.length === 0) return [];
+    // Three statements for the whole list (FRU-708): the rows of the index, the rows of the notes,
+    // and the newest replies of each.
+    const entries = await run((db) =>
+      db
+        .select({
+          note: note_index.note_id,
+          place: note_index.place,
+          connectorKind: connectors.kind,
+          reference: note_index.reference,
+          author: note_index.author_account_id,
+        })
+        .from(note_index)
+        .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+        .where(
+          and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), inArray(note_index.note_id, asked)),
+        ),
+    );
+    const rowOf = new Map<string, { id: number; author: string | null }>();
+    for (const entry of entries) {
+      const id = keptRowOf(entry.place, entry.connectorKind, entry.reference);
+      if (id !== undefined) rowOf.set(entry.note, { id, author: entry.author });
+    }
+    if (rowOf.size === 0) return [];
+    const ids = [...rowOf.values()].map((row) => row.id);
+    const kept = new Map(
+      (
+        await run((db) =>
+          db
+            .select({
+              id: notes.id,
+              stage: notes.stage,
+              status: notes.status_key,
+              payload: notes.payload,
+              at: notes.updated_at,
+            })
+            .from(notes)
+            .where(and(inArray(notes.id, ids), eq(notes.client_id, site))),
+        )
+      ).map((row) => [row.id, row]),
+    );
+    // The newest replies, handed over oldest first, as a read of a page gives them.
+    const threads = await repliesOf(
+      run,
+      ids.filter((id) => kept.has(id)).map((id) => ({ id })),
+    );
+
+    return noteIds.flatMap((noteId): TaskIssue[] => {
+      const row = rowOf.get(noteId);
+      const one = row === undefined ? undefined : kept.get(row.id);
+      if (row === undefined || one === undefined) return [];
+      // A row is parsed, never trusted; a note of a page is not a task, and its page reads it.
+      const parsed = parseTask(readJson(one.payload));
+      if (!parsed.ok || parsed.task.id !== noteId) return [];
+      const stage = stageOf(one.stage);
+
+      return [
+        {
+          id: String(row.id),
+          identifier: identifierFor(row.id),
+          title: parsed.task.title,
+          stage,
+          // Nobody named the states of this store: they are the stages, as `toNoteIssue` says.
+          stateName: '',
+          status: `${OWN_SOURCE}:${one.status ?? stage}`,
+          updatedAt: new Date(one.at).toISOString(),
+          comments: threads.get(row.id) ?? [],
+          ...(who !== undefined && row.author !== null && row.author === who.account ? { mine: true as const } : {}),
+          task: parsed.task,
+        },
+      ];
+    });
+  };
 
   /** Agent keys as the store answers them, each with the sites it names. */
   const withKeySites = async (rows: (typeof agent_keys.$inferSelect)[]): Promise<AgentKey[]> => {
@@ -2342,7 +2430,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           createdAt: new Date(now).toISOString(),
           title: input.title,
           ...(input.text === undefined ? {} : { text: input.text }),
-          client: { id: site },
+          // FRU-672: a task of the workspace names no site.
+          ...(site === NO_SITE ? {} : { client: { id: site } }),
           reporter: {
             id: who.account,
             ...(person === undefined || person.name === '' ? {} : { name: person.name }),
@@ -2402,66 +2491,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async readTask(workspace, site, noteId, who) {
-      return run(async (db) => {
-        const [entry] = await db
-          .select({
-            place: note_index.place,
-            connectorKind: connectors.kind,
-            reference: note_index.reference,
-            author: note_index.author_account_id,
-          })
-          .from(note_index)
-          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
-          .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
-          );
-        if (entry === undefined) return undefined;
-        const id = keptRowOf(entry.place, entry.connectorKind, entry.reference);
-        if (id === undefined) return undefined;
-        const [kept] = await db
-          .select({ stage: notes.stage, status: notes.status_key, payload: notes.payload, at: notes.updated_at })
-          .from(notes)
-          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (kept === undefined) return undefined;
-        // A row is parsed, never trusted; a note of a page is not a task, and its page reads it.
-        const parsed = parseTask(readJson(kept.payload));
-        if (!parsed.ok || parsed.task.id !== noteId) return undefined;
-        // The newest replies, handed over oldest first, as a read of a page gives them.
-        const replies = await db
-          .select()
-          .from(note_comments)
-          .where(eq(note_comments.note_id, id))
-          .orderBy(desc(note_comments.created_at), desc(note_comments.id))
-          .limit(COMMENTS_PER_ISSUE);
-        const thread = threadsOf(
-          replies.map((reply) => ({
-            id: reply.id,
-            note_id: reply.note_id,
-            author: reply.author,
-            body: reply.body,
-            createdAt: new Date(reply.created_at).toISOString(),
-          })),
-        );
-        const stage = stageOf(kept.stage);
-        const issue: TaskIssue = {
-          id: String(id),
-          identifier: identifierFor(id),
-          title: parsed.task.title,
-          stage,
-          // Nobody named the states of this store: they are the stages, as `toNoteIssue` says.
-          stateName: '',
-          status: `${OWN_SOURCE}:${kept.status ?? stage}`,
-          updatedAt: new Date(kept.at).toISOString(),
-          comments: thread.get(id) ?? [],
-          ...(who !== undefined && entry.author !== null && entry.author === who.account
-            ? { mine: true as const }
-            : {}),
-          task: parsed.task,
-        };
+      const [task] = await readTasks(workspace, site, [noteId], who);
 
-        return issue;
-      });
+      return task;
     },
+
+    readTasks,
 
     async changeTasks(workspace, tasks, change, who) {
       try {

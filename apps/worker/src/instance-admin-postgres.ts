@@ -649,7 +649,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               connector: { id: connectors.id, kind: connectors.kind, label: connectors.label },
             })
             .from(note_index)
-            .innerJoin(sites, eq(sites.id, note_index.site_id))
+            .leftJoin(sites, eq(sites.id, note_index.site_ref))
             .innerJoin(organization, eq(organization.id, note_index.workspace_id))
             .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
             .where(after)
@@ -665,7 +665,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             : db
                 .select({ notes: count() })
                 .from(note_index)
-                .innerJoin(sites, eq(sites.id, note_index.site_id))
+                .leftJoin(sites, eq(sites.id, note_index.site_ref))
                 .innerJoin(organization, eq(organization.id, note_index.workspace_id))
                 .where(filtered)
                 .then(([row]) => number(row?.notes)),
@@ -683,7 +683,8 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
 
             return {
               workspace: { id: row.workspace_id, name: workspaceName },
-              site: { id: row.site_id, origin },
+              // FRU-672: a task of the workspace itself has no site, and so no address.
+              site: { id: row.site_id, origin: origin ?? '' },
               note: row.note_id,
               pageUrl: row.page_url,
               excerpt: row.excerpt,
