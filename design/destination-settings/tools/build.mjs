@@ -197,10 +197,10 @@ frame(
   1440,
   'B · The settings of a Linear team',
   [
-    'A drawer on the right, over the tab. It first says that the settings are shared by every site that sends to this place (question 1).',
+    'A drawer on the right, over the tab. It first says that the settings are shared by every site that sends to this place (decision 1).',
     '« Status of arrival » lists the states of the team, read from Linear, each with the stage it maps to. Empty: the default state of Linear, as today.',
     'Assignee, labels, priority and milestone are read from the tracker: the list the console offers is the list the worker accepts.',
-    'The capture: on or off, the element or the visible window. A default of the composer of the extension (question 2).',
+    'The capture: on or off, the element or the visible window. A default of the composer of the extension (decision 2).',
     'The template: a title and a description with variables in double braces, no logic. The preview fills them with a note of example, and says that the block of the note follows, always.',
     'The details: one box per line of the description of today. An unticked box removes the line, never the block.',
   ],
@@ -238,7 +238,7 @@ frame(
   1440,
   'F · A setting that Linear refused',
   [
-    'The status was removed from the team. The issues arrive in the default state, the log says which setting failed, and the row of the place says « Action required » (question 5).',
+    'The status was removed from the team. The issues arrive in the default state, the log says which setting failed, and the row of the place says « Action required » (decision 5).',
     'The panel says why and what to do. It stays until a save of the settings.',
   ],
   () => page(1440, destinations(true), panel({ kind: 'linear', refused: true })),
@@ -379,7 +379,7 @@ const out = `<!DOCTYPE html>
 <nav class="toc" aria-label="Frames">${toc}<a href="#decisions">Decisions</a><a href="#texts">Texts, EN and FR</a></nav>
 ${rendered.join('\n')}
 <section class="frame" id="decisions"><h2 class="f-title">Decisions of the board (fru-specs, 2026-11-28)</h2>
-<p class="notes">The orchestrator decided where the settings live and what a template touches. The questions of the framing are in worker.md, each with its recommendation.</p>
+<p class="notes">The orchestrator decided where the settings live and what a template touches. The decisions of the framing are in worker.md.</p>
 <ol class="qa">
 <li><b>Where.</b> A drawer opened from the row of a place, in the tab « Destinations » of a site, and from the panel of the connector. The settings are of the place, in <code>connectors.settings</code>, so the drawer says that every site that sends there shares them.</li>
 <li><b>Who.</b> An owner or an admin (<code>manage-workspace</code>), as the settings of a Linear connector today.</li>

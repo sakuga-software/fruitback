@@ -309,20 +309,23 @@ The extension path counts **18 actions** today ([The path](#the-path)). Making t
 page « Connect » takes the detour through the setup away for a person who starts from the extension.
 It saves the setup's own steps for them, and the spec counts how many.
 
-### The questions
+### The decisions
 
-1. **Does a sign-in with Linear or GitHub create a Fruitback account?** Recommended: GitHub already
-   does, through its OAuth App. Linear does not. A Linear token of an application names no person, and
-   a token of a person carries no verified address. Revisit if Linear offers OpenID Connect.
-2. **Which destination by default: Fruitback, or the tool of the sign-in?** Recommended: Fruitback,
-   unless the person chose « Send to … » at step 3. A sign-in with GitHub does not say that the team
-   tracks its work in GitHub, and a note sent to a public repository is public.
-3. **One GitHub App, or two?** Recommended: two. GitHub Apps take several callbacks now, so the reason
-   of before is gone, but the permissions are not the same, and every person who signs in would read
-   « write issues ». The cost of two is one more consent, only for whoever chooses « Send to GitHub ».
-4. **Does the page « Connect » make the first workspace?** Recommended: yes, as the setup does, for an
-   account that has none, and only on a sign-in started by the extension. The setup stays the way of a
-   person who starts from the console or the landing.
+The orchestrator took the four recommendations on 2026-11-28.
+
+1. **A sign-in with Linear creates no account.** GitHub already does, through its OAuth App. A
+   Linear token of an application names no person, and a token of a person carries no verified
+   address. To be looked at again if Linear offers OpenID Connect.
+2. **The destination by default is Fruitback**, unless the person chose « Send to … » at step 3 of
+   the setup. A sign-in with GitHub does not say that the team tracks its work in GitHub, and a note
+   sent to a public repository is public.
+3. **Two GitHub Apps stay two.** GitHub Apps take several callbacks now, so the reason of before is
+   gone, but the permissions are not the same, and every person who signs in would read « write
+   issues ». The cost of two is one more consent, only for whoever chooses « Send to GitHub ». Nothing
+   here changes the settings of the App of the Cloud: that would be an action of Mathieu.
+4. **The page « Connect » makes the first workspace** of an account that has none, as the setup does,
+   and only on a sign-in started by the extension. The setup stays the way of a person who starts from
+   the console or the landing.
 
 ## The funnel, on the Cloud only (FRU-644, a framing)
 
@@ -332,72 +335,64 @@ rest on 2026-11-28. This section is the framing, written before any code. The ti
 
 ### The rules, in short
 
-- **Five steps, and no more**: the setup opened, an account created, a site added, the widget seen
-  on a site, and a first note. Each step is counted where the worker already acts. No step reads a
-  page, an address or a text.
-- **Two kinds of count.**
-  - « Setup opened » and « Account created » happen before a workspace exists, so nobody can opt in
-    for them yet. Each one is a bare number for a week: the worker adds 1 to a row
-    `(week, step)`. The row holds no account, no address, no browser and no time finer than the week.
-  - « Site added », « Widget seen » and « First note » are counted only for the workspaces whose owner
-    opted in. They are not stored: the screen of the administrator computes them when it is read, from
-    rows the worker already keeps, and answers counts by cohort.
-- **A cohort is the ISO week in which a workspace was made.** For each cohort the screen says how many
-  workspaces opted in, then how many of them have a site, a site where the widget was seen, and a note.
-  It names no workspace and gives no id. A count under 5 reads « fewer than 5 », so a small cohort does
-  not point at one workspace.
+- **Nothing is counted before the opt-in.** The funnel starts when a workspace is created. The
+  setup opened and an account created come before any workspace, so nobody has opted in for them yet,
+  and they are not counted. Counting them is the question for Mathieu below.
+- **Four steps**: a workspace created, a site added, the widget seen on a site, and a first note.
+  Each one is read from rows the worker already keeps. No step reads a page, an address or a text.
 - **The owner of the workspace opts in, and only the owner.** A switch « Share usage counts with
-  Fruitback » on the page « General » of the settings, off by default, drawn on the Cloud only. Turned
-  off, the workspace leaves every cohort at the next read: nothing was stored about it to delete.
-- **The setup is counted on the server, with no cookie and no service of a third party.** The setup
-  page of the Cloud sends one `POST` with no credential and no body when it opens. The worker adds 1 to
-  the week and answers `204`. A caller is rate-limited by address, as every route is, and the address is
-  never written with the count.
+  Fruitback » on the page « General » of the settings, off by default, drawn on the Cloud only. It is
+  not in the setup: FRU-610 took the decisions out of the setup.
+- **Nothing is stored per workspace for a step.** The screen of the administrator computes the counts
+  when it is read, from the consent, `sites` and `note_index`. Turned off, the workspace leaves every
+  cohort at the next read: nothing was kept about it to delete.
+- **A cohort is the ISO week in which a workspace was created.** For each of the last 12 cohorts the
+  screen says how many workspaces opted in, then how many of them have a site, a site where the
+  widget was seen, and a note. It names no workspace and gives no id. A count under 5 reads « fewer
+  than 5 », so that a small cohort does not point at one workspace.
 - **Only the worker of the Cloud counts.** The test is the host of `FRUITBACK_PUBLIC_URL`, as
-  `pairsByCode` does it (`pair-page.ts`), and not a new variable. On any other host, the routes
-  answer `404`, the worker writes no count, the console draws neither the switch nor the screen, and the
-  table stays empty. The code is in the image, as the code of the pairing is, but it does nothing there.
+  `pairsByCode` does it (`pair-page.ts`), and not a new variable: a flag is one more variable in
+  Dokploy for one host, and a self-hosted instance that set it by mistake would count. On any other
+  host, the routes answer `404`, the console draws neither the switch nor the screen, and the table of
+  the consent stays empty. The code is in the image, as the code of the pairing is, but does nothing
+  there.
 - **The administrator of the instance reads the funnel**, in a section « Funnel » of the screen
   « Instance », through `GET /console/admin/funnel` and the guard `instanceAdminOf`. The read names no
   workspace, so it writes no row of `admin_reads`.
-- **`docs/privacy.md` and `SECURITY.md` change in the same commit as the code**: what is counted, the
-  switch, that the setup is counted for everyone without an identifier, and that a self-hosted
-  instance counts nothing.
+- **No cookie and no service of a third party.** Everything is a query of the worker on its own
+  database.
+- **`docs/privacy.md` and `SECURITY.md` change in the same commit as the code**: what is counted, who
+  switches it on, and that a self-hosted instance counts nothing.
 
 ### What exists today
 
 Measured on `main` at `581d4f86`.
 
-| Step            | Where it happens                                                                                                                                     | What the worker keeps today                                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Setup opened    | `apps/console/app/routes/setup.tsx`. Its first call is `GET /console/me`, and a signed-out visitor makes the same call from any page                 | nothing: the worker cannot tell the setup apart                                  |
-| Account created | `databaseHooks.user.create.before` of `auth.ts`, the one place that decides a sign-up (`sign-up.ts`)                                                 | the row of `user` and its `createdAt`                                            |
-| Site added      | `POST /console/workspaces/<id>/sites` (`console-api.ts`) and `POST /session/sites` of the extension (`session-site-add.ts`), both `accounts.addSite` | the row of `sites` and its date                                                  |
-| Widget seen     | the read of the pins, `GET /feedback` (`feedback-routes.ts`), through `pageRead` and `site-seen.ts` (FRU-721)                                        | `sites.script_seen_at`, `sites.extension_seen_at`: the last date, at most hourly |
-| First note      | `postFeedback`, `index.record` (`feedback-routes.ts`), for a note sent alone, in a batch or held then approved                                       | the rows of `note_index` and their `created_at`                                  |
+| Step              | Where it happens                                                                                                                                     | What the worker keeps today                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Workspace created | `POST /console/workspaces` (`console-api.ts`), `createWorkspaceWithPlugin`                                                                           | the row of `organization` and its `createdAt`                                    |
+| Site added        | `POST /console/workspaces/<id>/sites` (`console-api.ts`) and `POST /session/sites` of the extension (`session-site-add.ts`), both `accounts.addSite` | the row of `sites` and its date                                                  |
+| Widget seen       | the read of the pins, `GET /feedback` (`feedback-routes.ts`), through `pageRead` and `site-seen.ts` (FRU-721)                                        | `sites.script_seen_at`, `sites.extension_seen_at`: the last date, at most hourly |
+| First note        | `postFeedback` and `index.record` (`feedback-routes.ts`), for a note sent alone, in a batch, or held then approved                                   | the rows of `note_index` and their `created_at`                                  |
 
 There is no analytics, no `/metrics` route and no telemetry of a third party. better-auth's
 telemetry is forced off (`auth.ts`), and `BETTER_AUTH_TELEMETRY` is refused at boot (`env.ts`). The
 workspace has no settings of its own: `organization.metadata` is unused, and every setting so far is a
-column of `sites`.
+column of `sites`. The setup page makes no call of its own when it opens: its first call is
+`GET /console/me`, which every page makes.
 
-So three of the five steps need nothing new: an opted-in workspace already has the rows that answer
-them. Only « Setup opened » needs a new count, and « Account created » needs one because no workspace
-exists yet to opt in for it.
+So every step needs nothing new: an opted-in workspace already has the rows that answer it. Only the
+consent is new.
 
 ### The data
 
-- **`funnel_weeks`**: `week` (text, an ISO week such as `2026-W48`), `step` (`setup` or `account`),
-  `count` (integer). The primary key is `(week, step)`. A count is one `INSERT … ON CONFLICT DO UPDATE
-  SET count = count + 1`. No other column.
 - **The consent**: a row of `workspace_funnel_consent` (`workspace_id`, `consented_at`,
-  `consented_by`), deleted when the owner turns the switch off and with its workspace. A table rather
+  `consented_by`), deleted when the owner turns the switch off, and with its workspace. A table rather
   than a column of `organization`: that table belongs to better-auth, and its `metadata` is text that
   nothing reads.
-- **No row per workspace for a step.** The read joins the consent with `sites` and `note_index`. It
-  answers, for each of the last 12 cohorts: the workspaces that opted in, those with a site, those with
-  a site seen, and those with a note.
-- `drill-seed.sql` gets a row of each table, and `postgres-numbers.test.ts` gets `consented_at`.
+- **The read** joins the consent with `organization`, `sites` and `note_index`, and answers counts by
+  cohort, never a row of a workspace.
+- `drill-seed.sql` gets a row of the table, and `postgres-numbers.test.ts` gets `consented_at`.
 
 ### Why
 
@@ -405,28 +400,34 @@ exists yet to opt in for it.
   record of what that workspace did, kept after it turned the switch off. Computed at the read, the
   switch is also the deletion. The cost is a join over the opted-in workspaces, once per read of an
   administrator.
-- **Why two bare counts before the opt-in.** The steps where most people stop are the first two, and
-  no workspace exists to consent for them. A count of the week with no identifier says nothing about
-  anybody. The alternative is a funnel that starts at « Site added », which cannot see the setup that
-  loses people.
-- **Why the owner.** The switch speaks for the whole workspace, as deleting it does. An admin does many
-  things in a workspace, but does not decide what it shares outside it.
-- **Why the host and not a variable.** The decision of FRU-325 for the pairing: a flag is one more
-  variable in Dokploy for one host, and a self-hosted instance that set it by mistake would count.
+- **Why the owner.** The switch speaks for the whole workspace outside of it, as its deletion does.
+  An admin does many things in a workspace, but does not decide what it shares with Fruitback.
+- **Why « fewer than 5 ».** The Cloud makes few workspaces a week at first, and an exact 1 or 2 can
+  point at a workspace that its administrator can name.
 
-### The questions
+### The decisions
 
-The orchestrator decided the opt-in, the cohorts, the place of the read, the setup counted on the
-server, and nothing in a self-host. The open questions are below, each with its recommendation.
+Decided by the orchestrator on 2026-11-28: the owner opts in, the counts are by weekly cohort with
+no id of a workspace, the administrator of the instance reads them, and a self-hosted instance counts
+nothing. The switch is in « General » only, off. A count under 5 reads « fewer than 5 ». Nothing is
+counted before the opt-in.
 
-1. **Are « Setup opened » and « Account created » counted for everyone, with no opt-in?**
-   Recommended: yes, as bare counts of the week with no identifier, written in `privacy.md`. Without
-   them the funnel starts after the two steps where people stop most.
-2. **Does the switch appear in the setup, or only in « General »?**
-   Recommended: in « General » only, off. A question in the setup is a decision before the first note,
-   which FRU-610 took out of the setup.
-3. **Is « fewer than 5 » the threshold?** Recommended: yes. The Cloud makes few workspaces a week at
-   first, and an exact 1 or 2 can point at a workspace that its administrator can name.
+### Question for Mathieu
+
+**Are « Setup opened » and « Account created » counted?** They come before any workspace, so before
+any opt-in. The orchestrator asked Mathieu on 2026-11-28; until he answers, they are not counted, and
+no ticket counts them.
+
+- **Option A, not counted** (the default): the funnel starts at « Workspace created ». It cannot see
+  the people who open the setup and leave, which is where the most are lost.
+- **Option B, counted for everyone as bare weekly counts**: the setup page sends one `POST` with no
+  credential and no body, and the worker adds 1 to a row `(week, step)` of a table `funnel_weeks`;
+  the creation of an account adds 1 the same way. No account, no address, no browser, no cookie, no
+  time finer than the week. A caller is rate-limited by address, as every route is, and the address is
+  never written with the count. `privacy.md` says it.
+
+Recommended: B. A count of a week with no identifier says nothing about anybody, and without it the
+funnel starts after the two steps that lose the most.
 
 ## The questions
 

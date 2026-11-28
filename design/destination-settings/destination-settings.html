@@ -152,7 +152,7 @@ table.texts td,table.texts th{border:1px solid var(--line);padding:6px 10px;text
 </section>
 <section class="frame" id="b">
   <h2 class="f-title">B · The settings of a Linear team</h2>
-  <ul class="notes"><li>A drawer on the right, over the tab. It first says that the settings are shared by every site that sends to this place (question 1).</li><li>« Status of arrival » lists the states of the team, read from Linear, each with the stage it maps to. Empty: the default state of Linear, as today.</li><li>Assignee, labels, priority and milestone are read from the tracker: the list the console offers is the list the worker accepts.</li><li>The capture: on or off, the element or the visible window. A default of the composer of the extension (question 2).</li><li>The template: a title and a description with variables in double braces, no logic. The preview fills them with a note of example, and says that the block of the note follows, always.</li><li>The details: one box per line of the description of today. An unticked box removes the line, never the block.</li></ul>
+  <ul class="notes"><li>A drawer on the right, over the tab. It first says that the settings are shared by every site that sends to this place (decision 1).</li><li>« Status of arrival » lists the states of the team, read from Linear, each with the stage it maps to. Empty: the default state of Linear, as today.</li><li>Assignee, labels, priority and milestone are read from the tracker: the list the console offers is the list the worker accepts.</li><li>The capture: on or off, the element or the visible window. A default of the composer of the extension (decision 2).</li><li>The template: a title and a description with variables in double braces, no logic. The preview fills them with a note of example, and says that the block of the note follows, always.</li><li>The details: one box per line of the description of today. An unticked box removes the line, never the block.</li></ul>
   <div class="f-box" style="width:1440px;position:relative"><div class="app w1440 tall">
     <aside class="side">
     <a href="#" class="ws"><span class="ws-i">A</span><b>Acme</b></a>
@@ -458,7 +458,7 @@ Reported by {{reporter}}</span>
 </section>
 <section class="frame" id="f">
   <h2 class="f-title">F · A setting that Linear refused</h2>
-  <ul class="notes"><li>The status was removed from the team. The issues arrive in the default state, the log says which setting failed, and the row of the place says « Action required » (question 5).</li><li>The panel says why and what to do. It stays until a save of the settings.</li></ul>
+  <ul class="notes"><li>The status was removed from the team. The issues arrive in the default state, the log says which setting failed, and the row of the place says « Action required » (decision 5).</li><li>The panel says why and what to do. It stays until a save of the settings.</li></ul>
   <div class="f-box" style="width:1440px;position:relative"><div class="app w1440 tall">
     <aside class="side">
     <a href="#" class="ws"><span class="ws-i">A</span><b>Acme</b></a>
@@ -613,7 +613,7 @@ Reported by {{reporter}}</span>
   </div></div>
 </section>
 <section class="frame" id="decisions"><h2 class="f-title">Decisions of the board (fru-specs, 2026-11-28)</h2>
-<p class="notes">The orchestrator decided where the settings live and what a template touches. The questions of the framing are in worker.md, each with its recommendation.</p>
+<p class="notes">The orchestrator decided where the settings live and what a template touches. The decisions of the framing are in worker.md.</p>
 <ol class="qa">
 <li><b>Where.</b> A drawer opened from the row of a place, in the tab « Destinations » of a site, and from the panel of the connector. The settings are of the place, in <code>connectors.settings</code>, so the drawer says that every site that sends there shares them.</li>
 <li><b>Who.</b> An owner or an admin (<code>manage-workspace</code>), as the settings of a Linear connector today.</li>

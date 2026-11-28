@@ -5758,24 +5758,21 @@ type PlaceSettings = {
 - **The worker checks each value against what the kind takes**, and against the tracker when it is an
   id (a state, a person, a label): the list the console offers is the list the worker accepts.
 
-### The questions
+### The decisions
 
 The orchestrator decided where the settings live, what a template touches, and that hiding a detail
-hides only the text. The open questions are below, each with its recommendation.
+hides only the text. It took the five recommendations below on 2026-11-28.
 
-1. **Is a setting of a place shared by every site that sends there?** Recommended: yes. It is the
-   convention of a team in its tool, and a site that wants other settings sends to another project or
-   another team. The panel says it.
-2. **Does « Capture by default » reach the widget of a script, or only the extension?** Recommended:
-   the extension first. The widget of a script joins a capture only through `captureScreenshot`, which
-   the site gives, and its reporter already turns it on. The widget can follow when it takes captures
-   of its own.
-3. **Does a template replace the lines of the details, or come with them?** Recommended: it replaces
-   them. A template that wants « Component » writes `{{component}}`, and the boxes then only empty the
-   variables. Without a template, the boxes remove the lines of today.
-4. **Do defaults for a task that Fruitback keeps (status, assignee) belong here?** Recommended: no, a
-   ticket of its own, as a setting of the site: Fruitback is not a connector, and has no
-   `connectors.settings`.
-5. **Does a refused status, assignee or label make the destination « Action required »?**
-   Recommended: yes, with the cause, until a save of the settings. It is the only way the team learns
-   that its issues lost a setting.
+1. **A setting of a place is shared by every site that sends there.** It is the convention of a team
+   in its tool, and a site that wants other settings sends to another project or another team. The
+   panel says it.
+2. **« Capture by default » is for the extension first.** The widget of a script joins a capture only
+   through `captureScreenshot`, which the site gives, and its reporter already turns it on. The widget
+   can follow when it takes captures of its own.
+3. **A template replaces the lines of the details.** A template that wants « Component » writes
+   `{{component}}`, and the boxes then only empty the variables. Without a template, the boxes remove
+   the lines of today.
+4. **The defaults of a task that Fruitback keeps (status, assignee) are not here.** They are a setting
+   of the site, in a ticket of their own: Fruitback is not a connector, and has no `connectors.settings`.
+5. **A refused status, assignee or label makes the destination « Action required »**, with the cause,
+   until a save of the settings. It is the only way the team learns that its issues lost a setting.
