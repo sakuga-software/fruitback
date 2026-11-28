@@ -34,6 +34,7 @@ import { ago, agoShort } from '../ago';
 import { NotePages } from '../parts/note-pages';
 import { useSlashKey } from '../parts/notes-filters';
 import { useWorkspace } from './workspace';
+import { SCREEN_INSET, ScreenHead } from '../parts/screen-head';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { hostOf, siteAddress, siteName } from '../site-address';
@@ -174,20 +175,15 @@ export default function Sites() {
   return (
     <>
       {/* FRU-688: « Sites » and « Add a site » in a head of 48 px, as the head of Notes (FRU-686). */}
-      <header
-        className={`${BLEED} -mt-[40px] flex min-h-[48px] items-center gap-[12px] border-b border-line pr-[16px] pl-[20px]`}
-      >
-        <h1 className="text-step font-semibold text-ink">{t('Sites')}</h1>
+      <ScreenHead title={t('Sites')}>
         {listed && manages ? (
-          <div className="ml-auto flex items-center">
-            {/* FRU-650: a plus before the words, as the mockup of FRU-688 draws it: 14 px, 6 px from them. */}
-            <Button size="panel" inset={10} gap={6} onClick={() => setAdding(true)}>
-              <SettingsIcon name="add" size={14} />
-              {t('Add a site')}
-            </Button>
-          </div>
+          // FRU-650: a plus before the words, as the mockup of FRU-688 draws it: 14 px, 6 px from them.
+          <Button size="panel" inset={10} gap={6} onClick={() => setAdding(true)}>
+            <SettingsIcon name="add" size={14} />
+            {t('Add a site')}
+          </Button>
         ) : null}
-      </header>
+      </ScreenHead>
 
       {read === 'loading' ? <p className="mt-[24px] text-small text-muted">{t('Loading…')}</p> : null}
 
@@ -632,7 +628,7 @@ function Untracked({ workspace, sites }: { workspace: Workspace; sites: readonly
   return (
     <p
       // 20 px from each edge of the screen, as the head and the bar: the column of the screen is wider.
-      className="mx-[calc(20px_-_clamp(16px,4vw,48px))] mt-[16px] flex flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-control border border-dashed border-line px-[12px] py-[10px] text-body text-muted"
+      className={`${SCREEN_INSET} mt-[16px] flex flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-control border border-dashed border-line px-[12px] py-[10px] text-body text-muted`}
     >
       <Mark size={14} />
       <span>

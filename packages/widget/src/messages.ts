@@ -334,6 +334,8 @@ export const ENGLISH = {
   'status.failedSignedOut': 'The status was not saved: your session has ended. Sign in again, then try again.',
   'status.refused': 'You can no longer change the status of this note here. Reload the page.',
   'thread.youBrowser': 'You · this browser',
+  /** FRU-647: beside the name on a reply of the reader, with `notes`. */
+  'thread.you': 'you',
   'thread.youMayEdit': 'You can edit it until a member picks it up.',
   'thread.youMayEditOrDelete': 'You can edit or delete it until a member picks it up.',
   'thread.youMayDelete': 'You can delete it until a member picks it up.',
