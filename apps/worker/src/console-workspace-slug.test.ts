@@ -168,13 +168,14 @@ describe('the short name of a workspace (FRU-715)', () => {
     ]);
   });
 
-  it(`keeps ${MAX_FORMER_SLUGS} names a workspace left at most, the newest ones`, async () => {
+  it('keeps 5 names a workspace left at most, the newest ones', async () => {
     const env = await world();
     const { id, other, alice, mallory, save } = await acme(env);
 
     for (let each = 1; each <= MAX_FORMER_SLUGS + 2; each += 1) {
       assert.equal((await save(alice.token, { slug: `acme-${each}` })).status, 200);
     }
+    assert.equal(MAX_FORMER_SLUGS, 5);
     const former = (await workspacesOf(env, alice.token))[id]?.formerSlugs;
     assert.deepEqual(former, ['acme-6', 'acme-5', 'acme-4', 'acme-3', 'acme-2']);
     // The oldest one is free for anybody at once.

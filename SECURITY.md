@@ -2599,8 +2599,8 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   test:`deletes a workspace for its owner only: the tokens of Linear read first, then its sites, connectors, deliveries and extensions`.
 - A workspace is made by the plugin for somebody of the cookie: `POST /console/workspaces`
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
-  slug, a logo and metadata. The slug is the short name of the workspace (FRU-715), which the
-  worker chooses from the name and hands to the plugin: no body gives it.
+  slug, a logo and metadata. The slug is the short name of the workspace, which the worker
+  chooses from the name and hands to the plugin: no body gives it.
 - A workspace is renamed by its owner or an admin, by `POST /console/workspaces/<id>`
   with a name, under the rule of the creation: one line, 1 to 80 characters. The role is read in
   the store of the worker at the call, a member and a guest get `403`, somebody who is not of the
@@ -2610,7 +2610,7 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   (`/organization/update`, which also takes a slug, a logo and metadata) stays closed. The id, the
   sites, the members and the extensions that are paired do not move: they name the id.
   test:`moves nothing else: the id, the sites, the members, and the extensions that are paired`.
-- **The short name of a workspace** (FRU-715), the `acme` of `/w/acme` in the console, is
+- The short name of a workspace, the `acme` of `/w/acme` in the console, is
   `organization.slug`, unique on the instance. It is changed with the name, by the same call and
   under the same roles and `Origin`, with `slug`: `[a-z0-9-]`, 3 to 40 characters, a letter or a
   digit at each end, and none of `RESERVED_SLUGS` (`api`, `w`, `login`, `setup`, the paths of the

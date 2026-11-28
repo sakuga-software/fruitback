@@ -416,7 +416,7 @@ The table `done_notices` keeps one row for each note that waits:
   its metadata included (a JPEG can say where and when it was taken), in `workspace_logos`. Every
   member of the workspace reads it. It goes when it is removed or replaced, or with its workspace.
 
-- The short name of a workspace (FRU-715), the `acme` of its address in the console, in
+- The short name of a workspace, the `acme` of its address in the console, in
   `organization.slug`: read in its name when it is made, changed by its owner or an admin. Every
   member of the workspace reads it, and nobody else. The short names it left are kept 30 days each,
   5 at most, in `workspace_former_slugs`, with the instant each is free again: so that an old link

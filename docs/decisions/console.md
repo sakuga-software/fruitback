@@ -1753,5 +1753,5 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   days opens whatever workspace took it.
 - **A new short name is shown at once**: `renamed` of the frame writes it and keeps the one of
   before in `formerSlugs`, so the page on screen stays drawn, and the frame then moves the address.
-  `e2e/console-workspace-address.spec.ts` holds the move, the replaced history, the refusals and the
+  `e2e/console-workspace-settings.spec.ts` holds the move, the replaced history, the refusals and the
   role of a member.
