@@ -289,18 +289,18 @@ Measured on `main` at `581d4f86`, read from the code.
 
 ### The team side, counted from the code
 
-From an owner signed in, with a site and no destination, to a note in Linear:
+From an owner signed in, with a site and no destination, to a note in Linear. A list and not a table:
+`first-note.spec.ts` reads every row of a table of this page that starts with a number as a row of
+the path above.
 
-| #   | Place   | Action                                               |
-| --- | ------- | ---------------------------------------------------- |
-| 1   | console | « Connect Linear or GitHub » at the end of the setup |
-| 2   | console | « Connect » on the tile of Linear, in « Connectors » |
-| 3   | linear  | choose the workspace of Linear, then « Authorize »   |
-| 4   | console | open the site, then the tab « Destinations »         |
-| 5   | console | « Add a destination… »                               |
-| 6   | console | choose the team                                      |
-| 7   | console | choose « Whole team » or a project                   |
-| 8   | site    | the element, the note, « Send »: 3 actions           |
+1. In `console`: « Connect Linear or GitHub » at the end of the setup.
+2. In `console`: « Connect » on the tile of Linear, in « Connectors ».
+3. In `linear`: choose the workspace of Linear, then « Authorize ».
+4. In `console`: open the site, then the tab « Destinations ».
+5. In `console`: « Add a destination… ».
+6. In `console`: choose the team.
+7. In `console`: choose « Whole team » or a project.
+8. In `site`: the element, the note, « Send »: 3 actions.
 
 **About 10 actions after the first note, and two of the screens are found by the person.** With the
 rules above: « Send to Linear » at step 3 of the setup, the consent of Linear, and the team chosen in
@@ -337,114 +337,130 @@ The orchestrator took the four recommendations on 2026-11-28.
 
 ## The funnel, on the Cloud only (FRU-644, a framing)
 
-Mathieu decided on 2026-11-19 (FRU-637) that a funnel measure is acceptable if it is aggregated,
-opt-in, on Fruitback Cloud only, and absent from a self-hosted instance. The orchestrator decided the
-rest on 2026-11-28. This section is the framing, written before any code. The tickets are at the end of this section.
+Mathieu decided on 2026-11-19 (FRU-637) that a funnel measure is acceptable on Fruitback Cloud only,
+and absent from a self-hosted instance. On 2026-11-28 he chose the tool and the consent: « ok pour
+server et client sur la version cloud only, pas forcément anonyme, avec une bannière de cookie claire
+sur le sujet ». This section is the framing, written before any code. The tickets are at the end of
+this section.
 
 ### The rules, in short
 
-- **Nothing is counted before the opt-in.** The funnel starts when a workspace is created. The
-  setup opened and an account created come before any workspace, so nobody has opted in for them yet,
-  and they are not counted. Counting them is the question for Mathieu below.
-- **Four steps**: a workspace created, a site added, the widget seen on a site, and a first note.
-  Each one is read from rows the worker already keeps. No step reads a page, an address or a text.
-- **The owner of the workspace opts in, and only the owner.** A switch « Share usage counts with
-  Fruitback » on the page « General » of the settings, off by default, drawn on the Cloud only. It is
-  not in the setup: FRU-610 took the decisions out of the setup.
-- **Nothing is stored per workspace for a step.** The screen of the administrator computes the counts
-  when it is read, from the consent, `sites` and `note_index`. Turned off, the workspace leaves every
-  cohort at the next read: nothing was kept about it to delete.
-- **A cohort is the ISO week in which a workspace was created.** For each of the last 12 cohorts the
-  screen says how many workspaces opted in, then how many of them have a site, a site where the
-  widget was seen, and a note. It names no workspace and gives no id. A count under 5 reads « fewer
-  than 5 », so that a small cohort does not point at one workspace.
-- **Only the worker of the Cloud counts.** The test is the host of `FRUITBACK_PUBLIC_URL`, as
-  `pairsByCode` does it (`pair-page.ts`), and not a new variable: a flag is one more variable in
-  Dokploy for one host, and a self-hosted instance that set it by mistake would count. On any other
-  host, the routes answer `404`, the console draws neither the switch nor the screen, and the table of
-  the consent stays empty. The code is in the image, as the code of the pairing is, but does nothing
-  there.
-- **The administrator of the instance reads the funnel**, in a section « Funnel » of the screen
-  « Instance », through `GET /console/admin/funnel` and the guard `instanceAdminOf`. The read names no
-  workspace, so it writes no row of `admin_reads`.
-- **No cookie and no service of a third party.** Everything is a query of the worker on its own
-  database.
-- **`docs/privacy.md` and `SECURITY.md` change in the same commit as the code**: what is counted, who
-  switches it on, and that a self-hosted instance counts nothing.
+- **The tool is PostHog, in its EU region**, with events from the server (the worker) and from the
+  browser (the landing, the setup, the console). It is the only service of a third party the funnel
+  uses, and Mathieu chose it.
+- **On the Cloud only.** The worker sends an event only when two things hold: the key is set, and the
+  host of `FRUITBACK_PUBLIC_URL` is the host of the Cloud, as `pairsByCode` reads it (`pair-page.ts`).
+  A self-hosted instance that sets the key by mistake sends nothing, and the boot says so in one line.
+  On a self-hosted instance the console loads no script of PostHog, draws no banner, and sends
+  nothing.
+- **The keys are variables that Mathieu sets**: `FRUITBACK_POSTHOG_KEY`, the project key, which is
+  public; and `FRUITBACK_POSTHOG_HOST`, `https://eu.i.posthog.com` by default. The worker hands the
+  key and the host to the browser in `GET /analytics`, on the Cloud only. Elsewhere that route answers
+  `404`, and no build of the console or of the landing carries a key.
+- **Nothing of PostHog runs in a browser before its consent**: no script, no cookie, no event. A banner
+  asks first, on the landing, the setup and the console. « Accept » and « Refuse » are two buttons of
+  the same size and weight, side by side, and the banner says what is measured, by whom, and links to
+  `privacy.md`. The choice can be changed at any time: « Cookie settings » in the footer of the landing
+  and in « My account ».
+- **The choice is kept in a first-party cookie**, `fruitback_consent`, on `.fruitback.com`, so that
+  the landing, the setup and the console share it. It holds `granted` or `denied` and the date, and
+  lasts 6 months; the banner then asks again. It is the one cookie written before the consent, and it
+  holds no identifier. A signed-in person's choice is also written on their account, so that the
+  worker knows it.
+- **Once consented, the events may name the person.** The `distinct_id` is the id of the account, and
+  the workspace is a group (`$groups.workspace`). Never an e-mail, a name, the text of a note, an
+  address of a page of a site, or anything of a visitor.
+- **Before the consent, or after a refusal, the server sends no identifier.** An event of the worker
+  then carries a random `distinct_id`, used once, and `$process_person_profile: false`, so PostHog
+  builds no profile. It holds no account id, no workspace id, no address and no property but the step
+  and its kind. The worker sends from its own address, so PostHog never sees the address of the
+  person.
+- **A send never slows a request and never fails one.** The worker sends after the answer, with a
+  timeout of 2 s, and a failure is one line in the log. Nothing is queued or sent again.
+- **The steps are all six**: `setup_opened`, `account_created`, `workspace_created`, `site_added`,
+  `widget_first_seen` and `first_note`. Each one says where it is sent from, below.
+- **A deleted account is deleted in PostHog too**, with the API of PostHog and a personal key that can
+  delete persons only (`FRUITBACK_POSTHOG_PERSONAL_KEY`). Without that key the worker deletes nothing,
+  and `privacy.md` says how long PostHog keeps the events.
+- **`docs/privacy.md`, `SECURITY.md` and the CSP change with the code that sends**, never before: a
+  page that says what the product does is written when it does it. The CSP of the console of the
+  Cloud allows the host of PostHog in `connect-src`, and the script of PostHog is a chunk of the
+  console, loaded after the consent, not a script of another host.
+
+### The steps
+
+| Step                | Sent from                                                                                              | When                                         | Properties                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------- | --------------------------------------------- |
+| `setup_opened`      | the browser, `setup.tsx`                                                                               | the setup opens, after the consent only      | `from`: `landing` (with `?site=`) or `direct` |
+| `account_created`   | the worker, after `databaseHooks.user.create` (`auth.ts`)                                              | an account is made                           | `provider`: `email`, `google` or `github`     |
+| `workspace_created` | the worker, `POST /console/workspaces`, and the page « Connect » of FRU-754                            | a workspace is made                          | none                                          |
+| `site_added`        | the worker, `accounts.addSite` (`POST …/sites` of the console, `POST /session/sites` of the extension) | a site is added                              | `from`: `console` or `extension`              |
+| `widget_first_seen` | the worker, `site-seen.ts` (FRU-721)                                                                   | the first date of a way is written on a site | `way`: `script` or `extension`                |
+| `first_note`        | the worker, `index.record` (`feedback-routes.ts`)                                                      | the first note of a site is indexed          | `channel`: `script` or `extension`            |
+
+- **The setup opened is an event of the browser only.** The page makes no call of its own when it
+  opens (its first call, `GET /console/me`, is made by every page), and a call made only to count it,
+  before the consent, would count a person who did not answer the banner. So the funnel sees the
+  setups of the people who accepted, and PostHog's own count of the banner says how many those are.
+- **The server events of a site** (`widget_first_seen`, `first_note`) are caused by a visitor of the
+  site, not by the person of the account. They carry the group of the workspace, and the account of
+  its owner as `distinct_id`, only when that owner consented. Otherwise they carry no identifier.
+- **Who consented, on the server**: the choice of a signed-in person is written on their account
+  (`user.analytics_consent`, `granted`, `denied` or empty, with its date) by the console, when the
+  banner is answered or the choice changed. Empty is « no identifier ».
 
 ### What exists today
 
 Measured on `main` at `581d4f86`.
 
-| Step              | Where it happens                                                                                                                                     | What the worker keeps today                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Workspace created | `POST /console/workspaces` (`console-api.ts`), `createWorkspaceWithPlugin`                                                                           | the row of `organization` and its `createdAt`                                    |
-| Site added        | `POST /console/workspaces/<id>/sites` (`console-api.ts`) and `POST /session/sites` of the extension (`session-site-add.ts`), both `accounts.addSite` | the row of `sites` and its date                                                  |
-| Widget seen       | the read of the pins, `GET /feedback` (`feedback-routes.ts`), through `pageRead` and `site-seen.ts` (FRU-721)                                        | `sites.script_seen_at`, `sites.extension_seen_at`: the last date, at most hourly |
-| First note        | `postFeedback` and `index.record` (`feedback-routes.ts`), for a note sent alone, in a batch, or held then approved                                   | the rows of `note_index` and their `created_at`                                  |
-
-There is no analytics, no `/metrics` route and no telemetry of a third party. better-auth's
-telemetry is forced off (`auth.ts`), and `BETTER_AUTH_TELEMETRY` is refused at boot (`env.ts`). The
-workspace has no settings of its own: `organization.metadata` is unused, and every setting so far is a
-column of `sites`. The setup page makes no call of its own when it opens: its first call is
-`GET /console/me`, which every page makes.
-
-So every step needs nothing new: an opted-in workspace already has the rows that answer it. Only the
-consent is new.
-
-### The data
-
-- **The consent**: a row of `workspace_funnel_consent` (`workspace_id`, `consented_at`,
-  `consented_by`), deleted when the owner turns the switch off, and with its workspace. A table rather
-  than a column of `organization`: that table belongs to better-auth, and its `metadata` is text that
-  nothing reads.
-- **The read** joins the consent with `organization`, `sites` and `note_index`, and answers counts by
-  cohort, never a row of a workspace.
-- `drill-seed.sql` gets a row of the table, and `postgres-numbers.test.ts` gets `consented_at`.
+- **No analytics, no `/metrics`, no telemetry of a third party.** better-auth's telemetry is forced
+  off (`auth.ts`), and `BETTER_AUTH_TELEMETRY` is refused at boot (`env.ts`). The worker logs no
+  request.
+- **No cookie of Fruitback on the landing.** The console keeps the cookie of its session, on its own
+  host.
+- **Each step already has its place in the code** (the table above): `databaseHooks.user.create`,
+  `createWorkspaceWithPlugin`, `accounts.addSite`, `markSiteSeen` (which writes a date only when the
+  one before is an hour old, so the first date is known), and `index.record`.
+- **The Cloud is a host, not a flag.** The worker knows it by the host of `FRUITBACK_PUBLIC_URL`
+  (`pairsByCode`), the console by the host of its API (`instanceOf(api).cloud`). The same image runs
+  on the Cloud and in a self-host.
+- **The CSP of the console** is in `apps/console/nginx.conf.template`.
 
 ### Why
 
-- **Why the read computes, and nothing is stored per workspace.** A step stored per workspace is a
-  record of what that workspace did, kept after it turned the switch off. Computed at the read, the
-  switch is also the deletion. The cost is a join over the opted-in workspaces, once per read of an
-  administrator.
-- **Why the owner.** The switch speaks for the whole workspace outside of it, as its deletion does.
-  An admin does many things in a workspace, but does not decide what it shares with Fruitback.
-- **Why « fewer than 5 ».** The Cloud makes few workspaces a week at first, and an exact 1 or 2 can
-  point at a workspace that its administrator can name.
+- **Why the consent before any script.** A banner that loads PostHog first and asks after has
+  already set its cookie. The script is a chunk that the console imports after « Accept », so a
+  refusal loads nothing.
+- **Why anonymous server events without the consent.** The worker sees the steps that matter most
+  (an account, a workspace, a site) whatever the browser chose. An event with a random id used once,
+  no profile, no property that names anything, and the address of the worker, is a count and nothing
+  more. Mathieu allowed events that name a person; the consent is what lets them.
+- **Why the host of the Cloud and the key both.** The key alone would let a self-hosted instance
+  that copied the variables of the Cloud send events. The host alone would need no key, and the
+  events would have nowhere to go.
+- **Why the key comes from the worker.** A build of the console or of the landing with a key in it
+  would carry it into every self-hosted image built from `main`.
 
 ### The decisions
 
-Decided by the orchestrator on 2026-11-28: the owner opts in, the counts are by weekly cohort with
-no id of a workspace, the administrator of the instance reads them, and a self-hosted instance counts
-nothing. The switch is in « General » only, off. A count under 5 reads « fewer than 5 ». Nothing is
-counted before the opt-in.
+Decided by Mathieu and the orchestrator on 2026-11-28:
 
-### Question for Mathieu
+1. PostHog, EU region, server and browser events, on the Cloud only.
+2. The events may name the person once they consented; never before.
+3. A banner, with « Refuse » as easy as « Accept », and a choice that can be changed.
+4. All six steps, « Setup opened » and « Account created » included.
+5. The keys are variables that Mathieu sets.
 
-**Are « Setup opened » and « Account created » counted?** They come before any workspace, so before
-any opt-in. The orchestrator asked Mathieu on 2026-11-28; until he answers, they are not counted, and
-no ticket counts them.
-
-- **Option A, not counted** (the default): the funnel starts at « Workspace created ». It cannot see
-  the people who open the setup and leave, which is where the most are lost.
-- **Option B, counted for everyone as bare weekly counts**: the setup page sends one `POST` with no
-  credential and no body, and the worker adds 1 to a row `(week, step)` of a table `funnel_weeks`;
-  the creation of an account adds 1 the same way. No account, no address, no browser, no cookie, no
-  time finer than the week. A caller is rate-limited by address, as every route is, and the address is
-  never written with the count. `privacy.md` says it.
-
-Recommended: B. A count of a week with no identifier says nothing about anybody, and without it the
-funnel starts after the two steps that lose the most.
+The opt-in of the owner of a workspace, and the counts by weekly cohort that this section framed
+first, are dropped: PostHog makes the cohorts, and the consent is the person's.
 
 ### The tickets
 
-| Ticket  | What                                                                               | Critical |
-| ------- | ---------------------------------------------------------------------------------- | -------- |
-| FRU-755 | The worker: the consent of the owner, and the read by cohort, on the Cloud only    | yes      |
-| FRU-756 | The console: the switch in « General », and the section « Funnel » of « Instance » | no       |
-
-No ticket counts « Setup opened » or « Account created » until Mathieu answers the question above.
+| Ticket  | What                                                                                                     | Critical |
+| ------- | -------------------------------------------------------------------------------------------------------- | -------- |
+| FRU-755 | The worker: the keys, `GET /analytics`, the consent on the account, the five server events, the deletion | yes      |
+| FRU-758 | The banner of the cookies: the landing, the setup and the console, and « Cookie settings »               | yes      |
+| FRU-756 | The browser: PostHog loaded after the consent, `setup_opened`, the CSP of the console of the Cloud       | yes      |
 
 ## The questions
 
