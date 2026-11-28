@@ -109,7 +109,7 @@ describe('the traces of a flaky test of the E2E suite', () => {
     };
 
     const onCi = config('true');
-    assert.deepEqual(onCi.trace, { mode: 'retain-on-first-failure', screenshots: false });
+    assert.deepEqual(onCi.trace, { mode: 'retain-on-first-failure', screenshots: false, snapshots: false });
     assert.deepEqual(
       onCi.reporter.find((reporter) => Array.isArray(reporter) && reporter[0] === 'json'),
       ['json', { outputFile: 'playwright-report/results.json' }],
