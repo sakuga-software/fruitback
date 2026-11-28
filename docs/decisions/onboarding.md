@@ -218,6 +218,216 @@ names the controls in French, as the extension draws them for a French browser.
 Before FRU-486, `docs/reviewing.md` showed five captures made by hand for FRU-322 on 2026-10-20
 (`docs/assets/guide-*.png`, removed), and step 3 of the setup showed no guide.
 
+## One sign-in, then the destination in the same move (FRU-664, a framing)
+
+Mathieu asked on 2026-11-22 for fewer actions on the path of a person who installs the extension and
+never writes a script tag, from the install to a note that arrives in the right place. He gave three
+leads: one sign-in that creates the account and connects the destination, a default source and
+destination for the first site, and a site turned on from the popup alone. This section is the
+framing, written before any code. It counts what exists, says which leads hold, and lists the
+tickets.
+
+### The rules, in short
+
+- **The team side is measured before anything is cut.** `first-note.spec.ts` stops at a note kept by
+  Fruitback. A second walk, `e2e/first-destination.spec.ts`, counts the actions from a signed-in owner
+  to a note that arrives in a tracker, against the stub of Linear of the tests. It writes its table here,
+  as the first walk does. The count below is read from the code, and the spec replaces it.
+- **No account is created by a connection of a tracker.** The token of Linear is an application
+  (`actor=app`), and the user token of the GitHub App is used once and kept nowhere. Neither names a
+  person, and neither says that an address is verified. An account still comes only from the e-mail
+  link, Google or the sign-in with GitHub, which `databaseHooks.user.create` checks (`auth.ts`).
+- **The setup offers the destination in the moment it is wanted.** Step 3 of the setup shows « Where
+  the notes go »: « Keep them in Fruitback » (chosen), « Send to Linear » and « Send to GitHub ». A
+  click on a tracker mints the ticket of the connector there, since the person is the owner of the
+  workspace they just made, and opens the consent of the provider. The callback goes back to the setup
+  (`?connected=<kind>`), not to « Connectors ».
+- **A connection started from the setup becomes the destination of the site.** When the tracker answers
+  one team, or one repository, the worker writes it as the place of the site at once. With several, step 3
+  shows one list, and the choice writes it. A connection made from « Connectors » changes no site, as
+  today.
+- **The default destination stays Fruitback.** A first site with no choice keeps its notes in the
+  worker (`place` null, FRU-651), and the first note arrives with no question. A worker that keeps no
+  tasks (`FRUITBACK_TASKS=off`) shows the step with no « Keep them in Fruitback »: a destination is then
+  required.
+- **Two GitHub Apps stay two.** The sign-in is an OAuth App that reads a profile and an address. The
+  connector is a GitHub App that writes issues in the repositories an organisation picks. One App for both
+  would show the permissions of the issues to every person who only signs in. Changing the settings of
+  the App of the Cloud is an action of Mathieu.
+- **The extension creates the first workspace, through the console it already opens.** A sign-in from
+  the extension goes through the page « Connect » of the console (FRU-482). An account with no workspace
+  is sent from there to the setup today. Instead, the page makes the first workspace as the setup does
+  (`firstWorkspace`, named from the address), then approves the browser. The popup then shows « Not in
+  your sites yet » and « Turn on » (FRU-255, FRU-453): the person adds the site, chooses where its notes
+  go and turns it on, and never sees the setup. No new route for the token of an extension.
+
+### What exists today
+
+Measured on `main` at `581d4f86`, read from the code.
+
+- **Sign-in**: the e-mail link, Google and GitHub (`socialProviders` of `auth.ts`), each one when its
+  variable is set. There is no sign-in with Linear: `/console/auth/start/linear` answers `404`
+  (`auth-routes.test.ts`). The three buttons of the popup open the page « Connect » of the console,
+  which signs in its own way.
+- **GitHub has two Apps on the Cloud**: the OAuth App of the sign-in (`FRUITBACK_AUTH_GITHUB_OAUTH`,
+  `read:user` and `user:email`) and the GitHub App of the connector (`FRUITBACK_GITHUB_CONNECTOR`, Issues
+  in read and write, Metadata in read). A self-hosted worker can have a third, the App of its own store.
+  [worker.md](worker.md) says why the sign-in has its own: « an App has one callback ».
+- **A connection takes a ticket**, which `POST …/connectors/linear/oauth`, `…/github/start` and
+  `…/<kind>/oauth` mint for `manage-workspace`, spent once in a minute (`oauth-flow.ts`). The callback
+  checks the role again and goes back to `/w/<id>/connectors`.
+- **The setup chooses no destination**: « The step « Source » is gone: a tracker is chosen in
+  Connectors, after » ([console.md](console.md)). The end of step 3 says that the note « waits in the
+  workspace », with a link « Connect Linear or GitHub ».
+- **The popup already adds a site and chooses its place**: `POST /session/sites` (FRU-255), then
+  `POST /session/sites/settings` with the lists of FRU-453, for an owner or an admin. It cannot make a
+  workspace or connect a tracker.
+- **The vocabulary.** A « source » of the console is a connector (Linear, GitHub, an address, a
+  plugin), the same thing as a destination seen from a site. The widget and the extension are
+  « modes » ([modes.md](../modes.md)). « A default source and destination » of the ticket is one thing:
+  where the notes of the first site go.
+
+### The team side, counted from the code
+
+From an owner signed in, with a site and no destination, to a note in Linear:
+
+| #   | Place   | Action                                               |
+| --- | ------- | ---------------------------------------------------- |
+| 1   | console | « Connect Linear or GitHub » at the end of the setup |
+| 2   | console | « Connect » on the tile of Linear, in « Connectors » |
+| 3   | linear  | choose the workspace of Linear, then « Authorize »   |
+| 4   | console | open the site, then the tab « Destinations »         |
+| 5   | console | « Add a destination… »                               |
+| 6   | console | choose the team                                      |
+| 7   | console | choose « Whole team » or a project                   |
+| 8   | site    | the element, the note, « Send »: 3 actions           |
+
+**About 10 actions after the first note, and two of the screens are found by the person.** With the
+rules above: « Send to Linear » at step 3 of the setup, the consent of Linear, and the team chosen in
+one list when there are several: **3 actions, or 2 with one team**, and the next note goes to Linear.
+The extension path counts **18 actions** today ([The path](#the-path)). Making the workspace on the
+page « Connect » takes the detour through the setup away for a person who starts from the extension.
+It saves the setup's own steps for them, and the spec counts how many.
+
+### The questions
+
+1. **Does a sign-in with Linear or GitHub create a Fruitback account?** Recommended: GitHub already
+   does, through its OAuth App. Linear does not. A Linear token of an application names no person, and
+   a token of a person carries no verified address. Revisit if Linear offers OpenID Connect.
+2. **Which destination by default: Fruitback, or the tool of the sign-in?** Recommended: Fruitback,
+   unless the person chose « Send to … » at step 3. A sign-in with GitHub does not say that the team
+   tracks its work in GitHub, and a note sent to a public repository is public.
+3. **One GitHub App, or two?** Recommended: two. GitHub Apps take several callbacks now, so the reason
+   of before is gone, but the permissions are not the same, and every person who signs in would read
+   « write issues ». The cost of two is one more consent, only for whoever chooses « Send to GitHub ».
+4. **Does the page « Connect » make the first workspace?** Recommended: yes, as the setup does, for an
+   account that has none, and only on a sign-in started by the extension. The setup stays the way of a
+   person who starts from the console or the landing.
+
+## The funnel, on the Cloud only (FRU-644, a framing)
+
+Mathieu decided on 2026-11-19 (FRU-637) that a funnel measure is acceptable if it is aggregated,
+opt-in, on Fruitback Cloud only, and absent from a self-hosted instance. The orchestrator decided the
+rest on 2026-11-28. This section is the framing, written before any code. The tickets are at the end.
+
+### The rules, in short
+
+- **Five steps, and no more**: the setup opened, an account created, a site added, the widget seen
+  on a site, and a first note. Each step is counted where the worker already acts. No step reads a
+  page, an address or a text.
+- **Two kinds of count.**
+  - « Setup opened » and « Account created » happen before a workspace exists, so nobody can opt in
+    for them yet. Each one is a bare number for a week: the worker adds 1 to a row
+    `(week, step)`. The row holds no account, no address, no browser and no time finer than the week.
+  - « Site added », « Widget seen » and « First note » are counted only for the workspaces whose owner
+    opted in. They are not stored: the screen of the administrator computes them when it is read, from
+    rows the worker already keeps, and answers counts by cohort.
+- **A cohort is the ISO week in which a workspace was made.** For each cohort the screen says how many
+  workspaces opted in, then how many of them have a site, a site where the widget was seen, and a note.
+  It names no workspace and gives no id. A count under 5 reads « fewer than 5 », so a small cohort does
+  not point at one workspace.
+- **The owner of the workspace opts in, and only the owner.** A switch « Share usage counts with
+  Fruitback » on the page « General » of the settings, off by default, drawn on the Cloud only. Turned
+  off, the workspace leaves every cohort at the next read: nothing was stored about it to delete.
+- **The setup is counted on the server, with no cookie and no service of a third party.** The setup
+  page of the Cloud sends one `POST` with no credential and no body when it opens. The worker adds 1 to
+  the week and answers `204`. A caller is rate-limited by address, as every route is, and the address is
+  never written with the count.
+- **Only the worker of the Cloud counts.** The test is the host of `FRUITBACK_PUBLIC_URL`, as
+  `pairsByCode` does it (`pair-page.ts`), and not a new variable. On any other host, the routes
+  answer `404`, the worker writes no count, the console draws neither the switch nor the screen, and the
+  table stays empty. The code is in the image, as the code of the pairing is, but it does nothing there.
+- **The administrator of the instance reads the funnel**, in a section « Funnel » of the screen
+  « Instance », through `GET /console/admin/funnel` and the guard `instanceAdminOf`. The read names no
+  workspace, so it writes no row of `admin_reads`.
+- **`docs/privacy.md` and `SECURITY.md` change in the same commit as the code**: what is counted, the
+  switch, that the setup is counted for everyone without an identifier, and that a self-hosted
+  instance counts nothing.
+
+### What exists today
+
+Measured on `main` at `581d4f86`.
+
+| Step            | Where it happens                                                                                                                                     | What the worker keeps today                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Setup opened    | `apps/console/app/routes/setup.tsx`. Its first call is `GET /console/me`, and a signed-out visitor makes the same call from any page                 | nothing: the worker cannot tell the setup apart                                  |
+| Account created | `databaseHooks.user.create.before` of `auth.ts`, the one place that decides a sign-up (`sign-up.ts`)                                                 | the row of `user` and its `createdAt`                                            |
+| Site added      | `POST /console/workspaces/<id>/sites` (`console-api.ts`) and `POST /session/sites` of the extension (`session-site-add.ts`), both `accounts.addSite` | the row of `sites` and its date                                                  |
+| Widget seen     | the read of the pins, `GET /feedback` (`feedback-routes.ts`), through `pageRead` and `site-seen.ts` (FRU-721)                                        | `sites.script_seen_at`, `sites.extension_seen_at`: the last date, at most hourly |
+| First note      | `postFeedback`, `index.record` (`feedback-routes.ts`), for a note sent alone, in a batch or held then approved                                       | the rows of `note_index` and their `created_at`                                  |
+
+There is no analytics, no `/metrics` route and no telemetry of a third party. better-auth's
+telemetry is forced off (`auth.ts`), and `BETTER_AUTH_TELEMETRY` is refused at boot (`env.ts`). The
+workspace has no settings of its own: `organization.metadata` is unused, and every setting so far is a
+column of `sites`.
+
+So three of the five steps need nothing new: an opted-in workspace already has the rows that answer
+them. Only « Setup opened » needs a new count, and « Account created » needs one because no workspace
+exists yet to opt in for it.
+
+### The data
+
+- **`funnel_weeks`**: `week` (text, an ISO week such as `2026-W48`), `step` (`setup` or `account`),
+  `count` (integer). The primary key is `(week, step)`. A count is one `INSERT … ON CONFLICT DO UPDATE
+  SET count = count + 1`. No other column.
+- **The consent**: a row of `workspace_funnel_consent` (`workspace_id`, `consented_at`,
+  `consented_by`), deleted when the owner turns the switch off and with its workspace. A table rather
+  than a column of `organization`: that table belongs to better-auth, and its `metadata` is text that
+  nothing reads.
+- **No row per workspace for a step.** The read joins the consent with `sites` and `note_index`. It
+  answers, for each of the last 12 cohorts: the workspaces that opted in, those with a site, those with
+  a site seen, and those with a note.
+- `drill-seed.sql` gets a row of each table, and `postgres-numbers.test.ts` gets `consented_at`.
+
+### Why
+
+- **Why the read computes, and nothing is stored per workspace.** A step stored per workspace is a
+  record of what that workspace did, kept after it turned the switch off. Computed at the read, the
+  switch is also the deletion. The cost is a join over the opted-in workspaces, once per read of an
+  administrator.
+- **Why two bare counts before the opt-in.** The steps where most people stop are the first two, and
+  no workspace exists to consent for them. A count of the week with no identifier says nothing about
+  anybody. The alternative is a funnel that starts at « Site added », which cannot see the setup that
+  loses people.
+- **Why the owner.** The switch speaks for the whole workspace, as deleting it does. An admin does many
+  things in a workspace, but does not decide what it shares outside it.
+- **Why the host and not a variable.** The decision of FRU-325 for the pairing: a flag is one more
+  variable in Dokploy for one host, and a self-hosted instance that set it by mistake would count.
+
+### The questions
+
+The orchestrator decided the opt-in, the cohorts, the place of the read, the setup counted on the
+server, and nothing in a self-host. The open questions are below, each with its recommendation.
+
+1. **Are « Setup opened » and « Account created » counted for everyone, with no opt-in?**
+   Recommended: yes, as bare counts of the week with no identifier, written in `privacy.md`. Without
+   them the funnel starts after the two steps where people stop most.
+2. **Does the switch appear in the setup, or only in « General »?**
+   Recommended: in « General » only, off. A question in the setup is a decision before the first note,
+   which FRU-610 took out of the setup.
+3. **Is « fewer than 5 » the threshold?** Recommended: yes. The Cloud makes few workspaces a week at
+   first, and an exact 1 or 2 can point at a workspace that its administrator can name.
+
 ## The questions
 
 1. **May the console talk to the extension of the same browser?** (FRU-487) `console.md` says that a

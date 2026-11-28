@@ -92,6 +92,20 @@ It ends with its decisions and every text in both languages. `tools/build.mjs` w
 script, not the HTML); `shots/` holds a picture of each frame. The agent fru-mcp-oauth decided its
 choices, as the orchestrator asked.
 
+## The settings of a destination (FRU-739, 2026-11-28)
+
+`destination-settings/destination-settings.html` is the board of the panel « Settings » of a place
+where the notes of a site go ([worker.md](../docs/decisions/worker.md), « The settings of a
+destination »). It is opened from the tab « Destinations » of a site. It draws the status of arrival,
+the assignee, the labels, the priority and the milestone, the capture joined by default, the title and
+the description with variables and their preview, and the technical details of the description. It
+covers a Linear team, a GitHub repository (no status, no file), Slack (the message only), a variable
+that does not exist, a setting that Linear refused, and 390 px. Frames at 1440 px are in English, at
+390 px in French, and the board ends with its decisions and every text in both languages. It is drawn
+on the slate tokens of the console below. `tools/build.mjs` writes it (edit the script, not the
+HTML); `shots/` holds a picture of each frame. The agent fru-specs drew it, and nothing of it is built
+yet.
+
 ## The export of 2026-10-07
 
 `fruitback-design-export.html` is the export of the Claude Design project « Application overlay

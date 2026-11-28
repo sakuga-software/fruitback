@@ -99,7 +99,16 @@ server, and whoever holds a backup. [SECURITY.md](https://github.com/sakuga-soft
 says it in full.
 
 In the two trackers, the issue description also states the reporter's name and e-mail in a line
-your team reads, and the note below it repeats them. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-note-is-stored-in-the-clear-in-your-database-or-your-tracker)
+your team reads, and the note below it repeats them.
+
+The description of an issue has two parts. The lines at the top are written for your team: the
+text, the page, the element, the component, the size of the window, who reported it. The block at
+the end holds the whole note as JSON, because that block is how Fruitback finds the note again and
+draws its pin: the anchor, the DOM path, the component, the viewport and, when the integrator turned
+it on, the browser environment are all in it. A setting of a destination that leaves a detail out
+of the lines at the top, or that changes their wording with a template, never changes the block. A
+detail that must not reach your tracker has to stay out of the note itself: a production build that
+exposes no component, and `includeEnv` left off. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-note-is-stored-in-the-clear-in-your-database-or-your-tracker)
 says who can read each store. On a public GitHub repository, that is everyone.
 
 ### An AI agent of your team (FRU-461 to FRU-464)
