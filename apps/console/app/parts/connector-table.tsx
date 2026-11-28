@@ -72,6 +72,12 @@ const STACKED = {
  * says it again, on the line of the health.
  */
 const USED_BY_COLUMN = '@max-[900px]:w-0';
+/**
+ * Where « Used by » goes, « Account » takes the room that is left (FRU-738). The other columns are
+ * then 83 % of the table, and an automatic layout gives what is left to every column, « Used by »
+ * too: 12 px of it at 860 px. An automatic column takes that room first.
+ */
+const ACCOUNT_COLUMN = '@max-[900px]:w-auto';
 const USED_BY_CELL = '@max-[900px]:px-0! @max-[900px]:[&>*]:hidden';
 const USED_BY_HEAD = '@max-[900px]:px-0! @max-[900px]:[&>*]:sr-only';
 
@@ -124,7 +130,7 @@ export function ConnectorsTable({
         {/* Widths of their own: a health that changes after « Retry » moves no column. */}
         <colgroup>
           <col className="w-[20%]" />
-          <col className="w-[25%]" />
+          <col className={`w-[25%] ${ACCOUNT_COLUMN}`} />
           <col className={`w-[17%] ${USED_BY_COLUMN}`} />
           <col className="w-[16%]" />
           <col className="w-[11%]" />
