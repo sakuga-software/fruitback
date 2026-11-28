@@ -24,7 +24,8 @@ const icon = {
   warn: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   ok: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   gear: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-  close: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  close:
+    '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
 };
 const mark = (kind) => {
   const fill = { linear: '#5e6ad2', github: '#0f172a', slack: '#4a154b', jira: '#2563eb' }[kind];
@@ -74,7 +75,12 @@ function page(width, body, overlay = '') {
 
 // --- the tab « Destinations » -------------------------------------------------------------------------
 const PLACES = [
-  { kind: 'linear', name: 'Acme · Web', detail: () => t('Linear team, whole team', 'Équipe Linear, toute l’équipe'), set: 4 },
+  {
+    kind: 'linear',
+    name: 'Acme · Web',
+    detail: () => t('Linear team, whole team', 'Équipe Linear, toute l’équipe'),
+    set: 4,
+  },
   { kind: 'github', name: 'acme/shop', detail: () => t('GitHub repository', 'Dépôt GitHub'), set: 0 },
   { kind: 'slack', name: '#qa-shop', detail: () => t('Slack channel', 'Canal Slack'), set: 1 },
 ];
@@ -168,8 +174,7 @@ function panel({ kind = 'linear', refused = false, badVar = false } = {}) {
     <header class="dr-head">${mark(kind)}<div><h2>${place.name}</h2><p class="muted">${place.detail()}</p></div><button type="button" class="b-ghost icon" aria-label="${t('Close', 'Fermer')}">${icon.close}</button></header>
     <div class="dr-body">
       ${refusedBox}${shared}
-      <h3>${t('When an issue arrives', 'Quand un ticket arrive')}</h3>
-      ${arrival}${people}
+      ${arrival || people ? `<h3>${t('When an issue arrives', 'Quand un ticket arrive')}</h3>\n      ${arrival}${people}` : ''}
       <h3>${t('Capture', 'Capture')}</h3>${capture}
       <h3>${t('Title and description', 'Titre et description')}</h3>${template}
       <h3>${t('Details', 'Détails')}</h3>${details}
