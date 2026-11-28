@@ -435,6 +435,8 @@ describe('the relay sends what the background decided, never what the page asked
  */
 /** The one path the widget calls with no session only, so never through the relay (FRU-604). */
 const VISITOR_ONLY_PATH = '/feedback/issue_1/notify';
+/** FRU-705: the link of an address, asked and opened by a visitor with no account. */
+const VISITOR_ADDRESS_PATHS = ['/feedback/visitor/email', '/feedback/visitor/confirm'];
 
 describe('what the widget sends is what the relay allows', () => {
   const widget = [
@@ -460,8 +462,10 @@ describe('what the widget sends is what the relay allows', () => {
     // FRU-604: the address of a visitor with no account. The relay carries the calls of a session,
     // whose reader the worker names and never asks: it stays out of the relay (the case below).
     assert.ok(resolved.includes(VISITOR_ONLY_PATH), 'the guard no longer sees the path of an address (FRU-604)');
+    // FRU-705: the same for the link of an address: the widget the relay carries asks for none.
+    for (const path of VISITOR_ADDRESS_PATHS) assert.ok(resolved.includes(path), path);
     for (const path of resolved) {
-      if (path === VISITOR_ONLY_PATH) continue;
+      if (path === VISITOR_ONLY_PATH || VISITOR_ADDRESS_PATHS.includes(path ?? '')) continue;
       assert.ok(
         path === FEEDBACK_PATH ||
           path === ATTACHMENTS_PATH ||
@@ -491,6 +495,26 @@ describe('what the widget sends is what the relay allows', () => {
     );
 
     assert.equal(answer.status, REFUSED_STATUS);
+    assert.equal(sent.length, 0);
+  });
+
+  it('refuses the paths of the link of an address of a visitor (FRU-705)', async () => {
+    const { relay, sent } = harness({
+      readSite: async () => ({ mode: 'team', endpoint: 'https://acme.dev/fruitback', enabled: true }),
+    });
+    for (const path of VISITOR_ADDRESS_PATHS) {
+      const answer = await relay(
+        {
+          url: `https://acme.dev/fruitback${path}?client=acme`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        },
+        'https://acme.dev',
+      );
+
+      assert.equal(answer.status, REFUSED_STATUS, path);
+    }
     assert.equal(sent.length, 0);
   });
 
