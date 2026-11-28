@@ -277,6 +277,7 @@ export const FRENCH: Catalog = {
   'confirm.done': 'Votre adresse est confirmée : vos notes sont à vous dans chaque navigateur qui la confirme.',
   'confirm.expired': 'Ce lien a expiré, ou a déjà servi. Demandez-en un autre.',
   'confirm.otherBrowser': 'Ouvrez le lien dans le navigateur où vous l’avez demandé.',
+  'thread.you': 'vous',
   'thread.youMayEdit': 'Vous pouvez la modifier tant qu’un membre ne l’a pas prise en charge.',
   'thread.youMayEditOrDelete': 'Vous pouvez la modifier ou la supprimer tant qu’un membre ne l’a pas prise en charge.',
   'thread.youMayDelete': 'Vous pouvez la supprimer tant qu’un membre ne l’a pas prise en charge.',

@@ -348,6 +348,8 @@ export const ENGLISH = {
   'confirm.done': 'Your address is confirmed: your notes are yours on every browser that confirms it.',
   'confirm.expired': 'This link ran out, or served already. Ask for another one.',
   'confirm.otherBrowser': 'Open the link in the browser where you asked for it.',
+  /** FRU-647: beside the name on a reply of the reader, with `notes`. */
+  'thread.you': 'you',
   'thread.youMayEdit': 'You can edit it until a member picks it up.',
   'thread.youMayEditOrDelete': 'You can edit or delete it until a member picks it up.',
   'thread.youMayDelete': 'You can delete it until a member picks it up.',

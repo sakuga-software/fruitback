@@ -38,7 +38,7 @@ import {
 import type { FruitbackTheme } from './theme.ts';
 import type { FruitbackTransport, TransportResponse } from './transport.ts';
 import { callWorker, errorOf, noteWriteFailure } from './worker-client.ts';
-import { type FruitbackNotes, NOTES_ENDPOINT, notesTransport } from './notes.ts';
+import { type FruitbackNotes, NOTES_ENDPOINT, type NotesWords, notesTransport } from './notes.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import type { StatusAnswer, StatusFailure } from './thread-status.ts';
 import { type NotifyAsk, createNotifyAsk } from './notify-ask.ts';
@@ -126,8 +126,9 @@ export type FruitbackOptions = {
   clientId?: string;
   /**
    * Where the notes go and where the pins come from, in place of a worker (FRU-646): `localNotes()`,
-   * or functions of the host. The widget then offers no reply, no place to choose, no address to ask
-   * and no file. `endpoint` and `transport` go with a worker, so `init` refuses them with `notes`.
+   * or functions of the host. The widget offers a reply, a verdict, an edit, a withdrawal or a file
+   * only where `notes` has its function (FRU-647), and never a place to choose or an address to ask.
+   * `endpoint` and `transport` go with a worker, so `init` refuses them with `notes`.
    */
   notes?: FruitbackNotes;
 } & WidgetOptions;
@@ -136,6 +137,12 @@ export type FruitbackOptions = {
 export type MountOptions = Omit<FruitbackOptions, 'endpoint' | 'clientId' | 'notes'> & {
   endpoint: string;
   clientId: string;
+  /**
+   * Set for a widget with `notes` only (FRU-647). The read says nothing of a verdict or a move, so
+   * this says whether `notes` takes a verdict. A widget with `notes` offers no move: no function of
+   * the host takes one.
+   */
+  notesOffer?: { check: boolean };
   /**
    * The key of this browser for the site (FRU-700), that `init` gives a mount whose host neither
    * names the reporter nor carries the calls. Never an option of the host.
@@ -499,7 +506,7 @@ const READ_RETRY_MS = 30_000;
  * The options of a mount. With `notes`, its transport answers the calls, at an address that no
  * call can reach by another way. Exported for its tests, never from `public.ts`.
  */
-export function mountOptions(given: FruitbackOptions): MountOptions {
+export function mountOptions(given: FruitbackOptions, words?: NotesWords): MountOptions {
   const { notes, endpoint, clientId, ...rest } = given;
   if (notes === undefined) {
     if (endpoint === undefined || clientId === undefined) {
@@ -514,12 +521,17 @@ export function mountOptions(given: FruitbackOptions): MountOptions {
     );
   }
 
-  return { ...rest, endpoint: NOTES_ENDPOINT, clientId: clientId ?? '', transport: notesTransport(notes) };
+  return {
+    ...rest,
+    endpoint: NOTES_ENDPOINT,
+    clientId: clientId ?? '',
+    transport: notesTransport(notes, words),
+    notesOffer: { check: notes.check !== undefined },
+  };
 }
 
 export function init(given: FruitbackOptions): Fruitback {
-  const options = mountOptions(given);
-  const document = options.document ?? globalThis.document;
+  const document = given.document ?? globalThis.document;
   // Named rather than left to fail. This is the published entry point, so the first thing anyone
   // does wrong with it is call it while server-rendering — and `Cannot read properties of undefined`
   // is a stack trace through a bundle, in someone else's app, with no clue what to do about it.
@@ -529,6 +541,15 @@ export function init(given: FruitbackOptions): Fruitback {
     );
   }
 
+  const translator = createTranslator({
+    locale: given.locale,
+    messages: given.messages,
+    language: languageOf(document),
+  });
+  // FRU-647: a widget with `notes` writes a reply with no name, and a verdict, in the words of the
+  // reader. The translator exists before the transport that asks it for them (review of #1007).
+  const options = mountOptions(given, (key) => translator.text(key));
+
   const view = document.defaultView ?? globalThis.window;
   // FRU-700: the key of this browser, for a visitor the worker cannot name another way. A transport of
   // a host carries its own identity. FRU-706: a host that mints a token keeps the key too: a token that
@@ -536,12 +557,6 @@ export function init(given: FruitbackOptions): Fruitback {
   if (options.transport === undefined) {
     options.visitor = createVisitorKey(storageOf(view), options.clientId);
   }
-  const translator = createTranslator({
-    locale: options.locale,
-    messages: options.messages,
-    language: languageOf(document),
-  });
-
   // FRU-604: whether this browser answered « Want to know when it's fixed? » already. See `notify-ask.ts`.
   const notifyAsk = createNotifyAsk(storageOf(view));
 
@@ -710,11 +725,16 @@ export function init(given: FruitbackOptions): Fruitback {
       },
     },
     // FRU-605: the author moves their open note: a capture for its new element, then `moveTo`.
-    move: (issue: NoteIssue) =>
-      new Promise<boolean | 'busy' | undefined>((resolve) => {
-        moving = { issue, resolve };
-        host.start('move.banner');
-      }),
+    // FRU-647: never with `notes`, which has no function for it.
+    ...(options.notesOffer === undefined
+      ? {
+          move: (issue: NoteIssue) =>
+            new Promise<boolean | 'busy' | undefined>((resolve) => {
+              moving = { issue, resolve };
+              host.start('move.banner');
+            }),
+        }
+      : {}),
     // FRU-605: the author withdraws their open note. No read after it, as for an edit: the stage and
     // the reply go on the issue (the overlay draws the pins again), and the lists follow.
     withdraw: {
@@ -746,7 +766,8 @@ export function init(given: FruitbackOptions): Fruitback {
     // FRU-603: the verdict of the author, from the thread of the note, in every mode. The worker
     // decides who may: the read says `mine` to the author it names, and the thread offers it then.
     // No read after it, as for an edit: the reply and the stage go on the issue, and the lists follow.
-    ...(options.replies === false
+    // FRU-647: with `notes`, only where `notes.check` takes it.
+    ...(options.replies === false || options.notesOffer?.check === false
       ? {}
       : {
           check: {

@@ -12,6 +12,7 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
+import { NOTES_ENDPOINT, notesTransport } from './notes.ts';
 import {
   type BatchSent,
   type ElementCapture,
@@ -40,6 +41,7 @@ import {
   type EditFailure,
   type ReplyFailure,
   createOverlay,
+  replyFromPage,
 } from './overlay.ts';
 import type { WithdrawAnswer, WithdrawFailure } from './thread-more.ts';
 import type { StatusAnswer, StatusFailure } from './thread-status.ts';
@@ -1133,6 +1135,28 @@ describe('every word the widget shows', () => {
     // The sentence of a send of drafts that can be tried again: the list writes it in its live region
     // (FRU-124), and the composer writes another one under its title since FRU-305.
     snapshots.push(failureText(translator, 'retry'));
+    // FRU-647: a widget with `notes` writes « you » in the line of a reply of the reader, then the thread
+    // shows it. Here, the read of the transport, in the words of the catalog.
+    const ofNotes = await notesTransport(
+      {
+        write: async () => ({ id: 'n' }),
+        read: async () => [
+          {
+            id: 'n',
+            note: noteFixture({ page: { url: 'https://acme.test/', path: '/' } }),
+            replies: [{ id: 'r', text: 'Seen.', createdAt: '2026-09-14T11:00:00.000Z', mine: true }],
+          },
+        ],
+      },
+      (key) => translator.text(key),
+    )({
+      url: `${NOTES_ENDPOINT}/feedback?url=${encodeURIComponent('https://acme.test/')}`,
+      method: 'GET',
+      headers: {},
+    });
+    const [ofReply] = (JSON.parse(ofNotes.body) as { issues: { comments: NoteComment[] }[] }).issues[0]?.comments ?? [];
+    const shownOfNotes = replyFromPage(ofReply?.body ?? '');
+    snapshots.push(shownOfNotes?.name ?? '', shownOfNotes?.who ?? '');
     const copied = [
       feedbackAsText([], { pageUrl: 'https://acme.test/', translator }),
       feedbackAsText(
