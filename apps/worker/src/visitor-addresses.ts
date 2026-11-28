@@ -13,8 +13,8 @@ import { NOTIFY_TOKEN_TTL_MS } from './done-notices.ts';
  * - **The link is the token of FRU-604, for another use**: an HMAC-SHA256 under a key derived from
  *   `FRUITBACK_AUTH_SECRET` for this use alone, that names the site, the browser that asked, the
  *   identity and the expiry. The worker keeps nothing for a link nobody opens. It lasts
- *   `VISITOR_LINK_TTL_MS` (30 minutes, as the token of an address of a note), and serves once: `Kv`
- *   marks it spent once the confirmation is kept (`visitor-email-routes.ts`).
+ *   `VISITOR_LINK_TTL_MS` (30 minutes, as the token of an address of a note), and serves once: the first
+ *   open claims it in `Kv` (`visitor-email-routes.ts`).
  * - **The link opens the page of the site**, `#fruitback-confirm=<token>`, and the widget sends it with
  *   the key of its browser. Only the browser that asked confirms: a link a person forwards, or one sent
  *   to the address of somebody else, opens nothing elsewhere.

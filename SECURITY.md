@@ -2809,9 +2809,15 @@ of a visitor and no more.
   the browser, and sends one message: a link to that page, `#fruitback-confirm=<token>`. The token is
   an HMAC-SHA256 under a key derived from `FRUITBACK_AUTH_SECRET` for this use alone, and names the
   site, the digest of the key of the browser that asked, the digest of the address and the expiry. It
-  works 30 minutes, and once: `Kv` marks it spent once the confirmation is kept, so a confirmation that
-  the database did not keep leaves the link good. The worker keeps nothing for a link nobody opens.
-  test:`keeps the link good when the confirmation was not kept, then spends it once it is (review of #1013)`.
+  works 30 minutes, and once: the first open claims it in `Kv` with one atomic count, so a second open,
+  at the same moment too, is refused; a confirmation that the database did not keep gives the claim
+  back, and the link stays good. The worker keeps nothing for a link nobody opens.
+  test:`keeps the link good when the confirmation was not kept, then spends it once it is (review of #1013)`,
+  test:`confirms once when the link is opened twice at the same moment (review of #1013)`.
+- What a confirmation proves, and no more: that the person who opened the link reads the mailbox of
+  the address, in the browser that asked for it. It is the design: whoever reads a mailbox is the
+  visitor of that address on the site, and gets the open notes of every browser that confirmed it.
+  An address typed and never opened from its mailbox proves nothing and gives nothing.
   test:`sends a link to the page, holding no address and no key, and lets the browser that asked confirm it once`,
   test:`refuses a link that ran out, of another site, or edited`.
 - Only the browser that asked confirms. `POST /feedback/visitor/confirm` compares the key of the

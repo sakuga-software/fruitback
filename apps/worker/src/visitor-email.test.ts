@@ -144,6 +144,15 @@ describe('a visitor known by a confirmed address (FRU-705)', () => {
     assert.deepEqual(await mine({ key: KEY_A }), ['ve_a']);
   });
 
+  it('confirms once when the link is opened twice at the same moment (review of #1013)', async () => {
+    const { askLink, lastLink, confirm } = await anEmailSite();
+    await askLink('ana@example.com', { key: KEY_A });
+    const token = lastLink();
+
+    const answers = await Promise.all([confirm(token, { key: KEY_A }), confirm(token, { key: KEY_A })]);
+    assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 410]);
+  });
+
   it('refuses an address of another shape, and a page of another origin', async () => {
     const { askLink, world } = await anEmailSite();
     const before = world.mail.sent.length;
@@ -214,7 +223,7 @@ describe('the guards of a confirmed address, each planted out (FRU-705)', () => 
     {
       guard: 'a link serves once',
       file: 'visitor-email-routes.ts',
-      from: "if ((await kv.get(spent)) !== undefined) return json(410, { error: 'link-used' }, corsHeaders);",
+      from: "if ((await kv.incr(spent, VISITOR_LINK_TTL_MS)) > 1) return json(410, { error: 'link-used' }, corsHeaders);",
       to: '',
       holds: async ({ askLink, lastLink, confirm }) => {
         await askLink('ana@example.com', { key: KEY_A });
