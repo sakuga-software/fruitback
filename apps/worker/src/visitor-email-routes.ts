@@ -135,11 +135,12 @@ export async function postVisitorConfirm(
   // Before the link is spent: a link opened in another browser stays good for the one that asked.
   if (link.visitor !== asked.browser) return json(403, { error: 'other-browser' }, corsHeaders);
 
+  // Once. A link that served is refused; one whose confirmation was not kept is not spent, so the
+  // visitor opens it again (review of #1013, #bd26d1). Two opens at the same moment confirm the same
+  // browser to the same address twice, which changes nothing. The count lives as long as the link could.
+  const spent = `visitor-link:${link.mac}`;
   try {
-    // Once. The count lives as long as the link could.
-    if ((await kv.incr(`visitor-link:${link.mac}`, VISITOR_LINK_TTL_MS)) > 1) {
-      return json(410, { error: 'link-used' }, corsHeaders);
-    }
+    if ((await kv.get(spent)) !== undefined) return json(410, { error: 'link-used' }, corsHeaders);
   } catch (error) {
     if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
@@ -147,12 +148,19 @@ export async function postVisitorConfirm(
   try {
     await asked.addresses.confirm(asked.site, asked.browser, link.identity, now);
   } catch (error) {
-    // The link is spent and nothing is kept: the visitor asks for another one.
     console.error(
       `[fruitback] the address of a visitor of site ${asked.site} was not kept: ${error instanceof Error ? error.message : String(error)}`,
     );
 
     return json(502, { error: 'store-unavailable' }, corsHeaders);
+  }
+  try {
+    await kv.set(spent, '1', VISITOR_LINK_TTL_MS);
+  } catch (error) {
+    // The address is confirmed. A link not marked spent confirms the same browser to the same address
+    // again, at most until it runs out: nothing more than it gave.
+    if (!(error instanceof KvError)) throw error;
+    console.error(`[fruitback] the link of a visitor of site ${asked.site} was not marked spent: ${error.message}`);
   }
 
   return json(200, { visitor: 'email' }, corsHeaders);

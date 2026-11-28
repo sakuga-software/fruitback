@@ -1861,7 +1861,8 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   row is `browser`, `unconfirmed`. The read says `confirm: 'email'` to it, and offers no edit nor
   deletion; `callerOf` refuses them with `403 email-required`.
 - **The link reuses the token of FRU-604**: the same HMAC construction under another derived key, the
-  same 30 minutes. Single use is a `Kv` count of its MAC. The link opens the page of the site, and the
+  same 30 minutes. Single use is a `Kv` mark of its MAC, written once the confirmation is kept (review
+  of #1013): a database that did not answer does not spend the link. The link opens the page of the site, and the
   widget sends the token with its key: only the browser that asked confirms (`403 other-browser`
   elsewhere, and the link stays good). Decision of the orchestrator, 2026-11-28: the mailer the worker
   has, the link expires after 30 minutes.

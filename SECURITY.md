@@ -2809,7 +2809,9 @@ of a visitor and no more.
   the browser, and sends one message: a link to that page, `#fruitback-confirm=<token>`. The token is
   an HMAC-SHA256 under a key derived from `FRUITBACK_AUTH_SECRET` for this use alone, and names the
   site, the digest of the key of the browser that asked, the digest of the address and the expiry. It
-  works 30 minutes, and once: `Kv` counts its use. The worker keeps nothing for a link nobody opens.
+  works 30 minutes, and once: `Kv` marks it spent once the confirmation is kept, so a confirmation that
+  the database did not keep leaves the link good. The worker keeps nothing for a link nobody opens.
+  test:`keeps the link good when the confirmation was not kept, then spends it once it is (review of #1013)`.
   test:`sends a link to the page, holding no address and no key, and lets the browser that asked confirm it once`,
   test:`refuses a link that ran out, of another site, or edited`.
 - Only the browser that asked confirms. `POST /feedback/visitor/confirm` compares the key of the

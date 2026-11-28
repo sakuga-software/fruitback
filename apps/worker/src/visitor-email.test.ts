@@ -122,6 +122,28 @@ describe('a visitor known by a confirmed address (FRU-705)', () => {
     assert.equal(readVisitorLinkToken(secret, `${site}x`, token, Date.now()), undefined);
   });
 
+  it('keeps the link good when the confirmation was not kept, then spends it once it is (review of #1013)', async () => {
+    const { world, askLink, lastLink, confirm, send, mine, noteOf } = await anEmailSite();
+    await send(noteOf('ve_a'), { key: KEY_A });
+    await askLink('ana@example.com', { key: KEY_A });
+    const token = lastLink();
+    const addresses = world.context.visitorAddresses;
+    assert.ok(addresses !== undefined);
+    const kept = addresses.confirm;
+    addresses.confirm = async () => {
+      throw new Error('the database did not answer');
+    };
+    try {
+      assert.deepEqual((await confirm(token, { key: KEY_A })).body, { error: 'store-unavailable' });
+    } finally {
+      addresses.confirm = kept;
+    }
+
+    assert.equal((await confirm(token, { key: KEY_A })).status, 200);
+    assert.deepEqual((await confirm(token, { key: KEY_A })).body, { error: 'link-used' });
+    assert.deepEqual(await mine({ key: KEY_A }), ['ve_a']);
+  });
+
   it('refuses an address of another shape, and a page of another origin', async () => {
     const { askLink, world } = await anEmailSite();
     const before = world.mail.sent.length;
@@ -192,8 +214,8 @@ describe('the guards of a confirmed address, each planted out (FRU-705)', () => 
     {
       guard: 'a link serves once',
       file: 'visitor-email-routes.ts',
-      from: 'if ((await kv.incr(`visitor-link:${link.mac}`, VISITOR_LINK_TTL_MS)) > 1) {',
-      to: 'if (false) {',
+      from: "if ((await kv.get(spent)) !== undefined) return json(410, { error: 'link-used' }, corsHeaders);",
+      to: '',
       holds: async ({ askLink, lastLink, confirm }) => {
         await askLink('ana@example.com', { key: KEY_A });
         const token = lastLink();
