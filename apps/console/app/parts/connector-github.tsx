@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type Repository, type TrackerTrouble, call, trackerTrouble } from '../api';
+import { type Repository, type TrackerTrouble, call, trackerTrouble, workspaceAddress } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { known } from '../listed';
@@ -95,7 +95,7 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
       <SendersList
         connector={connector}
         sites={sites}
-        workspaceId={workspace.id}
+        address={workspaceAddress(workspace)}
         {...(repositories === undefined ? {} : { repositories })}
       />
       {/* A list that failed leaves the worker's word on each repository, and says so. */}

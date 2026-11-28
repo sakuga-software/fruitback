@@ -15,7 +15,10 @@ import { type Action, MAX_GUEST_SITES, normalizeEmail } from './accounts.ts';
  *   (`POST /console/workspaces`, `DELETE /console/workspaces/<id>`). The first one validates the name
  *   and calls the plugin in the process; the plugin would take a slug, a logo and metadata that
  *   nothing reads. The second one revokes the tokens of the trackers first.
- * - `update`, `check-slug`: no screen renames a workspace, and a workspace has no slug.
+ * - `update`, `check-slug`: the worker renames a workspace and changes its short name, its slug
+ *   (`POST /console/workspaces/<id>`, FRU-236, FRU-715), with the rule of a short name and the 30
+ *   days of a name left (`workspace-slug.ts`); the plugin would take any slug, a logo and metadata.
+ *   `check-slug` would answer anybody whether a short name is taken.
  * - `get-full-organization`: it answers the members **and the invitations** in one body, to any
  *   member, a guest included (measured). An id of an invitation is worth its link.
  * - `get-invitation`: it reads one invitation by its id. The console lists the invitations of the

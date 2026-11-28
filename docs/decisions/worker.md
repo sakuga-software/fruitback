@@ -1613,7 +1613,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixty-eight BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixty-nine BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2139,9 +2139,10 @@ fixture, `accounts-sqlite.fixture.ts`.
 - **`user.name` takes no `NULL`, so « no name » is the empty text.** `accountOf` reads it as no
   name, and a sign-in that brings a name fills it. A row of before that held `NULL` or the empty
   text is the same row now.
-- **`organization.slug` is the id of the workspace.** better-auth requires a slug, unique. A
-  workspace has no slug that somebody reads, so it gets the one value that is already unique and
-  never changes. A slug that a person chooses is a feature, with its own rules.
+- **`organization.slug` was the id of the workspace.** better-auth requires a slug, unique. A
+  workspace had no slug that somebody read, so it got the one value that is already unique and
+  never changes. Since FRU-715 it is the short name of the workspace, with its own rules: see
+  _The short name of a workspace_ below.
 - **`locale` is an additional field of `user`**, in `authOptions` and in `auth-schema.ts`, with
   `input: false`: a sign-up of better-auth cannot give it.
 - **`roleOf` stays strict.** `member.role` is text, and better-auth reads `guest,admin` as two
@@ -2439,8 +2440,8 @@ Read on better-auth 1.7.7, in `plugins/organization/routes/crud-members.mjs`, `c
 - **A session whose row names an « active » workspace**: the plugin takes it out when the person
   leaves, and finds the session by its token, through the layer that keeps a digest.
   test:`lets somebody leave whose session names the workspace as its « active » one`.
-- **`create` through the plugin wants a slug.** The store writes the id of the workspace there. The
-  plugin makes the id itself, so the route gives a random `slug_…` that nothing reads.
+- **`create` through the plugin wants a slug.** The route gives it the short name it chose with
+  `freeSlugFor` (FRU-715); the store, which makes the id itself, chooses it the same way.
 - **`beforeCreateOrganization` is not used**: when it answers data, 1.7.7 merges it over the whole
   body of the call, `keepCurrentActiveOrganization` and `userId` included (read in `crud-org.mjs`,
   not measured). The route gives the plugin what it validated, and needs no hook.
@@ -3450,7 +3451,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the sixty-eight BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the sixty-nine BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4606,6 +4607,50 @@ client map were refused together at boot.
   memberships: one query by the primary key, at that route alone. `account(id)`, which every route
   reads, does not read it, so no other answer carries it. A read gives back what was kept; the
   console reads each field again, and a field it no longer knows is its default.
+
+## The short name of a workspace (FRU-715)
+
+### The rules, in short
+
+- **A workspace has a short name**, the `acme` of `/w/acme` in the console: `organization.slug`,
+  which better-auth already holds unique. `workspace-slug.ts` holds its rule: `[a-z0-9-]`, 3 to 40
+  characters, a letter or a digit at each end (`readWorkspaceSlug`), and none of `RESERVED_SLUGS`.
+  An id always holds a `_` (`newId`), a short name never does: the console tells them apart.
+- **The short name is an address of the console only.** Every route names the workspace by its id,
+  and no route reads a short name. `GET /console/me` answers `slug` for each workspace, and
+  `formerSlugs` when it left some, newest first. The links that the worker writes (mails, the ways
+  back of OAuth) name the id: the console replaces it with the short name on arrival.
+- **A new workspace gets the short name read in its name** (`slugFromName`: no accent, one `-` for
+  anything else, 35 characters at most), alone when it is free and is no reserved word, else with
+  `-` and 4 random letters or digits (`freeSlugFor`, 5 tries, then 8 of them unasked). The three ways
+  to make one choose it so: the store, the route through the plugin, and the administrator.
+- **`POST /console/workspaces/<id>` takes `slug` beside `name`**, for an owner or an admin. The
+  short name is written first, by `setWorkspaceSlug` in one transaction: a name another workspace
+  holds is `409 slug-taken`, and the name of the call is not written either. Then the plugin writes
+  the name, and answers the workspace with its short name.
+- **A name a workspace leaves waits 30 days** (`FORMER_SLUG_DAYS`), a row of
+  `workspace_former_slugs` with the instant it is free (`until`): it still opens the workspace, no
+  other workspace takes it, and the workspace takes it back at once. 5 at most by workspace
+  (`MAX_FORMER_SLUGS`), the newest; a sixth one frees the oldest. A row past its `until` reads as
+  no row, and the next change of a short name, on any workspace, deletes it: no sweep of its own.
+- **Two changes at the same moment**: a check reads either the short name of before or its row in
+  `workspace_former_slugs`, as both are written in one transaction. Two workspaces that ask for one
+  free name both pass the checks, and the unique constraint refuses the second write: `taken`.
+- **Migration `0062_workspace_slugs`** makes the table and gives every workspace of before the short
+  name read in its name, the same reading in SQL (the accents of Latin-1 only): the oldest workspace
+  that reads a name gets it, the others, and a reserved word or less than 3 characters, get 8
+  characters of the md5 of their id after it. `workspace-slugs-migration.test.ts` holds the reserved
+  words of the SQL to `RESERVED_SLUGS`.
+
+### Why not a 301 of the server
+
+The ticket asks that `/w/<id>` redirects to the short name with a `301`. The console is static files
+that nginx serves (`console.md`): no server knows which short name an id has, and only a member may
+learn it. A `301` would need a route that maps an id to a short name for anybody, or nginx asking the
+worker with the cookie at each page. The console does the same for the person: it opens the
+workspace at the old address and replaces it in the history (`navigate(…, { replace: true })`),
+with the rest of the path, the query and the hash. The old address stays in no history, as after a
+`301`.
 
 ## A provider of another address, confirmed (FRU-415, step 1)
 

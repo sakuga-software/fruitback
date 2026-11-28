@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type Delivery, call } from '../api';
+import { type Delivery, call, workspaceAddress } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { Button, LinkButton, Problem, SidePanel } from '../ui';
@@ -151,7 +151,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
           }
         : {})}
     >
-      <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      <SendersList connector={connector} sites={sites} address={workspaceAddress(workspace)} />
       <p className="text-hint text-muted">
         <LinkButton space="inline" href={REST_GUIDE} newTab>
           {t('The request, and how to check its signature')}

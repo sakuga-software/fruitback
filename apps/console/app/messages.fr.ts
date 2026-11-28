@@ -1387,6 +1387,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages de l’espace de travail',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  'The address is saved.': 'L’adresse est enregistrée.',
+  'The name and the address are saved.': 'Le nom et l’adresse sont enregistrés.',
+  'Use 3 to 40 lowercase letters, digits or hyphens, with a letter or a digit at each end.':
+    'Utilisez de 3 à 40 lettres minuscules, chiffres ou tirets, avec une lettre ou un chiffre à chaque bout.',
+  'This address is reserved for Fruitback. Choose another one.':
+    'Cette adresse est réservée à Fruitback. Choisissez-en une autre.',
+  'Another workspace already has this address. Choose another one.':
+    'Un autre espace de travail a déjà cette adresse. Choisissez-en une autre.',
   // Settings › Appearance, FRU-694.
   'Only for you, on this account. Every member picks their own.':
     'Pour vous seul, sur ce compte. Chaque membre choisit la sienne.',

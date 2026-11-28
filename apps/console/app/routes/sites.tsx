@@ -1,7 +1,16 @@
 import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { STAGES, STAGE_NAMES, type Stage } from '../stages';
-import { type Destination, type Site, type Visibility, type Workspace, type Writers, call, placesOf } from '../api';
+import {
+  type Destination,
+  type Site,
+  type Visibility,
+  type Workspace,
+  type Writers,
+  call,
+  placesOf,
+  workspaceAddress,
+} from '../api';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf, writeProblemOf } from '../problems';
 import { type Fetched, listedOf } from '../listed';
 import {
@@ -141,7 +150,7 @@ export default function Sites() {
   const navigate = useNavigate();
   function added(site: Site) {
     setAdding(false);
-    navigate(`/w/${workspace.id}/sites/${site.id}/install`);
+    navigate(`/w/${workspaceAddress(workspace)}/sites/${site.id}/install`);
   }
 
   // A site removed on its page comes back here: focus goes to the search, or to the field of the card
@@ -455,7 +464,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
   useLocale();
   const navigate = useNavigate();
   const name = siteName(site.origin);
-  const page = `/w/${workspace.id}/sites/${site.id}`;
+  const page = `/w/${workspaceAddress(workspace)}/sites/${site.id}`;
   // Every role reads the page of a site and installs Fruitback on it. The rest is of who manages them.
   const items: MenuItem[] = [
     { id: 'open', label: t('Open its page') },
@@ -471,7 +480,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
   const go = (id: string) => {
     if (id === 'statuses') navigate(`${page}/statuses`);
     else if (id === 'open') navigate(page);
-    else if (id === 'notes') navigate(notesOf(workspace.id, site.id));
+    else if (id === 'notes') navigate(notesOf(workspaceAddress(workspace), site.id));
     // « Remove » is in the tab « Advanced » (FRU-689), which asks the second time.
     else navigate(`${page}/advanced#${id}`);
   };
@@ -529,7 +538,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
         </td>
         <td data-column="open" className={`${CELL} ${GONE.open}`}>
           <span className={`${LINE} px-[12px]`}>
-            <Fresh site={site} name={name} to={notesOf(workspace.id, site.id, 'new')} />
+            <Fresh site={site} name={name} to={notesOf(workspaceAddress(workspace), site.id, 'new')} />
           </span>
         </td>
         {seesTracker ? (
@@ -538,7 +547,7 @@ function SiteRow({ workspace, site, manages, seesTracker, span }: SiteRowProps) 
               <SentTo
                 site={site}
                 name={name}
-                notes={notesOf(workspace.id, site.id)}
+                notes={notesOf(workspaceAddress(workspace), site.id)}
                 resend={manages ? resend : undefined}
               />
             </span>
@@ -632,7 +641,7 @@ function Untracked({ workspace, sites }: { workspace: Workspace; sites: readonly
           : t('{count} sites keep their notes in Fruitback.', { count: sites.length })}
       </span>
       <Link
-        to={`/w/${workspace.id}/connectors?new=1`}
+        to={`/w/${workspaceAddress(workspace)}/connectors?new=1`}
         className="rounded-inner font-medium text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {t('Connect a tracker')}
@@ -1036,7 +1045,10 @@ function AccessIcon({ icon }: { icon: keyof typeof ACCESS_PATHS }) {
   );
 }
 
-/** The Notes screen with one site chosen in its filter « Site », and a status in « Status » when one is given. */
+/**
+ * The Notes screen with one site chosen in its filter « Site », and a status in « Status » when one is
+ * given. `workspace` is its address in the console (FRU-715): `workspaceAddress`.
+ */
 export function notesOf(workspace: string, site: string, stage?: Stage): string {
   return `/w/${workspace}/notes?${new URLSearchParams({ site, ...(stage === undefined ? {} : { stage }) }).toString()}`;
 }

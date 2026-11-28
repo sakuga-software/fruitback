@@ -533,11 +533,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   guest have no entry and read the settings from the name. On the settings the entry is the one on
   screen, and the name is not a second one. **« General » is two cards** (FRU-693, the mockup
   « Réglages General »): « Identity », a row each for the logo, the name and the address of the
-  workspace in this console (`<host>/w/<id>`, read only: the worker keeps no other name for it),
-  each box 320 px wide at the end of its row and under the words below 640 px; then **« Danger
-  zone »**, a light red border (`danger-line`), for the owner alone. The name leaves by « Save » in
-  the head of the page, disabled while the name typed, trimmed, is the one kept, or by Enter in its
-  field; the logo leaves as soon as it is chosen, as before. **« Delete… » opens a dialog** that says
+  workspace in this console, each box 320 px wide at the end of its row and under the words below
+  640 px; then **« Danger zone »**, a light red border (`danger-line`), for the owner alone. The
+  address is a field for an owner or an admin (FRU-715): `<host>/w/` in the muted ink inside the
+  box (`prefix` of `Field`), then the short name, typed in lower case. A member reads it, and a
+  worker of before, which keeps no short name, shows the id, read only. The name and the short
+  name leave together by « Save » in the head of the page, disabled while both, trimmed, are the
+  ones kept, or by Enter in either field (the short name is in the form by its `form`); the logo
+  leaves as soon as it is chosen, as before. The console says a short name of the wrong form before
+  it sends anything (`workspace-slug.ts`); the worker says a reserved word and a name another
+  workspace holds, under the field, which keeps what was typed (`SLUG_PROBLEMS`). **« Delete… » opens a dialog** that says
   what goes and deletes only once the name of the workspace is typed in it, case and all (spaces
   around do not count): `DELETE /console/workspaces/<id>`, which the worker refuses to anybody but
   the owner (`delete-workspace`). A refusal is said in the dialog, which keeps what was typed; « Keep
@@ -1726,3 +1731,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   draw, shown where anybody writes.
 - **A role that does not change a site reads the tab with every control disabled**, and no « Save ».
 - `e2e/console-site-access.spec.ts` holds it; `access-policy.test.ts` holds the table.
+
+## The address of a workspace (FRU-715)
+
+### The rules, in short
+
+- **A workspace is at `/w/<its short name>`**, the `slug` that `/console/me` answers:
+  `workspaceAddress` of `api.ts` builds every link of the console with it, and gives the id when a
+  worker of before answers no `slug`. A part that takes the workspace as a text for a link
+  (`siteTabPath`, `notesOf`, `viewAddress`, `address` of `SitePlaces` and `SendersList`) takes this
+  address; a call of the worker always names the id.
+- **The frame finds the workspace an address names** (`workspaceOf`): by its id or its short name,
+  then by a short name it left in the last 30 days (`formerSlugs`). It then replaces the address with
+  the one of its short name, keeping the rest of the path, the query, the hash and the state, in the
+  history too (`replace`): the old address opens the workspace, and no step of the history holds it.
+  An address that names no workspace of the person leads to the front door, as an unknown id did.
+- **Before `/console/me` answers, an address with a `_` is an id**, and the reads of the bar start at
+  once, as before. A short name waits for the answer, which says which workspace it is.
+- **A link that leaves the console names the id**: a copied link of a note (`task-copy.tsx`), and the
+  links the worker writes. An id opens the workspace for life; a short name can change, and after 30
+  days opens whatever workspace took it.
+- **A new short name is shown at once**: `renamed` of the frame writes it and keeps the one of
+  before in `formerSlugs`, so the page on screen stays drawn, and the frame then moves the address.
+  `e2e/console-workspace-address.spec.ts` holds the move, the replaced history, the refusals and the
+  role of a member.

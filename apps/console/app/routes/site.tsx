@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { type Connector, type Destination, call } from '../api';
+import { type Connector, type Destination, call, workspaceAddress } from '../api';
 import { accessOf } from '../access-policy';
 import { type Listed, listedOf } from '../listed';
 import { useLocale } from '../use-locale';
@@ -68,7 +68,9 @@ export default function SiteOverview() {
 
   const moved = MOVED[hash.slice(1)];
   if (moved !== undefined)
-    return <Navigate replace to={`${siteTabPath(workspace.id, site.id, moved.tab)}${moved.hash ?? ''}`} />;
+    return (
+      <Navigate replace to={`${siteTabPath(workspaceAddress(workspace), site.id, moved.tab)}${moved.hash ?? ''}`} />
+    );
 
   // Who writes, and the e-mail of FRU-604, as the tab « Access » reads them (FRU-703).
   const access = accessOf(site);
@@ -76,16 +78,22 @@ export default function SiteOverview() {
   return (
     <div className="grid items-start gap-[16px] min-[1100px]:grid-cols-[minmax(0,1fr)_420px]">
       <div className="flex min-w-0 flex-col gap-[16px]">
-        <SiteFigures workspace={workspace.id} site={site} seesTracker={seesTracker} />
+        <SiteFigures workspace={workspaceAddress(workspace)} site={site} seesTracker={seesTracker} />
         <SiteRows
-          workspace={workspace.id}
+          workspace={workspaceAddress(workspace)}
           site={site}
           manages={manages}
           writers={access.writers}
           notifyDone={access.notifyDone}
         />
         {manages && seesTracker ? (
-          <PlacesCard base={base} workspace={workspace.id} site={site} connectors={connectors} onPlaced={placed} />
+          <PlacesCard
+            base={base}
+            workspace={workspaceAddress(workspace)}
+            site={site}
+            connectors={connectors}
+            onPlaced={placed}
+          />
         ) : null}
       </div>
       <div className="flex min-w-0 flex-col gap-[16px]">

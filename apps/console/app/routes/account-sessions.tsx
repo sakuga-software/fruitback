@@ -1,3 +1,4 @@
+import { workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { SessionsSection, SignOutEverywhere, SignOutProblem, useSignOut } from '../parts/account-sessions';
@@ -22,7 +23,7 @@ export default function AccountSessions() {
       />
       <SignOutProblem stillIn={stillIn} />
       <div className="max-w-[800px]">
-        <SessionsSection workspace={workspace.id} />
+        <SessionsSection workspace={workspaceAddress(workspace)} />
       </div>
     </>
   );

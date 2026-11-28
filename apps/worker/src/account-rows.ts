@@ -61,7 +61,9 @@ export function accountOf(row: Record<string, unknown> | undefined): Account | u
 }
 
 export function workspaceOf(row: Record<string, unknown>): Workspace | undefined {
-  return typeof row.id === 'string' && typeof row.name === 'string' ? { id: row.id, name: row.name } : undefined;
+  return typeof row.id === 'string' && typeof row.name === 'string' && typeof row.slug === 'string'
+    ? { id: row.id, name: row.name, slug: row.slug }
+    : undefined;
 }
 
 export function roleOf(value: unknown): Role | undefined {

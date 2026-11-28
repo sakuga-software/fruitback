@@ -14,6 +14,7 @@ import {
   makeAgentKey,
   revokeAgentKey,
   siteChoices,
+  workspaceAddress,
 } from '../api';
 import { ago, dayOf } from '../ago';
 import { claudeLine, daysOf, endOf, keyEnd, statusKey } from '../agent-keys';
@@ -114,7 +115,7 @@ function AgentsScreen() {
   if (listed !== undefined && workspaceSites !== undefined) {
     action =
       workspaceSites.length === 0 ? (
-        <Button tone="outline" size="page" to={`/w/${workspace.id}/sites`}>
+        <Button tone="outline" size="page" to={`/w/${workspaceAddress(workspace)}/sites`}>
           {t('Add a site first')}
         </Button>
       ) : (

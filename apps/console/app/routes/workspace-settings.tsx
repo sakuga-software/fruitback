@@ -1,6 +1,14 @@
 import { type FormEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { LOGO_TYPES, type Workspace, call, removeWorkspaceLogo, renameWorkspace, setWorkspaceLogo } from '../api';
+import {
+  LOGO_TYPES,
+  type Workspace,
+  call,
+  removeWorkspaceLogo,
+  renameWorkspace,
+  setWorkspaceLogo,
+  workspaceAddress,
+} from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { manages } from '../setup-stage';
@@ -8,6 +16,7 @@ import { SettingsIcon } from '../settings-icons';
 import { Button, Dialog, Field, FilePick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
+import { MAX_SLUG, SLUG_PROBLEMS, slugOf, slugRefusal } from '../workspace-slug';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from '../parts/setup-account';
 import { Row, SettingsCard } from '../parts/account-rows';
 import { SettingsHead } from './settings-shell';
@@ -19,9 +28,10 @@ import { WorkspaceMark, useWorkspace } from './workspace';
  * every role. The mockup « Réglages General » of FRU-693 draws it in the shell of FRU-692.
  *
  * Two cards. « Identity »: the logo (FRU-428), the name (FRU-236) and the address of the workspace
- * in the console. Every member reads them; an owner or an admin changes the logo and the name. The
- * name leaves by « Save » in the head, which stays disabled while the name is the one kept, or by
- * Enter in its field. The logo leaves as soon as it is chosen, as before. « Danger zone », for the
+ * in the console, its short name (FRU-715). Every member reads them; an owner or an admin changes
+ * them. The name and the short name leave together by « Save » in the head, which stays disabled
+ * while both are the ones kept, or by Enter in either field. The logo leaves as soon as it is chosen,
+ * as before. « Danger zone », for the
  * owner alone: the deletion of the workspace (FRU-503), confirmed in a dialog by typing its name.
  * What an agent needs is on the page « AI » (FRU-544, `workspace-settings-ai.tsx`).
  */
@@ -33,38 +43,58 @@ export default function WorkspaceSettings() {
   return <Settings key={workspace.id} />;
 }
 
-/** The form of the name: Enter in its field sends it, and « Save » in the head submits it by its id. */
+/**
+ * The form of the name and the short name: Enter in either field sends both, and « Save » in the head
+ * submits it by its id.
+ */
 const NAME_FORM = 'workspace-name-form';
 
 function Settings() {
   useLocale();
   const { workspace, renamed } = useWorkspace();
   const [name, setName] = useState(workspace.name);
+  // FRU-715: a worker of before keeps no short name: the row then shows the id, and no field.
+  const [slug, setSlug] = useState(workspace.slug ?? '');
   const [busy, setBusy] = useState(false);
   // One rename on its way at a time, whatever the state drawn says yet: two Enter in a row, or Enter
   // then « Save », send one name (raised in review).
   const sending = useRef(false);
   const [problem, setProblem] = useState<string | undefined>();
-  const [kept, setKept] = useState(false);
+  const [slugProblem, setSlugProblem] = useState<string | undefined>();
+  // What the last « Save » kept, said under the address: `undefined` for nothing said.
+  const [kept, setKept] = useState<'name' | 'address' | 'both' | undefined>();
   const may = manages(workspace);
   // « Save » acts only on a change: the worker trims the name, so the console compares it trimmed.
-  const changed = name.trim() !== workspace.name;
+  const slugChanged = workspace.slug !== undefined && slugOf(slug) !== workspace.slug;
+  const changed = name.trim() !== workspace.name || slugChanged;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (sending.current) return;
     setProblem(undefined);
-    setKept(false);
-    if (!changed) return setKept(true);
+    setSlugProblem(undefined);
+    setKept(undefined);
+    if (!changed) return setKept('name');
+    // The form of the short name is said at once; the worker says the rest.
+    const refused = slugChanged ? slugRefusal(slug) : undefined;
+    if (refused !== undefined) return setSlugProblem(SLUG_PROBLEMS[refused]);
     sending.current = true;
     setBusy(true);
-    const answer = await renameWorkspace(workspace, name);
+    const answer = await renameWorkspace(workspace, name, slugChanged ? slugOf(slug) : undefined);
     sending.current = false;
     setBusy(false);
-    // A refusal keeps the name as it was typed.
-    if (!answer.ok) return setProblem(problemOf(answer, RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED));
+    // A refusal keeps the name and the short name as they were typed. A refusal of the short name is
+    // said under it: the worker kept neither.
+    if (!answer.ok) {
+      if (Object.hasOwn(SLUG_PROBLEMS, answer.error)) return setSlugProblem(SLUG_PROBLEMS[answer.error]);
+
+      return setProblem(problemOf(answer, RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED));
+    }
+    const nameChanged = answer.data.name !== workspace.name;
     setName(answer.data.name);
-    setKept(true);
+    if (answer.data.slug !== undefined) setSlug(answer.data.slug);
+    if (!slugChanged) setKept('name');
+    else setKept(nameChanged ? 'both' : 'address');
     renamed(answer.data);
   }
 
@@ -88,10 +118,17 @@ function Settings() {
           name={name}
           onName={(typed) => {
             setName(typed);
-            setKept(false);
+            setKept(undefined);
+          }}
+          slug={slug}
+          onSlug={(typed) => {
+            setSlug(typed.toLowerCase());
+            setSlugProblem(undefined);
+            setKept(undefined);
           }}
           onSubmit={(event) => void submit(event)}
           problem={problem}
+          slugProblem={slugProblem}
           kept={kept}
         />
         {workspace.role === 'owner' ? <DangerZone workspace={workspace} /> : null}
@@ -99,6 +136,13 @@ function Settings() {
     </>
   );
 }
+
+/** What « Save » says it kept. */
+const KEPT_WORDS = {
+  name: msg('The name is saved.'),
+  address: msg('The address is saved.'),
+  both: msg('The name and the address are saved.'),
+} as const;
 
 /** The classes of a box of 320 px at the end of a row, which takes the whole row under 640 px. */
 const ROW_BOX = 'w-full min-w-0 min-[640px]:w-[320px] min-[640px]:flex-none';
@@ -112,21 +156,27 @@ function IdentityCard({
   may,
   name,
   onName,
+  slug,
+  onSlug,
   onSubmit,
   problem,
+  slugProblem,
   kept,
 }: {
   workspace: Workspace;
   may: boolean;
   name: string;
   onName: (name: string) => void;
+  slug: string;
+  onSlug: (slug: string) => void;
   onSubmit: (event: FormEvent) => void;
   problem: string | undefined;
-  kept: boolean;
+  slugProblem: string | undefined;
+  kept: 'name' | 'address' | 'both' | undefined;
 }) {
   useLocale();
   const logo = useLogo(workspace);
-  // The address of the workspace in this console. The worker keeps no other name for it.
+  // The address of the workspace in this console (FRU-715): its short name after `/w/`.
   const host = typeof window === 'undefined' ? '' : window.location.host;
 
   return (
@@ -172,20 +222,45 @@ function IdentityCard({
               <Problem>{t(problem)}</Problem>
             </div>
           )}
-          <p role="status" className={kept ? 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]' : 'sr-only'}>
-            {kept ? t('The name is saved.') : ''}
+          <p
+            role="status"
+            className={kept === undefined ? 'sr-only' : 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]'}
+          >
+            {kept === undefined ? '' : t(KEPT_WORDS[kept])}
           </p>
         </li>
-        <li className="kit-settings-row flex min-h-[56px] flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[16px] py-[10px]">
-          <RowWords title={t('Workspace URL')} />
-          <span
-            className={`${ROW_BOX} flex min-h-control-lg items-center rounded-control border border-line px-[10px] py-[4px] text-small [overflow-wrap:anywhere]`}
-          >
-            <span>
-              <span className="text-muted">{`${host}/w/`}</span>
-              {workspace.id}
-            </span>
-          </span>
+        <li className="kit-settings-row border-t border-line px-[16px]">
+          {may && workspace.slug !== undefined ? (
+            <div className="flex min-h-[56px] flex-wrap items-center gap-x-[12px] gap-y-[8px] py-[10px]">
+              <RowWords title={t('Workspace URL')} />
+              <div className={ROW_BOX}>
+                {/* In the form of the name, by its id: Enter here submits it, as « Save » does. */}
+                <Field
+                  label={t('Workspace URL')}
+                  labelHidden
+                  prefix={`${host}/w/`}
+                  value={slug}
+                  maxLength={MAX_SLUG}
+                  autoComplete="off"
+                  form={NAME_FORM}
+                  onChange={(event) => onSlug(event.target.value)}
+                  {...(slugProblem === undefined ? {} : { error: t(slugProblem) })}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex min-h-[56px] flex-wrap items-center gap-x-[12px] gap-y-[8px] py-[10px]">
+              <RowWords title={t('Workspace URL')} />
+              <span
+                className={`${ROW_BOX} flex min-h-control-lg items-center rounded-control border border-line px-[10px] py-[4px] text-small [overflow-wrap:anywhere]`}
+              >
+                <span>
+                  <span className="text-muted">{`${host}/w/`}</span>
+                  {workspaceAddress(workspace)}
+                </span>
+              </span>
+            </div>
+          )}
         </li>
       </ul>
     </SettingsCard>

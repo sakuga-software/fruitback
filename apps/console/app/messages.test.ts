@@ -47,6 +47,7 @@ const screens = [
   'site-preview.tsx',
   'note-status.ts',
   'workspace-logo.ts',
+  'workspace-slug.ts',
   'guide-steps.ts',
   'setup-guide.tsx',
   'extension-here.ts',

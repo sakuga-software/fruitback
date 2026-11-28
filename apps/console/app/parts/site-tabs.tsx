@@ -37,7 +37,7 @@ const TABS: readonly {
   { tab: 'advanced', path: '/advanced', label: msg('Advanced'), icon: 'advanced', manages: true },
 ];
 
-/** The address of a tab of a site. */
+/** The address of a tab of a site. `workspace` is the address of the workspace (FRU-715): `workspaceAddress`. */
 export function siteTabPath(workspace: string, site: string, tab: SiteTab): string {
   const path = TABS.find((each) => each.tab === tab)?.path ?? '';
 

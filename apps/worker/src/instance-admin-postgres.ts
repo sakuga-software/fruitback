@@ -3,7 +3,8 @@ import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId, roleOf } from './account-rows.ts';
-import { dropWorkspace, holdMembers, insertWorkspaceWithOwner } from './accounts-postgres.ts';
+import { dropWorkspace, holdMembers, insertWorkspaceWithOwner, slugTakenIn } from './accounts-postgres.ts';
+import { freeSlugFor } from './workspace-slug.ts';
 import { CONNECTOR_TROUBLES, can } from './accounts.ts';
 import { invitation, member, organization, session, user } from './auth-schema.ts';
 import type {
@@ -1144,7 +1145,11 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         if (person === undefined) return { ok: false, refused: 'unknown-account' };
         if (person.suspended === true) return { ok: false, refused: 'suspended-account' };
         const owner = { id: String(person.id), email: String(person.email) };
-        const workspace = { id: newId('ws'), name };
+        const workspace = {
+          id: newId('ws'),
+          name,
+          slug: await freeSlugFor(name, (slug) => slugTakenIn(db, slug, now)),
+        };
         await insertWorkspaceWithOwner(db, workspace, owner.id, new Date(now));
         await db.insert(admin_actions).values({
           ...actionOf(actor, now, 'workspace-created', workspace.id),

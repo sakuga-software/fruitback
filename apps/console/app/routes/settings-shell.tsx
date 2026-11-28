@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
+import { workspaceAddress } from '../api';
 import { msg, t } from '../i18n';
 import { SettingsIcon, type SettingsIconName } from '../settings-icons';
 import { useLocale } from '../use-locale';
@@ -69,7 +70,7 @@ export default function SettingsShell() {
       </div>
       {/* As high as the window under the bar, so the rule of the navigation reaches its foot. */}
       <div className="grid min-[768px]:min-h-[calc(100dvh-48px)] min-[768px]:grid-cols-[220px_minmax(0,1fr)]">
-        <SettingsNav workspace={context.workspace.id} />
+        <SettingsNav workspace={workspaceAddress(context.workspace)} />
         <div className="min-w-0 px-[clamp(16px,3vw,32px)] pt-[24px] pb-[72px]">
           <Outlet context={context} />
         </div>

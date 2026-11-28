@@ -199,6 +199,11 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at)
        VALUES ('ws_acme', 'image/png', '\\x89504e47'::bytea, 1)`,
   );
+  // FRU-715: a short name that a workspace left, and the instant it is free again.
+  await rowsOf(
+    database,
+    `INSERT INTO workspace_former_slugs (slug, workspace_id, until) VALUES ('acme-old', 'ws_acme', 1)`,
+  );
   // FRU-450: another address of an account, that Fruitback verified.
   await rowsOf(
     database,
@@ -220,7 +225,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixty-eight BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixty-nine BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -288,6 +293,7 @@ it('knows the sixty-eight BIGINT columns of the worker, and that better-auth has
     'sites.created_at',
     'sites.extension_seen_at',
     'sites.script_seen_at',
+    'workspace_former_slugs.until',
     'workspace_logos.updated_at',
     'workspace_suspensions.since',
   ]);

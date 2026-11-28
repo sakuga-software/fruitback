@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { AddressesSection } from '../parts/account-addresses';
@@ -37,7 +38,7 @@ export default function Account() {
       <div className="grid items-start gap-[16px] min-[1280px]:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-[16px]">
           <ProfileSection me={me} primary={primary} />
-          <SessionsSection workspace={workspace.id} limit={LAST_BROWSERS} />
+          <SessionsSection workspace={workspaceAddress(workspace)} limit={LAST_BROWSERS} />
         </div>
         <div className="flex min-w-0 flex-col gap-[16px]">
           <AddressesSection workspace={workspace.id} onPrimary={setPrimary} />

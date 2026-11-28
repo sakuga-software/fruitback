@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type Connector, type Destination, call } from '../api';
+import { type Connector, type Destination, call, workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { type Listed, listedOf } from '../listed';
 import { useLocale } from '../use-locale';
@@ -55,7 +55,7 @@ export default function SiteDestinations() {
     <div className="max-w-[760px]">
       <SitePlaces
         base={base}
-        workspaceId={workspace.id}
+        address={workspaceAddress(workspace)}
         site={site}
         connectors={connectors}
         onRetry={() => void readConnectors()}

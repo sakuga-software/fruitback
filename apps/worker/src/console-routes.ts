@@ -280,8 +280,8 @@ export async function handleConsole(request: Request, pathname: string, seams: C
               cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
               consoleUrl: served.consoleUrl,
               // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
-              createWorkspace: async (each: Request, name: string) =>
-                createWorkspaceWithPlugin(await auth, each.headers, name),
+              createWorkspace: async (each: Request, name: string, slug: string) =>
+                createWorkspaceWithPlugin(await auth, each.headers, name, slug),
               // And renamed by it (FRU-236).
               renameWorkspace: async (each: Request, workspace: string, name: string) =>
                 renameWorkspaceWithPlugin(await auth, each.headers, workspace, name),

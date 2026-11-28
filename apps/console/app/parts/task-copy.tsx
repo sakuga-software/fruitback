@@ -188,6 +188,8 @@ export function useTaskCopy({
     link: (notes) => {
       if (notes.length === 0) return;
       const origin = window.location.origin;
+      // The id, not the short name (FRU-715): a link that leaves the console opens the workspace for
+      // life, after a change of short name too. The console shows the short name on arrival.
       const links = notes.map((note) => `${origin}/w/${workspace}/notes?task=${encodeURIComponent(note.id)}`);
       copied(
         links.join('\n'),

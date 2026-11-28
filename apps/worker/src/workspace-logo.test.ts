@@ -290,7 +290,7 @@ describe('the logo of a workspace (FRU-428)', () => {
       token: people.admin.token,
       body: { name: 'Acme Studio' },
     });
-    assert.deepEqual(await renamed.json(), { id, name: 'Acme Studio', role: 'admin', logo: first });
+    assert.deepEqual(await renamed.json(), { id, name: 'Acme Studio', slug: 'acme', role: 'admin', logo: first });
     await new Promise((resolve) => setTimeout(resolve, 5));
     const second = ((await (await send(people.owner.token, jpeg(8, 8), 'image/jpeg')).json()) as { logo: string }).logo;
     assert.notEqual(second, first);

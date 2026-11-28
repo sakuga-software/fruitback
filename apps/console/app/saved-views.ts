@@ -37,7 +37,10 @@ export function viewsFor(role: string): readonly SavedView[] {
   return VIEWS.filter((view) => view.guests || role !== 'guest');
 }
 
-/** The address of a view: the Notes screen of the workspace, with the filters of the view. */
+/**
+ * The address of a view: the Notes screen of the workspace, with the filters of the view. `workspace`
+ * is the address of the workspace in the console (FRU-715): `workspaceAddress`.
+ */
 export function viewAddress(workspace: string, view: Pick<SavedView, 'filters'>): string {
   const query = new URLSearchParams();
   for (const name of FILTERS) {

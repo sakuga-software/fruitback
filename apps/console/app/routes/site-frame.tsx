@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useOutletContext, useParams } from 'react-router';
-import { type Site, readSite } from '../api';
+import { type Site, readSite, workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { type Fetched } from '../listed';
 import { ReadProblem } from '../read-problem';
@@ -87,7 +87,7 @@ export default function SiteFrame() {
           className="flex min-w-0 items-center gap-[6px] text-step leading-auto font-semibold"
         >
           <Link
-            to={`/w/${workspace.id}/sites`}
+            to={`/w/${workspaceAddress(workspace)}/sites`}
             className="flex-none rounded-inner text-muted [text-decoration:none] hover:text-ink"
           >
             {t('Sites')}
@@ -111,7 +111,7 @@ export default function SiteFrame() {
         {site === undefined ? null : (
           <div className="ms-auto flex flex-wrap items-center gap-[8px]">
             <OpenSite origin={site.origin} />
-            <NotesLink workspace={workspace.id} site={site} />
+            <NotesLink workspace={workspaceAddress(workspace)} site={site} />
           </div>
         )}
       </header>
@@ -138,7 +138,7 @@ export default function SiteFrame() {
       ) : (
         <>
           <SiteTabs
-            workspace={workspace.id}
+            workspace={workspaceAddress(workspace)}
             site={site.id}
             current={tabOf(pathname, siteId)}
             manages={manages}

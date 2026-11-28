@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type SiteChoice, type Workspace, siteChoices } from '../api';
+import { type SiteChoice, type Workspace, siteChoices, workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { type Listed, listedOf } from '../listed';
 import { ReadProblem } from '../read-problem';
@@ -47,7 +47,7 @@ function AgentsSection({ workspace, may }: { workspace: Workspace; may: boolean 
   useEffect(() => {
     if (may) void load();
   }, [load, may]);
-  const base = `/w/${workspace.id}`;
+  const base = `/w/${workspaceAddress(workspace)}`;
 
   return (
     <section aria-labelledby="workspace-agents-title" className="flex max-w-[640px] flex-col gap-[14px]">
