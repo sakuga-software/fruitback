@@ -78,6 +78,13 @@ describe('the traces of a flaky test of the E2E suite', () => {
     assert.equal(outputOf(cut), 'flaky=true\n');
   });
 
+  it('keeps the traces, and does not fail, when the report is JSON of another shape', () => {
+    assert.equal(
+      outputOf({ suites: [{ title: 'a.spec.ts', specs: [{ title: 'no tests', file: 'a.spec.ts', line: 1 }] }] }),
+      'flaky=true\n',
+    );
+  });
+
   it('keeps the traces of a part with a flaky test, as of a part that failed', () => {
     const workflow = parseDocument(readFileSync(new URL('.github/workflows/ci.yml', ROOT), 'utf8')).toJS() as {
       jobs: Record<string, { steps: { id?: string; if?: string; run?: string; uses?: string }[] }>;
