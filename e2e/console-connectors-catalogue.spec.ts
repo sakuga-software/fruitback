@@ -208,7 +208,7 @@ test('`?new` leads nowhere for a person who cannot add a connector', async ({ pa
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
   await expect(search(page)).not.toBeFocused();
   // FRU-738: with no action, the box of the actions of the head is there and draws nothing.
-  const actions = page.locator('main header > div');
+  const actions = page.locator('main header').first().locator(':scope > div');
   await expect(actions).toHaveCount(1);
   expect(await styles(actions, ['display'])).toEqual({ display: 'none' });
 
