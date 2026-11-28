@@ -151,8 +151,14 @@ export async function postVisitorConfirm(
     console.error(
       `[fruitback] the address of a visitor of site ${asked.site} was not kept: ${error instanceof Error ? error.message : String(error)}`,
     );
-    // The claim goes: a count that runs out at once starts again at the next open.
-    await kv.set(spent, '0', 1).catch(() => undefined);
+    // The claim goes back: a count of 0, live as long as the link, which the next open takes to 1
+    // (`incr` adds to a live row whatever its expiry, review of #1013, #d63a82). A `Kv` that does not
+    // answer keeps the claim, and says so: the visitor then asks for another link.
+    await kv.set(spent, '0', VISITOR_LINK_TTL_MS).catch((released: unknown) => {
+      console.error(
+        `[fruitback] the link of a visitor of site ${asked.site} stays spent: ${released instanceof Error ? released.message : String(released)}`,
+      );
+    });
 
     return json(502, { error: 'store-unavailable' }, corsHeaders);
   }
