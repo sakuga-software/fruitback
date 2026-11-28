@@ -335,6 +335,8 @@ export const ENGLISH = {
   'status.refused': 'You can no longer change the status of this note here. Reload the page.',
   'thread.youBrowser': 'You · this browser',
   'thread.youSigned': 'You',
+  /** FRU-647: beside the name on a reply of the reader, with `notes`. */
+  'thread.you': 'you',
   'thread.youMayEdit': 'You can edit it until a member picks it up.',
   'thread.youMayEditOrDelete': 'You can edit or delete it until a member picks it up.',
   'thread.youMayDelete': 'You can delete it until a member picks it up.',

@@ -262,6 +262,7 @@ export const FRENCH: Catalog = {
   'status.refused': 'Vous ne pouvez plus changer le statut de cette note ici. Rechargez la page.',
   'thread.youBrowser': 'Vous · ce navigateur',
   'thread.youSigned': 'Vous',
+  'thread.you': 'vous',
   'thread.youMayEdit': 'Vous pouvez la modifier tant qu’un membre ne l’a pas prise en charge.',
   'thread.youMayEditOrDelete': 'Vous pouvez la modifier ou la supprimer tant qu’un membre ne l’a pas prise en charge.',
   'thread.youMayDelete': 'Vous pouvez la supprimer tant qu’un membre ne l’a pas prise en charge.',
