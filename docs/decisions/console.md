@@ -931,7 +931,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   - **The spaces are the ones of Sites and Members** (FRU-738, Mathieu: « the spacing of this page
     is not the one of the others »). The screen kept the large title of before, 40 px down and 48 px
     in, with a sentence under it, and its table 48 px in. Now it has the head of 48 px of the redesign
-    (`ScreenHead` of `routes/workspace.tsx`, which Sites and Members draw too): « Connectors » at 14
+    (`ScreenHead` of `parts/screen-head.tsx`, which Sites and Members draw too): « Connectors » at 14
     px, 20 px in, « New connector » with its plus at the right, and no sentence, as the mockup of
     FRU-690 draws it. The content starts 24 px under the head, 20 px from each edge (`SCREEN_INSET`,
     the inset of the band under the table of Sites), with 24 px between its parts. The wider table

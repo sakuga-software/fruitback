@@ -24,7 +24,8 @@ import {
 import { ago, agoShort } from '../ago';
 import { NotePages } from '../parts/note-pages';
 import { useSlashKey } from '../parts/notes-filters';
-import { SCREEN_INSET, ScreenHead, useWorkspace } from './workspace';
+import { useWorkspace } from './workspace';
+import { SCREEN_INSET, ScreenHead } from '../parts/screen-head';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { hostOf, siteAddress, siteName } from '../site-address';

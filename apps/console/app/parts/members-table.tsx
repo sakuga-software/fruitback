@@ -7,7 +7,7 @@ import { useLocale } from '../use-locale';
 import { hostOf, siteName } from '../site-address';
 import { SiteTile } from './notes-table';
 import { useSlashKey } from './notes-filters';
-import { ScreenHead } from '../routes/workspace';
+import { ScreenHead } from './screen-head';
 
 /** The head, the tabs and the lists go from one edge of the screen to the other (FRU-691). */
 const BLEED = '-mx-[clamp(16px,4vw,48px)]';
