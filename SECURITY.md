@@ -2294,6 +2294,13 @@ seen » is shown to owners and admins only.
   workspace: whoever reads the notes of that site writes there, as they could leave a note on its
   pages. A guest writes only in a site shared with them, and any other site is `404`, with nothing
   written. test:`lets a guest write in a site shared with them only`.
+- With no site, the task belongs to the workspace: a member writes and reads it, and a
+  guest neither writes nor reads it, nor changes, deletes or counts it: every route of a task answers
+  `404` to her, as for a site not shared with her. A key of `/mcp` reads the sites of its grant, never
+  the workspace itself. Its statuses are the built-in ones only. It goes with its workspace, its rows
+  of `notes` included. test:`is neither written nor seen by a guest, nor counted for her`,
+  test:`is never read by a key of /mcp, which reads the sites of its grant`,
+  test:`stays when a site goes, and goes with its workspace`.
 - The worker writes its author from the session: the account in the index, which gives the author
   the rights of the status, and the name the account has now, marked `verified`, in the task. A
   body cannot name another author. test:`takes a title alone, and the list shows it with the notes of its site, with no page`.

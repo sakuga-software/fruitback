@@ -2189,6 +2189,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Create the task': 'Créer la tâche',
   'No text.': 'Aucun texte.',
   'Written by hand: no page and no pin.': 'Écrite à la main : ni page ni repère.',
+  // FRU-672: a task of the workspace itself, with no site.
+  'No site: the whole workspace': 'Aucun site : tout l’espace de travail',
+  'No site: the whole workspace.': 'Aucun site : tout l’espace de travail.',
 
   // FRU-658: copy a task.
   'Copy the link to its page': 'Copier le lien vers sa page',

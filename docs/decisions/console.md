@@ -1620,6 +1620,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **A task has no page**: its row and its card draw no link to a page, its menu no « Copy the link to
   the note », and its panel says « Written by hand: no page and no pin. » in place of the page and the
   element.
+- **A task may have no site (FRU-672)**: for a member, the choice of the site ends with « No site: the
+  whole workspace », shown when there is more than one choice, and chosen when the workspace has no
+  site yet, so that « New task » works there. Its statuses are the built-in ones. Its row says « No
+  site » with no tile, and its panel adds « No site: the whole workspace. ». A guest is offered no
+  such choice and sees no such task.
 
 ## Copy a task (FRU-658)
 

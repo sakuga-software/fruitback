@@ -967,11 +967,17 @@ export const note_comments = pgTable(
  * A row goes with its site and with its workspace (`cascade`): the index of a site that is removed
  * is removed, with the notes themselves (FRU-194). `connector_id` is `set null` when
  * the connector goes, and `place` then still says that the note went to one.
+ *
+ * FRU-672: a task written by hand with no site has `site_id` `NO_SITE`, the empty string, and
+ * belongs to its workspace only. No site has that id, so the foreign key to `sites` is on `site_ref`,
+ * the site id or NULL, which PostgreSQL computes: a row with a site still goes with it.
  */
 export const note_index = pgTable(
   'note_index',
   {
     site_id: text('site_id').notNull(),
+    // FRU-672: the site of the row, NULL for a task with no site. Computed, never written.
+    site_ref: text('site_ref').generatedAlwaysAs(sql`NULLIF(site_id, '')`),
     note_id: text('note_id').notNull(),
     workspace_id: text('workspace_id').notNull(),
     page_url: text('page_url').notNull(),
@@ -1015,10 +1021,12 @@ export const note_index = pgTable(
   (table) => [
     primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.note_id] }),
     foreignKey({
-      name: 'note_index_site_id_fkey',
-      columns: [table.site_id],
+      name: 'note_index_site_ref_fkey',
+      columns: [table.site_ref],
       foreignColumns: [sites.id],
     }).onDelete('cascade'),
+    // What the removal of a site looks for through its key: the primary key starts with `site_id`.
+    index('note_index_by_site_ref').on(table.site_ref),
     foreignKey({
       name: 'note_index_workspace_id_fkey',
       columns: [table.workspace_id],

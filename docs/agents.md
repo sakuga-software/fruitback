@@ -111,6 +111,9 @@ filters take both. Each entry says what it is in `kind`:
 
 Read `kind` before you read `task`: the same name holds the fields of a note, and the text of a task.
 
+A task that a person wrote with no site belongs to the whole workspace. A key reads the sites it
+names, so no tool reads such a task, and `create_task` always names a site.
+
 On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status`,
 `update_task` and `create_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept
 before.

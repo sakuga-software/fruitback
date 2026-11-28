@@ -433,6 +433,8 @@ The table `done_notices` keeps one row for each note that waits:
   member who reads its site reads it, and so does an agent key of that site (`get_note`,
   `notes_as_text` and `list_notes`). It goes when a person deletes it, with its site, and with
   `forget` of the worker by its number or by the name of its author, as a note does.
+  A task may also have no site: it belongs to the workspace. Then every member reads it, no guest and
+  no agent key does, and it goes with the workspace, not with a site.
 
 ### The index of the notes, on a worker with accounts (FRU-237)
 

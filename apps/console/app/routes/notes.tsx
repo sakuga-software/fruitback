@@ -412,6 +412,8 @@ export default function Notes() {
   const create = useTaskCreate({
     base,
     sites: typeof sites === 'object' ? sites : [],
+    // FRU-672: a member writes a task of the workspace, with no site; a guest reads none.
+    workspaceTasks: seesTracker,
     siteInView,
     statusesOf: (site) => (typeof shown === 'object' ? shown.statuses?.[site] : undefined),
     people: tasks.seam.people,
@@ -471,7 +473,8 @@ export default function Notes() {
       tone="primary"
       size="panel"
       onClick={() => create.open()}
-      disabled={typeof sites !== 'object' || sites.length === 0}
+      // FRU-672: a member with no site yet writes a task of the workspace.
+      disabled={typeof sites !== 'object' || (sites.length === 0 && !seesTracker)}
     >
       {t('New task')}
       {/* The key, in a box of its own: the glyph alone was cut by the end of the button. */}

@@ -189,7 +189,9 @@ describe('a task written by hand (FRU-657)', () => {
     // Counted in code points, as zod counts them in `taskSchema`: 201 emoji are refused here, never a 500.
     assert.deepEqual(await refused({ site, title: '🍓'.repeat(201) }), [400, 'title']);
     assert.deepEqual(await refused({ site, title: 'A', text: '🍓'.repeat(5_001) }), [400, 'text']);
-    assert.deepEqual(await refused({ title: 'No site' }), [400, 'site']);
+    // FRU-672: no site is a task of the workspace (`task-no-site.test.ts`); a site that is no id is refused.
+    assert.deepEqual(await refused({ site: 'not a site', title: 'A' }), [400, 'site']);
+    assert.deepEqual(await refused({ site: 7, title: 'A' }), [400, 'site']);
     assert.deepEqual(await refused({ site, title: 'A', status: 'done' }), [400, 'status']);
     assert.deepEqual(await refused({ site, title: 'A', priority: 'soon' }), [400, 'priority']);
     assert.deepEqual(await refused({ site: 'site_none', title: 'A' }), [404, 'not-found']);

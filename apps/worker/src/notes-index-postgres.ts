@@ -76,6 +76,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       // The deliveries first: a few rows, read once, then matched to the notes by their key.
       const pending = await pendingOf(db, workspace);
       const narrowed = filtered(workspace, query, pending);
+      // FRU-672: a task of the workspace has no site: the join with `sites` (the search of its
+      // address) leaves it in, with no address.
       // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
       // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
       // group counts what the list shows (FRU-551).
@@ -106,7 +108,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             memberRole: member.role,
           })
           .from(note_index)
-          .innerJoin(sites, eq(sites.id, note_index.site_id))
+          .leftJoin(sites, eq(sites.id, note_index.site_ref))
           .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
           .leftJoin(
             member,
@@ -137,7 +139,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
                   inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
               })
               .from(note_index)
-              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .leftJoin(sites, eq(sites.id, note_index.site_ref))
               .where(narrowed)
               .groupBy(keyOf, note_index.stage),
         // The notes of the filter that have a delivery: those of its references, matched to their
@@ -151,7 +153,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
                 reference: note_index.reference,
               })
               .from(note_index)
-              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .leftJoin(sites, eq(sites.id, note_index.site_ref))
               .where(
                 and(narrowed, sql`${note_index.reference} = ANY(${sql.param(keys.map((key) => key[2]))}::text[])`),
               ),

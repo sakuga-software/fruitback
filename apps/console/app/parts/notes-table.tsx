@@ -183,10 +183,17 @@ export const NoteRow = memo(function NoteRow({
         </span>
       </td>
       <td className={GONE.site}>
-        <span className={`${LINE} gap-[6px] pl-[12px] text-ink-soft`}>
-          <SiteTile host={host} />
-          <span className="truncate">{host}</span>
-        </span>
+        {/* FRU-672: a task of the workspace itself has no site, so no tile and no host. */}
+        {note.site.id === '' ? (
+          <span className={`${LINE} pl-[12px] text-muted`} data-no-site="">
+            <span className="truncate">{t('No site')}</span>
+          </span>
+        ) : (
+          <span className={`${LINE} gap-[6px] pl-[12px] text-ink-soft`}>
+            <SiteTile host={host} />
+            <span className="truncate">{host}</span>
+          </span>
+        )}
       </td>
       {seesTracker ? (
         <td className={GONE.place}>
