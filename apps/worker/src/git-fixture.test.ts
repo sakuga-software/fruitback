@@ -20,9 +20,16 @@ const IGNORED = new Set(['node_modules', 'dist', '.git', '.output', '.react-rout
 
 /**
  * The files that may start git: the fixture, the script of the mutation job that tests wrap in
- * `apart`, and the script of CI that reads the files of a pull request (FRU-344), which no test runs.
+ * `apart`, and the two scripts of CI that read the merge commit of a pull request, which no test
+ * runs: the files it changes (FRU-344) and the version of the extension on its base (FRU-612). Their
+ * tests import the functions, and `main` runs only under `import.meta.main`.
  */
-const ALLOWED = ['apps/worker/src/git.fixture.ts', 'tools/ci/changes.ts', 'tools/mutation/scope.ts'];
+const ALLOWED = [
+  'apps/worker/src/git.fixture.ts',
+  'tools/ci/changes.ts',
+  'tools/ci/extension-release.ts',
+  'tools/mutation/scope.ts',
+];
 
 /** A call that starts git itself, or hands a line that begins with `git` to a shell. */
 const STARTS_GIT = /\b(?:exec|execSync|execFile|execFileSync|spawn|spawnSync)\(\s*['"`]git\b/;
