@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router';
-import { API, type Account, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
+import { API, type Account, type Me, callUntilAnswered, knownMe, saveLanguage, workspaceAddress } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { adoptAppearance } from '../appearance';
 import { instanceOf } from '../instance';
@@ -68,7 +68,13 @@ export default function AdminFrame() {
 
   return (
     <Frame
-      rail={<AdminRail current={current?.path} back={context.me.workspaces[0]?.id} account={context.me.account} />}
+      rail={
+        <AdminRail
+          current={current?.path}
+          back={context.me.workspaces[0] === undefined ? undefined : workspaceAddress(context.me.workspaces[0])}
+          account={context.me.account}
+        />
+      }
     >
       {/* The screen « Instance » says the release itself. */}
       <ReleaseBanner show={pathname !== '/admin'} />

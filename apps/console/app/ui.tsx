@@ -840,6 +840,14 @@ type FieldProps = {
    * Never on a field where somebody types their own address or password.
    */
   someoneElse?: boolean;
+  /**
+   * A text in the box before the value, in the muted ink, that nobody types or changes: the start of
+   * an address, as `app.fruitback.dev/w/` before the short name of a workspace (FRU-715). The box
+   * draws the edge and the ring around both.
+   */
+  prefix?: string;
+  /** The id of the form the input belongs to, when it is not inside it (FRU-715): Enter submits it. */
+  form?: string;
 };
 
 /** What turns off the fill of the browser and of LastPass, 1Password and Bitwarden in one field. */
@@ -878,6 +886,27 @@ function inputClasses(compact: boolean, locked: boolean, code: boolean): string 
   ].join(' ');
 }
 
+/**
+ * The box of a `Field` with a `prefix` (FRU-715): the edge, the colours and the height of an input,
+ * around the prefix and an input that draws none of them. The ring of focus is the box's, as the edge
+ * of an invalid value is.
+ */
+function prefixedClasses(compact: boolean, locked: boolean): string {
+  return [
+    CONTROL,
+    'flex items-center overflow-hidden',
+    compact ? 'h-control-md px-[12px] text-(length:--text-small)' : 'h-control-lg px-[14px] text-(length:--text-body)',
+    'leading-auto',
+    locked ? 'border-line bg-subtle text-ink-soft' : CONTROL_COLOURS,
+    'has-[input[aria-invalid=true]]:border-accent-strong has-[input[aria-invalid=true]]:[box-shadow:0_0_0_1px_var(--color-accent-strong)]',
+    'has-[input:focus-visible]:[outline:2px_solid_var(--color-accent)] has-[input:focus-visible]:outline-offset-2',
+  ].join(' ');
+}
+
+/** The input inside a box with a prefix: no edge, no colour of its own, no ring. */
+const PREFIXED_INPUT =
+  'h-full min-w-0 flex-1 border-0 bg-transparent p-0 [box-shadow:none] font-normal text-inherit leading-auto [outline:none]! disabled:cursor-not-allowed disabled:opacity-50';
+
 /** A text field of HeroUI: its label, its input, and the hint the input is described by. */
 export function Field({
   label,
@@ -892,8 +921,20 @@ export function Field({
   inputRef,
   code = false,
   someoneElse = false,
+  prefix,
   ...input
 }: FieldProps) {
+  const control = (
+    <Input
+      className={prefix === undefined ? inputClasses(compact, locked, code) : PREFIXED_INPUT}
+      {...input}
+      {...(inputRef === undefined ? {} : { ref: inputRef })}
+      {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
+      {...(someoneElse ? NO_PASSWORD_MANAGER : {})}
+      readOnly={readOnly || locked}
+    />
+  );
+
   return (
     <TextField
       fullWidth
@@ -913,14 +954,14 @@ export function Field({
        * that element takes no room.
        */}
       <div className="kit-field__control block min-w-0">
-        <Input
-          className={inputClasses(compact, locked, code)}
-          {...input}
-          {...(inputRef === undefined ? {} : { ref: inputRef })}
-          {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
-          {...(someoneElse ? NO_PASSWORD_MANAGER : {})}
-          readOnly={readOnly || locked}
-        />
+        {prefix === undefined ? (
+          control
+        ) : (
+          <div className={prefixedClasses(compact, locked)}>
+            <span className="flex-none text-muted">{prefix}</span>
+            {control}
+          </div>
+        )}
       </div>
       {hint === undefined ? null : <Description className={FIELD_HINT}>{hint}</Description>}
       {error === undefined ? null : <FieldError className={FIELD_ERROR}>{error}</FieldError>}

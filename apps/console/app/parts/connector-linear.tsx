@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { type Connector, type ConnectorSettings, type TrackerTrouble, UNREACHABLE, call, trackerTrouble } from '../api';
+import {
+  type Connector,
+  type ConnectorSettings,
+  type TrackerTrouble,
+  UNREACHABLE,
+  call,
+  trackerTrouble,
+  workspaceAddress,
+} from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { Button, Problem, SidePanel, Toggle } from '../ui';
@@ -223,7 +231,7 @@ export function LinearPanel({ id, base, connector, sites, manages, onRemoved, ba
       <SendersList
         connector={connector}
         sites={sites}
-        workspaceId={workspace.id}
+        address={workspaceAddress(workspace)}
         {...(manages && connector.settings !== undefined
           ? {
               statuses: t(

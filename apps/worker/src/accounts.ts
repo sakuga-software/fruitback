@@ -65,7 +65,28 @@ export function readLocaleTag(value: unknown): string | undefined {
   }
 }
 
-export type Workspace = { id: string; name: string };
+/**
+ * A workspace: its id, for life, its name, and its short name (FRU-715), the `acme` of `/w/acme` in the
+ * console, which `workspace-slug.ts` describes.
+ */
+export type Workspace = { id: string; name: string; slug: string };
+
+/**
+ * A workspace of an account, with its role there. `suspension`: an administrator of the instance
+ * suspended it (FRU-282). `logoAt`: the instant its logo was sent (FRU-428), absent when it has none.
+ */
+export type Membership = {
+  workspace: Workspace;
+  role: Role;
+  suspension?: WorkspaceSuspension;
+  logoAt?: number;
+};
+
+/**
+ * What `setWorkspaceSlug` did: written, already the one it had, held by another workspace, or no
+ * such workspace.
+ */
+export type SlugChange = 'set' | 'unchanged' | 'taken' | 'not-found';
 
 /**
  * A workspace that an administrator of the instance suspended (FRU-282): since when, in milliseconds,
@@ -703,14 +724,25 @@ export type AccountStore = {
   /** The language of the account behind this address, if there is one and it has one. */
   localeOf(email: string): Promise<string | undefined>;
   createWorkspace(name: string, owner: string): Promise<Workspace>;
+  /** Every workspace this account belongs to, with its role there, oldest first: `Membership`. */
+  memberships(account: string): Promise<Membership[]>;
   /**
-   * Every workspace this account belongs to, with its role there, oldest first. `suspension`: an
-   * administrator of the instance suspended the workspace (FRU-282). `logoAt`: the instant its logo
-   * was sent (FRU-428), absent when it has none.
+   * Whether a short name (FRU-715) is the one of a workspace, or one that a workspace left less than
+   * `FORMER_SLUG_DAYS` days before `now`. A new workspace gets a name that this says is free.
    */
-  memberships(
-    account: string,
-  ): Promise<{ workspace: Workspace; role: Role; suspension?: WorkspaceSuspension; logoAt?: number }[]>;
+  slugTaken(slug: string, now: number): Promise<boolean>;
+  /**
+   * Gives a workspace the short name `slug`, which `readWorkspaceSlug` read. Its short name of before
+   * waits `FORMER_SLUG_DAYS` days, its own: `taken` for any other workspace in that time, and back to
+   * it at once if it takes it again. A workspace keeps `MAX_FORMER_SLUGS` of them at most. One change
+   * on the instance at a time: two workspaces that ask for one name at once get it once.
+   */
+  setWorkspaceSlug(workspace: string, slug: string, now: number): Promise<SlugChange>;
+  /**
+   * The short names that these workspaces left and that still open them at `now` (FRU-715), newest
+   * first, by workspace. A workspace that has none is absent. `GET /console/me` alone reads them.
+   */
+  formerSlugs(workspaces: readonly string[], now: number): Promise<ReadonlyMap<string, readonly string[]>>;
   /** The logo of a workspace (FRU-428), or `undefined` when it has none. */
   logo(workspace: string): Promise<WorkspaceLogo | undefined>;
   /** Writes the logo of a workspace over the one it had. The caller checked it: `checkLogo`. */

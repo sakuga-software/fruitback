@@ -1329,3 +1329,28 @@ export const workspace_logos = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+/**
+ * The short names that a workspace left (FRU-715), each until the instant it is free again:
+ * `FORMER_SLUG_DAYS` days after the change, as `workspace-slug.ts` says. The console still opens the
+ * workspace at such an address, and no other workspace takes the name before `until`. A row past its
+ * `until` reads as no row; the next change of a short name, on any workspace, deletes it. The rows go
+ * with the workspace.
+ */
+export const workspace_former_slugs = pgTable(
+  'workspace_former_slugs',
+  {
+    slug: text('slug').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    until: instant('until').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'workspace_former_slugs_pkey', columns: [table.slug] }),
+    foreignKey({
+      name: 'workspace_former_slugs_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    index('workspace_former_slugs_by_workspace').on(table.workspace_id),
+  ],
+);

@@ -416,6 +416,15 @@ The table `done_notices` keeps one row for each note that waits:
   its metadata included (a JPEG can say where and when it was taken), in `workspace_logos`. Every
   member of the workspace reads it. It goes when it is removed or replaced, or with its workspace.
 
+- The short name of a workspace, the `acme` of its address in the console, in
+  `organization.slug`: read in its name when it is made, changed by its owner or an admin. Every
+  member of the workspace reads it, and nobody else. The short names it left are kept 30 days each,
+  5 at most, in `workspace_former_slugs`, with the instant each is free again: so that an old link
+  still opens the workspace, and opens no other workspace in that time. A row past its 30 days is
+  deleted at the next change of a short name on the instance, and every row goes with its workspace.
+  A short name says what the name says, nothing more: an owner who names a workspace after a person
+  or a client puts that name in its address.
+
 - The notes that wait to be sent to a connected address, in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 

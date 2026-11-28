@@ -13,6 +13,9 @@ import {
   railCounts,
   saveLanguage,
   signOut,
+  workspaceAddress,
+  workspaceNamed,
+  workspaceOf,
 } from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
@@ -26,6 +29,7 @@ import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
+import { mayBeSlug } from '../workspace-slug';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
 import {
   type PersonalView,
@@ -136,24 +140,48 @@ const ROLE_WORDS: Readonly<Record<Role, string>> = {
   guest: msg('Guest'),
 };
 
-/** The context of workspace `id` in what `/console/me` answered, if it names it. */
-function contextOf(me: Me | undefined, id: string | undefined): Read | undefined {
-  const workspace = me?.workspaces.find((each) => each.id === id);
+/** The context of the workspace that `named` names in what `/console/me` answered, if one is. */
+function contextOf(me: Me | undefined, named: string | undefined): Read | undefined {
+  const workspace = me === undefined ? undefined : workspaceOf(me.workspaces, named);
 
   return me === undefined || workspace === undefined ? undefined : { me, workspace };
 }
 
 export default function WorkspaceFrame() {
   useLocale();
-  const { workspace: id } = useParams();
-  const { pathname, search } = useLocation();
+  // FRU-715: the address names the workspace by its short name, by a short name it left, or by its id.
+  const { workspace: named } = useParams();
+  const location = useLocation();
+  const { pathname, search } = location;
   const navigate = useNavigate();
   // Drawn at once from the last answer of this tab (FRU-356), and read again below.
-  const [read, setContext] = useState<Read | undefined>(() => contextOf(knownMe(), id));
+  const [read, setContext] = useState<Read | undefined>(() => contextOf(knownMe(), named));
   // Asks `/console/me` again: after a rename, so that the answer this tab keeps has the new name.
   const [asked, askAgain] = useState(0);
   // A change of workspace draws the new one from the last answer too, while the worker is asked.
-  const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
+  const context =
+    read !== undefined && named !== undefined && workspaceNamed(read.workspace, named)
+      ? read
+      : (contextOf(knownMe(), named) ?? read);
+  // The id of the workspace the address names: every call of the worker names the id, never the short
+  // name. An answer of the worker says which workspace a short name is. Before any answer, an address
+  // that cannot be a short name is an id (`ws_…` holds a `_`, which no short name holds), and the
+  // reads of the bar start at once, as they did before short names.
+  let id: string | undefined;
+  if (context !== undefined && named !== undefined && workspaceNamed(context.workspace, named))
+    id = context.workspace.id;
+  else if (context === undefined && named !== undefined && !mayBeSlug(named)) id = named;
+  // FRU-715: an address that names the workspace by its id or by a name it left is replaced by the
+  // one of its short name, with the rest of the path, the query and the hash: the address bar, a copy
+  // and the history show the short name, and the old address stays in no history.
+  const shortName = context === undefined ? undefined : workspaceAddress(context.workspace);
+  useEffect(() => {
+    if (id === undefined || shortName === undefined || named === shortName) return;
+    navigate(
+      { pathname: pathname.replace(/^\/w\/[^/]+/, `/w/${shortName}`), search, hash: location.hash },
+      { replace: true, state: location.state },
+    );
+  }, [id, shortName, named, pathname, search, location.hash, location.state, navigate]);
   // FRU-711: the counts of the bar, read once when the frame mounts and at each change of workspace.
   // FRU-690: the sends that wait, from that read, then as the Connectors screen last read them.
   const [counts, setCounts] = useState<{ workspace: string; counts: Readonly<Record<string, number>> }>();
@@ -240,11 +268,11 @@ export default function WorkspaceFrame() {
       if (!me.ok) return navigate('/sign-in', { replace: true });
       adoptLanguage(me.data.account, saveLanguage);
       adoptAppearance(me.data.account);
-      const workspace = me.data.workspaces.find((each) => each.id === id);
+      const workspace = workspaceOf(me.data.workspaces, named);
       if (workspace === undefined) return navigate('/', { replace: true });
       setContext({ me: me.data, workspace });
     });
-  }, [id, navigate, asked]);
+  }, [named, navigate, asked]);
 
   // A write refused because the workspace is suspended shows the banner, also when the suspension
   // came after `/console/me` was read. Only a refusal of the workspace on screen: a write sent in
@@ -271,11 +299,11 @@ export default function WorkspaceFrame() {
   // WARNING: the context of another workspace is not shown. After a change of workspace the address
   // names the new one at once, and the answer of the worker comes later: a screen drawn in between
   // would read, and write, in the workspace of before.
-  if (context === undefined || context.workspace.id !== id)
+  if (context === undefined || id === undefined || context.workspace.id !== id)
     return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
   /** Writes `change` in the workspace on screen, and asks `/console/me` again for the tab to keep it. */
-  const changed = (change: Partial<Pick<Workspace, 'name' | 'logo'>>) => {
+  const changed = (change: Partial<Pick<Workspace, 'name' | 'logo' | 'slug' | 'formerSlugs'>>) => {
     const id = context.workspace.id;
     const apply = (each: Workspace) => (each.id === id ? { ...each, ...change } : each);
     setContext({
@@ -286,7 +314,20 @@ export default function WorkspaceFrame() {
   };
   const outlet: WorkspaceContext = {
     ...context,
-    renamed: (workspace) => changed({ name: workspace.name }),
+    // FRU-715: a new short name too. The one of before still names the workspace, so the address on
+    // screen stays drawn until the frame replaces it with the new one.
+    renamed: (workspace) =>
+      changed({
+        name: workspace.name,
+        ...(workspace.slug === undefined || workspace.slug === context.workspace.slug
+          ? {}
+          : {
+              slug: workspace.slug,
+              formerSlugs: [context.workspace.slug, ...(context.workspace.formerSlugs ?? [])].filter(
+                (each): each is string => each !== undefined && each !== workspace.slug,
+              ),
+            }),
+      }),
     logoChanged: (logo) => changed({ logo }),
     failingRead: (count) => {
       if (told.current.workspace === context.workspace.id) told.current.what.add('failing');
@@ -315,11 +356,13 @@ export default function WorkspaceFrame() {
   };
 
   const sections = sectionsFor(context.workspace);
-  const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
+  // The path of the workspace as the address names it now: the frame replaces it after this render.
+  const here = `/w/${named ?? id}`;
+  const current = sections.find((section) => pathname.startsWith(`${here}/${section.path}`));
   // FRU-697: the Notes screen with the filters of a view, and no other, is that view: its entry is the
   // one on screen, not « Notes ».
   const views = viewsFor(context.workspace.role);
-  const onNotes = pathname === `/w/${context.workspace.id}/notes`;
+  const onNotes = pathname === `${here}/notes`;
   const inView = onNotes ? views.find((view) => view.id === viewOf(new URLSearchParams(search))?.id) : undefined;
   // FRU-723: a view of the person is the one on screen the same way, after the views of the mockup.
   const mine = outlet.personalViews ?? [];
@@ -344,17 +387,22 @@ export default function WorkspaceFrame() {
           {...(inMine === undefined ? {} : { currentPersonal: inMine.id })}
           onPersonal={(view, action) => setEditing({ action, view, open: true })}
           {...(viewCounts?.workspace === context.workspace.id ? { viewCounts: viewCounts.counts } : {})}
-          onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
-          onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
+          onWorkspace={(chosen) => {
+            const workspace = context.me.workspaces.find((each) => each.id === chosen);
+            navigate(`/w/${workspace === undefined ? chosen : workspaceAddress(workspace)}/sites`, {
+              viewTransition: true,
+            });
+          }}
+          onSettings={() => navigate(`/w/${workspaceAddress(context.workspace)}/settings`, { viewTransition: true })}
           // The entry « Settings » is the one on screen when the rail has it: the name is not a second one.
           // Every page of the settings is the settings: « General » and « AI » (FRU-544).
-          settings={current?.path !== 'settings' && underSettings(pathname, context.workspace.id)}
+          settings={current?.path !== 'settings' && underSettings(pathname, named ?? id)}
           admin={context.me.instanceAdmin === true}
           account={context.me.account}
           {...(counts?.workspace === context.workspace.id ? { counts: counts.counts } : {})}
           {...(failing?.workspace === context.workspace.id ? { failing: failing.count } : {})}
           {...(toApprove?.workspace === context.workspace.id ? { toApprove: toApprove.count } : {})}
-          approveCurrent={pathname === `/w/${context.workspace.id}/approve`}
+          approveCurrent={pathname === `${here}/approve`}
         />
       }
     >
@@ -688,7 +736,7 @@ export function Rail({
     ) : (
       // One workspace: its name leads to its settings (FRU-414). A screen reader hears where.
       <Link
-        to={`/w/${workspace.id}/settings`}
+        to={`/w/${workspaceAddress(workspace)}/settings`}
         viewTransition
         {...(settings ? { 'aria-current': 'page' as const } : {})}
         className={`${RAIL_HEAD} ${settings ? 'bg-selected' : ''}`}
@@ -700,7 +748,7 @@ export function Rail({
   // The search of the bar is the one of the notes (FRU-684): no screen searches the whole workspace.
   const search = (
     <Link
-      to={`/w/${workspace.id}/notes`}
+      to={`/w/${workspaceAddress(workspace)}/notes`}
       state={{ search: true }}
       viewTransition
       aria-label={t('Search notes')}
@@ -718,14 +766,14 @@ export function Rail({
         <RailFoot
           help={{ href: 'https://fruitback.com', label: t('Help and docs') }}
           account={account}
-          accountPage={`/w/${workspace.id}/${ACCOUNT}`}
+          accountPage={`/w/${workspaceAddress(workspace)}/${ACCOUNT}`}
         />
       }
     >
       <RailNav
         label={t('Workspace')}
         entries={sections.map((section) => ({
-          to: `/w/${workspace.id}/${section.path}`,
+          to: `/w/${workspaceAddress(workspace)}/${section.path}`,
           label: t(section.label),
           current: section.path === current,
           ...(SECTION_ICONS[section.path] === undefined ? {} : { icon: SECTION_ICONS[section.path] }),
@@ -739,7 +787,7 @@ export function Rail({
           heading
           entries={[
             ...views.map((view) => ({
-              to: viewAddress(workspace.id, view),
+              to: viewAddress(workspaceAddress(workspace), view),
               label: t(VIEW_LABELS[view.id]),
               current: view.id === currentView,
               mark: <ViewMark view={view.id} account={account} />,
@@ -749,7 +797,7 @@ export function Rail({
             ...(showsApprove
               ? [
                   {
-                    to: `/w/${workspace.id}/approve`,
+                    to: `/w/${workspaceAddress(workspace)}/approve`,
                     label: t('To approve'),
                     current: approveCurrent,
                     icon: 'inbox' as const,
@@ -760,7 +808,7 @@ export function Rail({
             // FRU-723: the views of the person, with the name they gave, and a menu to rename or delete.
             ...personal.map((view) => ({
               key: view.id,
-              to: viewAddress(workspace.id, view),
+              to: viewAddress(workspaceAddress(workspace), view),
               label: view.name,
               current: view.id === currentPersonal,
               icon: 'filter' as const,

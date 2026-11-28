@@ -54,6 +54,7 @@ import {
   defaultWriters,
   offersDoneNotice,
   type SharedSite,
+  type SlugChange,
   type Site,
   type Visibility,
   type WorkspaceSuspension,
@@ -89,9 +90,11 @@ import {
   site_shares,
   sites,
   statuses,
+  workspace_former_slugs,
   workspace_logos,
   workspace_suspensions,
 } from './postgres-schema.ts';
+import { FORMER_SLUG_MS, MAX_FORMER_SLUGS, freeSlugFor, readWorkspaceSlug } from './workspace-slug.ts';
 import {
   DEFAULT_NOTE_STAGE,
   MAX_STATUSES,
@@ -746,6 +749,49 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     return database.transaction(work);
   };
 
+  /** The writes of `setWorkspaceSlug`, in one transaction. */
+  const changeSlug = (workspace: string, slug: string, now: number): Promise<SlugChange> =>
+    transaction(async (db): Promise<SlugChange> => {
+      // The names whose time is over are free: deleted here, on any workspace.
+      await db.delete(workspace_former_slugs).where(lte(workspace_former_slugs.until, now));
+      const [current] = await db
+        .select({ slug: organization.slug })
+        .from(organization)
+        .where(eq(organization.id, workspace));
+      if (current === undefined) return 'not-found';
+      if (current.slug === slug) return 'unchanged';
+      const held = await db
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.slug, slug))
+        .limit(1);
+      if (held.length > 0) return 'taken';
+      const [left] = await db
+        .select({ workspace: workspace_former_slugs.workspace_id })
+        .from(workspace_former_slugs)
+        .where(eq(workspace_former_slugs.slug, slug));
+      if (left !== undefined && left.workspace !== workspace) return 'taken';
+      // A name it left and takes again is its short name, and no former one any more.
+      if (left !== undefined) await db.delete(workspace_former_slugs).where(eq(workspace_former_slugs.slug, slug));
+      await db.update(organization).set({ slug }).where(eq(organization.id, workspace));
+      // The name of before waits, if it is one a person could type: not an id that a test wrote.
+      if ('slug' in readWorkspaceSlug(current.slug)) {
+        await db
+          .insert(workspace_former_slugs)
+          .values({ slug: current.slug, workspace_id: workspace, until: now + FORMER_SLUG_MS })
+          .onConflictDoNothing();
+      }
+      const kept = await db
+        .select({ slug: workspace_former_slugs.slug })
+        .from(workspace_former_slugs)
+        .where(eq(workspace_former_slugs.workspace_id, workspace))
+        .orderBy(desc(workspace_former_slugs.until), asc(workspace_former_slugs.slug));
+      const over = kept.slice(MAX_FORMER_SLUGS).map((row) => row.slug);
+      if (over.length > 0) await db.delete(workspace_former_slugs).where(inArray(workspace_former_slugs.slug, over));
+
+      return 'set';
+    });
+
   /** FRU-708: the tasks written by hand of `noteIds`, in their order, as `readTask` reads one. */
   const readTasks: AccountStore['readTasks'] = async (workspace, site, noteIds, who) => {
     const asked = [...new Set(noteIds)];
@@ -1282,12 +1328,51 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async createWorkspace(name, owner) {
-      const workspace = { id: newId('ws'), name: name.trim() };
       const now = new Date();
+      const trimmed = name.trim();
+      const workspace = {
+        id: newId('ws'),
+        name: trimmed,
+        slug: await freeSlugFor(trimmed, (slug) => store.slugTaken(slug, now.getTime())),
+      };
 
       await transaction((tx) => insertWorkspaceWithOwner(tx, workspace, owner, now));
 
       return workspace;
+    },
+
+    async slugTaken(slug, now) {
+      return run((db) => slugTakenIn(db, slug, now));
+    },
+
+    async setWorkspaceSlug(workspace, slug, now) {
+      // Two workspaces that ask for one free name at once both pass the checks below: the unique
+      // constraint of `organization.slug` refuses the second write, and its transaction leaves
+      // nothing. A name that a workspace leaves and its former row are written in one transaction,
+      // so a check reads either the one or the other.
+      try {
+        return await changeSlug(workspace, slug, now);
+      } catch (error) {
+        if (isUniqueViolation(error)) return 'taken';
+        throw error;
+      }
+    },
+
+    async formerSlugs(workspaces, now) {
+      if (workspaces.length === 0) return new Map();
+      const rows = await run((db) =>
+        db
+          .select({ slug: workspace_former_slugs.slug, workspace: workspace_former_slugs.workspace_id })
+          .from(workspace_former_slugs)
+          .where(
+            and(inArray(workspace_former_slugs.workspace_id, [...workspaces]), gt(workspace_former_slugs.until, now)),
+          )
+          .orderBy(desc(workspace_former_slugs.until), asc(workspace_former_slugs.slug)),
+      );
+      const found = new Map<string, string[]>();
+      for (const row of rows) found.set(row.workspace, [...(found.get(row.workspace) ?? []), row.slug]);
+
+      return found;
     },
 
     async memberships(person) {
@@ -1296,6 +1381,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .select({
             id: organization.id,
             name: organization.name,
+            slug: organization.slug,
             role: member.role,
             since: workspace_suspensions.since,
             reason: workspace_suspensions.reason,
@@ -3448,17 +3534,36 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 }
 
 /**
+ * Whether a short name is held (FRU-715): the one of a workspace, or one that a workspace left before
+ * `now` and whose time is not over. `slugTaken` of the store, and the administrator who makes a
+ * workspace in a transaction of theirs, ask it.
+ */
+export async function slugTakenIn(db: Db, slug: string, now: number): Promise<boolean> {
+  const held = await db.select({ id: organization.id }).from(organization).where(eq(organization.slug, slug)).limit(1);
+  if (held.length > 0) return true;
+  const left = await db
+    .select({ id: workspace_former_slugs.workspace_id })
+    .from(workspace_former_slugs)
+    .where(and(eq(workspace_former_slugs.slug, slug), gt(workspace_former_slugs.until, now)))
+    .limit(1);
+
+  return left.length > 0;
+}
+
+/**
  * The rows of a new workspace and of its owner (FRU-507): written by a person who makes one, and by
- * an administrator who makes one for somebody. `organization.slug` is required and unique, and a
- * workspace has no slug: it is its id. Run it in the transaction of the caller.
+ * an administrator who makes one for somebody. `organization.slug` is its short name (FRU-715), which
+ * `freeSlugFor` chose. Run it in the transaction of the caller.
  */
 export async function insertWorkspaceWithOwner(
   db: Db,
-  workspace: { id: string; name: string },
+  workspace: { id: string; name: string; slug: string },
   owner: string,
   now: Date,
 ): Promise<void> {
-  await db.insert(organization).values({ id: workspace.id, name: workspace.name, slug: workspace.id, createdAt: now });
+  await db
+    .insert(organization)
+    .values({ id: workspace.id, name: workspace.name, slug: workspace.slug, createdAt: now });
   await db
     .insert(member)
     .values({ id: newId('mem'), organizationId: workspace.id, userId: owner, role: 'owner', createdAt: now });

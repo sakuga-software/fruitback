@@ -83,6 +83,7 @@ import { StoreError } from './store.ts';
 import { pairsByCode } from './pair-page.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
+import { freeSlugFor, readWorkspaceSlug } from './workspace-slug.ts';
 import { handleLogo } from './workspace-logo.ts';
 import { handleAgentKeys } from './agent-keys.ts';
 import { handleAgentTrigger } from './agent-triggers.ts';
@@ -142,9 +143,10 @@ export type ConsoleApiContext = {
   resolveTxt?: TxtResolver;
   /**
    * Makes a workspace for the person of the cookie of this request, through the organization plugin
-   * of better-auth (FRU-149). Absent, the store makes it: a test that gives no plugin.
+   * of better-auth (FRU-149), with the short name the route chose (FRU-715). Absent, the store makes
+   * it and chooses the short name itself: a test that gives no plugin.
    */
-  createWorkspace?: (request: Request, name: string) => Promise<Workspace>;
+  createWorkspace?: (request: Request, name: string, slug: string) => Promise<Workspace>;
   /**
    * Renames a workspace for the person of the cookie of this request, through the organization plugin
    * of better-auth (FRU-236). Absent: better-auth is off, nobody is signed in, and the route is not
@@ -668,6 +670,11 @@ export async function handleConsoleApi(
       context.accounts.isInstanceAdmin(account.id),
       context.accounts.appearanceOf(account.id),
     ]);
+    // FRU-715: the short names each workspace left in the last 30 days, which still open it in the console.
+    const former = await context.accounts.formerSlugs(
+      memberships.map(({ workspace }) => workspace.id),
+      context.now ?? Date.now(),
+    );
 
     return json(
       200,
@@ -680,12 +687,18 @@ export async function handleConsoleApi(
         // FRU-282: each workspace says whether it is suspended, and since when, for the banner.
         // Not why (FRU-328): the reason is a note of the administrator of the instance.
         // FRU-428: the address of its logo, or `null`.
-        workspaces: memberships.map(({ workspace, role, suspension, logoAt }) => ({
-          ...workspace,
-          role,
-          logo: logoAt === undefined ? null : logoPath(workspace.id, logoAt),
-          ...memberSuspensionView(suspension),
-        })),
+        // FRU-715: its short name (`slug`), and the ones it left (`formerSlugs`), absent when none.
+        workspaces: memberships.map(({ workspace, role, suspension, logoAt }) => {
+          const formerSlugs = former.get(workspace.id);
+
+          return {
+            ...workspace,
+            role,
+            logo: logoAt === undefined ? null : logoPath(workspace.id, logoAt),
+            ...memberSuspensionView(suspension),
+            ...(formerSlugs === undefined ? {} : { formerSlugs }),
+          };
+        }),
       },
       headers,
     );
@@ -733,10 +746,15 @@ export async function handleConsoleApi(
     const name = workspaceName((await readJsonObject(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     // By the organization plugin (FRU-149): its hooks see the workspace and its first member.
+    // FRU-715: its short name is read in its name, with a suffix when another workspace holds it.
     const workspace =
       context.createWorkspace === undefined
         ? await context.accounts.createWorkspace(name, account.id)
-        : await context.createWorkspace(request, name);
+        : await context.createWorkspace(
+            request,
+            name,
+            await freeSlugFor(name, (slug) => context.accounts.slugTaken(slug, context.now ?? Date.now())),
+          );
 
     return json(201, { ...workspace, role: 'owner', logo: null }, headers);
   }
@@ -1415,11 +1433,25 @@ export async function handleConsoleApi(
   // FRU-236: the name of a workspace, changed by who manages it. The rule of the name is the one
   // of the creation. Nothing else of the workspace moves: its id, its sites, its members, and the
   // sessions of its extensions, which name the id.
+  // FRU-715: and its short name, `slug`, when the body has one. It is written first: a name that
+  // another workspace holds refuses the whole call, and the name stays as it was.
   if (rest === '' && request.method === 'POST') {
     if (!allowed('manage-workspace')) return forbidden();
-    const name = workspaceName((await readJsonObject(request))?.name);
+    const body = await readJsonObject(request);
+    const name = workspaceName(body?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
+    const slug = body?.slug === undefined ? undefined : readWorkspaceSlug(body.slug);
+    if (slug !== undefined && 'refused' in slug) return json(400, { error: slug.refused }, headers);
     if (context.renameWorkspace === undefined) return json(404, { error: 'not-found' }, headers);
+    if (slug !== undefined) {
+      const changed = await context.accounts.setWorkspaceSlug(
+        workspaceId as string,
+        slug.slug,
+        context.now ?? Date.now(),
+      );
+      if (changed === 'taken') return json(409, { error: 'slug-taken' }, headers);
+      if (changed === 'not-found') return json(404, { error: 'not-found' }, headers);
+    }
     const renamed = await context.renameWorkspace(request, workspaceId as string, name);
     const logo = await context.accounts.logo(workspaceId as string);
 

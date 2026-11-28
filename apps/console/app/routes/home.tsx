@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
+import { type Me, type Site, call, callUntilAnswered, myInvitations, workspaceAddress } from '../api';
 import { t } from '../i18n';
 import { takeAuthorize, takeConnect } from '../connect-return';
 import { LinkButton, Problem } from '../ui';
@@ -36,7 +36,7 @@ export default function Home() {
       if (authorizing !== undefined) return navigate(`/authorize/${authorizing}`, { replace: true });
       const manages = me.data.workspaces.find((each) => each.role === 'owner' || each.role === 'admin');
       if (unstarted && manages !== undefined) {
-        return navigate(`/w/${manages.id}/connectors?github=unstarted`, { replace: true });
+        return navigate(`/w/${workspaceAddress(manages)}/connectors?github=unstarted`, { replace: true });
       }
       // The front door must not take this person on with no word: they think GitHub is connected.
       if (unstarted) return setManagesNone(true);
@@ -55,7 +55,7 @@ export default function Home() {
         // An invitation that could not be read does not hold the front door: it is on its own page.
         if (invitations.ok && invitations.data.length > 0) return navigate('/invitations', { replace: true });
         if (workspace === undefined) return navigate('/setup', { replace: true });
-        const sites = `/w/${workspace.id}/sites`;
+        const sites = `/w/${workspaceAddress(workspace)}/sites`;
         // A workspace with no site is a setup that stopped at its second step (FRU-239). A list
         // that could not be read is not an empty list: the Sites screen says so itself.
         navigate(listed?.ok === true && listed.data.sites.length === 0 ? '/setup' : sites, { replace: true });

@@ -56,14 +56,15 @@ type Offer = Fetched<
  */
 export function SitePlaces({
   base,
-  workspaceId,
+  address,
   site,
   connectors,
   onRetry,
   onPlaced,
 }: {
   base: string;
-  workspaceId: string;
+  /** The address of the workspace in the console (FRU-715): `workspaceAddress`. */
+  address: string;
   site: Site;
   /** Every source of the workspace: a list is written with the kind of each one (`setPlaces`). */
   connectors: Listed<Connector>;
@@ -489,7 +490,7 @@ export function SitePlaces({
       {typeof connectors !== 'string' && connectors.length === 0 ? (
         <p className="text-small text-muted">
           {t('No connector is added.')}{' '}
-          <LinkButton space="inline" to={`/w/${workspaceId}/connectors`}>
+          <LinkButton space="inline" to={`/w/${address}/connectors`}>
             {t('Connect a tracker')}
           </LinkButton>
         </p>

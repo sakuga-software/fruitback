@@ -1,4 +1,14 @@
-import type { Account, Answer, Invitation, Me, Site, Visibility, Workspace, Writers } from './api.ts';
+import {
+  type Account,
+  type Answer,
+  type Invitation,
+  type Me,
+  type Site,
+  type Visibility,
+  type Workspace,
+  type Writers,
+  workspaceAddress,
+} from './api.ts';
 import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, problemOf } from './problems.ts';
 import { workspaceNameFrom } from './workspace-name.ts';
 
@@ -197,7 +207,7 @@ export async function siteNow(calls: SetupCalls, workspace: Workspace, site: Sit
 /** Where a stage sends the person, away from the setup: none for a stage the setup shows. */
 export function leaveFor(stage: Stage): string | undefined {
   if (stage.kind === 'invited') return '/invitations';
-  if (stage.kind === 'waiting') return `/w/${stage.workspace.id}/sites`;
+  if (stage.kind === 'waiting') return `/w/${workspaceAddress(stage.workspace)}/sites`;
 
   return undefined;
 }

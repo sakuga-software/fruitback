@@ -142,15 +142,15 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       ]);
       const me = (await (await as(worker, alice, '/console/me')).json()) as { workspaces: unknown[] };
       assert.deepEqual(me.workspaces, [
-        { id: workspace.id, name: 'Acme Studio', role: 'owner', logo: null, suspended: false },
+        { id: workspace.id, name: 'Acme Studio', slug: 'acme-studio', role: 'owner', logo: null, suspended: false },
       ]);
 
       // The name is still read by the worker, before the plugin: the plugin takes any text.
       assert.equal((await as(worker, alice, '/console/workspaces', { body: { name: ' ' } })).status, 400);
       assert.equal((await as(worker, alice, '/console/workspaces', { body: { name: 'x'.repeat(81) } })).status, 400);
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM organization')).length, 1);
-      // The plugin made it: it has the slug that the route gave it, which nothing reads.
-      assert.match(String((await rowsOf(worker.database, 'SELECT slug FROM organization'))[0]?.slug), /^slug_/);
+      // The plugin made it: it has the slug that the route gave it, its short name (FRU-715).
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT slug FROM organization'), [{ slug: 'acme-studio' }]);
     });
 
     it('answers 502 when better-auth does not make the workspace, and makes none', async () => {
@@ -1071,7 +1071,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       ]);
       const me = (await (await as(worker, paul, '/console/me')).json()) as { workspaces: unknown[] };
       assert.deepEqual(me.workspaces, [
-        { id: acme.workspace, name: 'acme', role: 'member', logo: null, suspended: false },
+        { id: acme.workspace, name: 'acme', slug: 'acme', role: 'member', logo: null, suspended: false },
       ]);
       assert.equal((await as(worker, paul, `/console/workspaces/${acme.workspace}/sites`)).status, 200);
       // Spent: it is no longer theirs to read, and a second acceptance is refused.

@@ -114,7 +114,8 @@ test.describe('the views of the person (FRU-723)', () => {
       const there = views(other.page).getByRole('link', { name: 'Fresh menus', exact: true });
       await expect(there).not.toHaveAttribute('aria-current', 'page');
       await there.click();
-      await expect(other.page).toHaveURL(`${CONSOLE}/w/${workspace}/notes?stage=new&q=menu`);
+      // FRU-715: the address of the id is replaced by the short name of the workspace.
+      await expect(other.page).toHaveURL(`${CONSOLE}/w/acme/notes?stage=new&q=menu`);
       await expect(there).toHaveAttribute('aria-current', 'page');
       await expect(other.page.getByRole('searchbox', { name: 'Search notes' })).toHaveValue('menu');
     } finally {
@@ -146,7 +147,7 @@ test.describe('the views of the person (FRU-723)', () => {
     await expect(ask).toHaveCount(0);
     await expect(views(page).getByRole('link')).toHaveCount(3);
     // The list stays on screen with its filters, and « Save view » is offered again.
-    await expect(page).toHaveURL(`${CONSOLE}/w/${workspace}/notes?stage=new&q=menu`);
+    await expect(page).toHaveURL(`${CONSOLE}/w/acme/notes?stage=new&q=menu`);
     await expect(toolbar(page).getByRole('button', { name: 'Save view' })).toBeVisible();
 
     // The worker was asked each time: kept, renamed, deleted, and none of it is left.

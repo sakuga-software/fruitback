@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { type Connector, type SiteChoice, call, siteChoices } from '../api';
+import { type Connector, type SiteChoice, call, siteChoices, workspaceAddress } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { msg, t } from '../i18n';
@@ -87,7 +87,7 @@ export default function SiteAdvanced() {
     // A site that is still there says so under the button (FRU-164).
     if (!removed.ok) return setProblem(problemOf(removed, REMOVAL_PROBLEMS, SITE_NOT_REMOVED));
     // The table takes focus on its search: a keyboard does not start again from the top of the page.
-    navigate(`/w/${workspace.id}/sites`, { state: { removed: site.id } });
+    navigate(`/w/${workspaceAddress(workspace)}/sites`, { state: { removed: site.id } });
   }
   const keep = () => {
     setRemoving(false);

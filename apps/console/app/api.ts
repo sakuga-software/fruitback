@@ -33,7 +33,30 @@ export type Workspace = Omit<WorkspaceSuspension, 'reason'> & {
    * from a worker of before, which keeps none: the initial of the name shows, as for `null`.
    */
   logo?: string | null;
+  /**
+   * Its short name (FRU-715), the `acme` of `/w/acme`: `workspaceAddress` reads it. Absent from a
+   * worker of before, which keeps none: the console then names the workspace by its id.
+   */
+  slug?: string;
+  /** The short names it left in the last 30 days, which still open it (FRU-715). Absent: none. */
+  formerSlugs?: readonly string[];
 };
+
+/**
+ * The address of a workspace in the console (FRU-715): `/w/<this>/…`. Its short name, or its id when
+ * the worker answers none. The calls of the worker always name the id.
+ */
+export function workspaceAddress(workspace: Pick<Workspace, 'id' | 'slug'>): string {
+  return workspace.slug ?? workspace.id;
+}
+
+/**
+ * Whether `/w/<named>` is this workspace (FRU-715): its id, its short name, or a short name it left in
+ * the last 30 days. The id stays an address for life: the links of before, and of every mail.
+ */
+export function workspaceNamed(workspace: Pick<Workspace, 'id' | 'slug' | 'formerSlugs'>, named: string): boolean {
+  return named === workspace.id || named === workspace.slug || (workspace.formerSlugs ?? []).includes(named);
+}
 export type Visibility = 'members' | 'everyone';
 /** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
 export type Writers = 'members' | 'anyone';
@@ -999,11 +1022,26 @@ export function answerConnect(
 }
 
 /**
- * Renames a workspace (FRU-236): its owner or an admin. The worker answers the workspace as
- * `/console/me` lists it, with the role of the person.
+ * The workspace that `/w/<named>` names (FRU-715): by its id or its short name first, then by a short
+ * name it left. An id holds a `_` and no short name does, and the worker gives no workspace a name
+ * that another one left less than 30 days before: one workspace answers at most.
  */
-export function renameWorkspace(workspace: Workspace, name: string): Promise<Answer<Workspace>> {
-  return call<Workspace>('POST', `/console/workspaces/${workspace.id}`, { name });
+export function workspaceOf(workspaces: readonly Workspace[], named: string | undefined): Workspace | undefined {
+  if (named === undefined) return undefined;
+
+  return (
+    workspaces.find((each) => each.id === named || each.slug === named) ??
+    workspaces.find((each) => workspaceNamed(each, named))
+  );
+}
+
+/**
+ * Renames a workspace (FRU-236): its owner or an admin. The worker answers the workspace as
+ * `/console/me` lists it, with the role of the person. With `slug`, it also gives the workspace that
+ * short name (FRU-715): the worker writes the short name first, and a refusal of it keeps the name too.
+ */
+export function renameWorkspace(workspace: Workspace, name: string, slug?: string): Promise<Answer<Workspace>> {
+  return call<Workspace>('POST', `/console/workspaces/${workspace.id}`, slug === undefined ? { name } : { name, slug });
 }
 
 /** The types of image the worker keeps as a logo (FRU-428), as `workspace-logo.ts` of the worker says. */

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { type Connector, type TrackerTrouble, call, trackerTrouble } from '../api';
+import { type Connector, type TrackerTrouble, call, trackerTrouble, workspaceAddress } from '../api';
 import { moment } from '../ago';
 import { msg, t } from '../i18n';
 import { problemOf, writeProblemOf } from '../problems';
@@ -206,7 +206,7 @@ export function PluginPanel({ id, base, connector, sites, manages, onChanged, on
           })}
         </Problem>
       )}
-      <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      <SendersList connector={connector} sites={sites} address={workspaceAddress(workspace)} />
       {/* FRU-624: a connector that receives says the notes that did not arrive, as an address does. */}
       {trackerOf(connector.kind)?.receives ? (
         <LateDeliveries base={base} connector={connector} manages={manages} onChanged={onChanged} source={source} />

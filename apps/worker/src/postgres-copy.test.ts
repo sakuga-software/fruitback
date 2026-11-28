@@ -263,7 +263,7 @@ for (const subject of SUBJECTS) {
       const sealed = await accounts.sealedKey(files.tracker);
       assert.equal(open(sealed?.sealed ?? '', SECRETS_KEY), API_KEY);
       assert.deepEqual(await accounts.memberships(files.alice), [
-        { workspace: { id: files.workspace, name: 'Acme' }, role: 'owner' },
+        { workspace: { id: files.workspace, name: 'Acme', slug: 'acme' }, role: 'owner' },
       ]);
       // The first call of a store moved the people into the tables of better-auth (FRU-146): the same
       // person, under the same id, by each way she signed in with.

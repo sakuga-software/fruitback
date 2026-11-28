@@ -178,7 +178,7 @@ for (const { label, open, skip } of DATABASES) {
       const alice = await accounts.signIn({ provider: 'github', subject: '42', email: 'alice@acme.dev' });
       assert.deepEqual(alice, { id: 'acc_alice', email: 'alice@acme.dev', name: 'Alice', locale: 'fr' });
       assert.deepEqual(await accounts.memberships('acc_alice'), [
-        { workspace: { id: 'ws_acme', name: 'Acme' }, role: 'owner' },
+        { workspace: { id: 'ws_acme', name: 'Acme', slug: 'acme' }, role: 'owner' },
       ]);
       assert.deepEqual(await accounts.sites('ws_acme'), [
         {

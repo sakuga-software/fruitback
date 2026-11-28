@@ -7,6 +7,7 @@ import {
   type Workspace,
   agentTrigger,
   setAgentTrigger,
+  workspaceAddress,
 } from '../api';
 import { msg, t } from '../i18n';
 import { type Fetched, type Listed, known } from '../listed';
@@ -178,7 +179,7 @@ export function SiteAgent({
               '{place} is gone, and the calls of this site do not start it. Connect the routine again from the connectors.',
               { place: placeOf(waitingAt) },
             )}{' '}
-            <LinkButton space="inline" to={`/w/${workspace.id}/connectors?connector=${waitingAt.id}`}>
+            <LinkButton space="inline" to={`/w/${workspaceAddress(workspace)}/connectors?connector=${waitingAt.id}`}>
               {t('See the calls')}
             </LinkButton>
           </p>
@@ -195,7 +196,7 @@ export function SiteAgent({
                   count: read.waiting,
                   host: placeOf(waitingAt),
                 })}{' '}
-            <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
+            <LinkButton space="inline" to={`/w/${workspaceAddress(workspace)}/connectors`}>
               {t('See the calls')}
             </LinkButton>
           </p>
@@ -205,7 +206,7 @@ export function SiteAgent({
         <Callout>
           <p className="text-small">
             {t('The workspace has no address that receives yet. Connect one, then come back here.')}{' '}
-            <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
+            <LinkButton space="inline" to={`/w/${workspaceAddress(workspace)}/connectors`}>
               {t('Connect an address')}
             </LinkButton>
           </p>

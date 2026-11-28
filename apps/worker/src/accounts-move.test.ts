@@ -219,14 +219,15 @@ for (const { label, open, skip } of DATABASES) {
       const { database } = await databaseOfBefore(open);
       const accounts = createPostgresAccountStore(database);
 
+      // FRU-715: `0063_workspace_slugs` then reads a short name in each name.
       assert.deepEqual(await accounts.memberships('acc_alice'), [
-        { workspace: { id: 'ws_acme', name: 'Acme' }, role: 'owner' },
-        { workspace: { id: 'ws_odd', name: 'Odd' }, role: 'owner' },
+        { workspace: { id: 'ws_acme', name: 'Acme', slug: 'acme' }, role: 'owner' },
+        { workspace: { id: 'ws_odd', name: 'Odd', slug: 'odd' }, role: 'owner' },
       ]);
       // Bob made `ws_solo` before he joined Acme: the order is the one of the instants, not of the ids.
       assert.deepEqual(await accounts.memberships('acc_bob'), [
-        { workspace: { id: 'ws_solo', name: 'Bob and co' }, role: 'owner' },
-        { workspace: { id: 'ws_acme', name: 'Acme' }, role: 'guest' },
+        { workspace: { id: 'ws_solo', name: 'Bob and co', slug: 'bob-and-co' }, role: 'owner' },
+        { workspace: { id: 'ws_acme', name: 'Acme', slug: 'acme' }, role: 'guest' },
       ]);
       assert.deepEqual(
         await Promise.all(['acc_alice', 'acc_bob', 'acc_carol', 'acc_dave'].map((id) => accounts.role('ws_acme', id))),
@@ -242,7 +243,7 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(await accounts.role('ws_odd', 'acc_bob'), undefined);
       assert.equal(await accounts.role('ws_odd', 'acc_carol'), undefined);
       assert.deepEqual(await accounts.memberships('acc_carol'), [
-        { workspace: { id: 'ws_acme', name: 'Acme' }, role: 'admin' },
+        { workspace: { id: 'ws_acme', name: 'Acme', slug: 'acme' }, role: 'admin' },
       ]);
       // The control: the two rows are there, with the text they had. better-auth reads the first as two roles.
       assert.deepEqual(
@@ -292,13 +293,14 @@ for (const { label, open, skip } of DATABASES) {
           `SELECT id, name, slug, logo, metadata, (extract(epoch FROM "createdAt") * 1000)::bigint::text AS created
              FROM "organization" ORDER BY id`,
         ),
+        // The slug is the id after this move; `0063_workspace_slugs` (FRU-715) then reads it in the name.
         [
-          { id: 'ws_acme', name: 'Acme', slug: 'ws_acme', logo: null, metadata: null, created: String(THEN + 20) },
-          { id: 'ws_odd', name: 'Odd', slug: 'ws_odd', logo: null, metadata: null, created: String(THEN + 22) },
+          { id: 'ws_acme', name: 'Acme', slug: 'acme', logo: null, metadata: null, created: String(THEN + 20) },
+          { id: 'ws_odd', name: 'Odd', slug: 'odd', logo: null, metadata: null, created: String(THEN + 22) },
           {
             id: 'ws_solo',
             name: 'Bob and co',
-            slug: 'ws_solo',
+            slug: 'bob-and-co',
             logo: null,
             metadata: null,
             created: String(THEN + 21),
@@ -373,7 +375,7 @@ for (const { label, open, skip } of DATABASES) {
         ['accountId', 'createdAt', 'id', 'providerId', 'updatedAt', 'userId'],
       );
       assert.deepEqual(await rowsOf(database, `SELECT name, slug FROM "organization" WHERE id = '${workspace.id}'`), [
-        { name: 'Erin and co', slug: workspace.id },
+        { name: 'Erin and co', slug: 'erin-and-co' },
       ]);
       const [member] = await rowsOf(database, `SELECT id, role FROM "member" WHERE "userId" = '${erin.id}'`);
       assert.match(String(member?.id), /^mem_[0-9a-f]{20}$/);

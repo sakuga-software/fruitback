@@ -20,7 +20,7 @@ INSERT INTO "account" ("id", "accountId", "providerId", "userId", "accessToken",
   ('lgn_drill3', 'bob@acme.dev', 'email', 'acc_drill2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:01:00+00', '2026-10-11 10:01:00+00');
 
 INSERT INTO "organization" ("id", "name", "slug", "logo", "createdAt", "metadata") VALUES
-  ('ws_drill1', 'Acme', 'ws_drill1', NULL, '2026-10-11 10:00:00+00', NULL);
+  ('ws_drill1', 'Acme', 'acme', NULL, '2026-10-11 10:00:00+00', NULL);
 
 INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES
   ('mem_drill1', 'ws_drill1', 'acc_drill1', 'owner', '2026-10-11 10:00:00+00'),
@@ -214,6 +214,10 @@ INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES
 -- The logo of a workspace (FRU-428): the first bytes of a PNG, enough for a row that the drill compares.
 INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at) VALUES
   ('ws_drill1', 'image/png', '\x89504e470d0a1a0a0000000d49484452', 1760000000000);
+
+-- A short name that the workspace left (FRU-715): it still opens the workspace until the instant.
+INSERT INTO workspace_former_slugs (slug, workspace_id, until) VALUES
+  ('acme-old', 'ws_drill1', 1760000000000);
 
 -- The other addresses of an account (FRU-450): one that GitHub gave, one that Fruitback verified.
 INSERT INTO account_emails (email, account_id, providers, verified_at, created_at) VALUES

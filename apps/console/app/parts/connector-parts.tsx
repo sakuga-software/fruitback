@@ -214,13 +214,14 @@ export function Disconnect({
 export function SendersList({
   connector,
   sites,
-  workspaceId,
+  address,
   repositories,
   statuses,
 }: {
   connector: Connector;
   sites: Listed<Site>;
-  workspaceId: string;
+  /** The address of the workspace in the console (FRU-715): `workspaceAddress`. */
+  address: string;
   /**
    * The repositories of a GitHub, as GitHub lists them now: once the list names a repository, its
    * word wins over the worker's, which can be older (FRU-382). Absent: not read, or not GitHub.
@@ -262,7 +263,7 @@ export function SendersList({
                     // hears which site, the visible word first (WCAG 2.5.3).
                     <LinkButton
                       space="flush"
-                      to={`/w/${workspaceId}/sites/${site.id}/statuses`}
+                      to={`/w/${address}/sites/${site.id}/statuses`}
                       label={t('Statuses of {site}', { site: siteLabel(site.origin) })}
                     >
                       {t('Statuses')}
@@ -302,7 +303,7 @@ export function SendersList({
       {statuses === undefined ? null : <p className="mt-[8px] text-hint text-muted">{statuses}</p>}
       <p className="mt-[8px] text-hint text-muted">
         {t('Each site chooses where its notes go, on the Sites screen.')}{' '}
-        <LinkButton space="inline" to={`/w/${workspaceId}/sites`}>
+        <LinkButton space="inline" to={`/w/${address}/sites`}>
           {t('Open the sites')}
         </LinkButton>
       </p>

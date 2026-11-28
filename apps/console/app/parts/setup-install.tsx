@@ -1,4 +1,4 @@
-import { type Site, type Workspace, call } from '../api';
+import { type Site, type Workspace, call, workspaceAddress } from '../api';
 import { agoInSentence } from '../ago';
 import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
@@ -227,7 +227,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
         </span>
       </p>
       <div className="mt-6">
-        <Button tone="outline" to={`/w/${workspace.id}/sites`}>
+        <Button tone="outline" to={`/w/${workspaceAddress(workspace)}/sites`}>
           {t('Open the console')}
         </Button>
       </div>
@@ -327,10 +327,10 @@ export function FirstNoteIn({ workspace, site }: { workspace: Workspace; site: S
         })}
       </p>
       <div className="mt-2 flex flex-wrap gap-2.5">
-        <Button inset={22} to={`/w/${workspace.id}/connectors`}>
+        <Button inset={22} to={`/w/${workspaceAddress(workspace)}/connectors`}>
           {t('Connect Linear or GitHub')}
         </Button>
-        <Button tone="outline" size="page" inset={18} to={`/w/${workspace.id}/sites`}>
+        <Button tone="outline" size="page" inset={18} to={`/w/${workspaceAddress(workspace)}/sites`}>
           {t('Open the console')}
         </Button>
       </div>

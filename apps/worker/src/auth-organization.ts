@@ -1,7 +1,7 @@
 import { json } from './http.ts';
 import { type AuthAdapter, adapterOf, apiOf } from './auth-internals.ts';
 import { type AccountStore, type SharedSite, type Workspace, can, mailboxOf } from './accounts.ts';
-import { newId, roleOf } from './account-rows.ts';
+import { roleOf } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
 import {
   type AuthRouteContext,
@@ -880,31 +880,37 @@ export async function mailAdminInvitation(
  * A new workspace for the person of this cookie, made by the organization plugin (FRU-149):
  * `POST /console/workspaces` calls this, and the route of the plugin stays closed to a request.
  *
- * The caller validated the name. The plugin wants a slug, and a workspace has none: it gets a value
- * that nothing reads. `keepCurrentActiveOrganization`: no call of the worker reads an « active »
- * workspace, so none is written in the session.
+ * The caller validated the name, and chose the short name of the workspace (FRU-715) with
+ * `freeSlugFor`: the plugin keeps it as its slug, and refuses one that another workspace holds.
+ * `keepCurrentActiveOrganization`: no call of the worker reads an « active » workspace, so none is
+ * written in the session.
  *
  * The person is the one of the cookie, read by better-auth: the body names nobody.
  *
  * It throws `AuthUnavailable` when better-auth does not make it: the caller answers `502`, as on the
  * other calls that read the cookie.
  */
-export async function createWorkspaceWithPlugin(auth: Auth, headers: Headers, name: string): Promise<Workspace> {
+export async function createWorkspaceWithPlugin(
+  auth: Auth,
+  headers: Headers,
+  name: string,
+  slug: string,
+): Promise<Workspace> {
   const plugin = apiOf(auth);
-  let made: { id?: unknown; name?: unknown } | null;
+  let made: { id?: unknown; name?: unknown; slug?: unknown } | null;
   try {
     made = await plugin.createOrganization({
-      body: { name, slug: newId('slug'), keepCurrentActiveOrganization: true },
+      body: { name, slug, keepCurrentActiveOrganization: true },
       headers,
     });
   } catch (error) {
     throw new AuthUnavailable(error instanceof Error ? error.message : String(error), { cause: error });
   }
-  if (typeof made?.id !== 'string' || typeof made.name !== 'string') {
+  if (typeof made?.id !== 'string' || typeof made.name !== 'string' || typeof made.slug !== 'string') {
     throw new AuthUnavailable('better-auth made a workspace and answered no id for it');
   }
 
-  return { id: made.id, name: made.name };
+  return { id: made.id, name: made.name, slug: made.slug };
 }
 
 /**
@@ -926,15 +932,15 @@ export async function renameWorkspaceWithPlugin(
   name: string,
 ): Promise<Workspace> {
   const plugin = apiOf(auth);
-  let renamed: { id?: unknown; name?: unknown } | null;
+  let renamed: { id?: unknown; name?: unknown; slug?: unknown } | null;
   try {
     renamed = await plugin.updateOrganization({ body: { organizationId: workspace, data: { name } }, headers });
   } catch (error) {
     throw new AuthUnavailable(error instanceof Error ? error.message : String(error), { cause: error });
   }
-  if (renamed?.id !== workspace || typeof renamed.name !== 'string') {
+  if (renamed?.id !== workspace || typeof renamed.name !== 'string' || typeof renamed.slug !== 'string') {
     throw new AuthUnavailable('better-auth renamed a workspace and answered another one');
   }
 
-  return { id: workspace, name: renamed.name };
+  return { id: workspace, name: renamed.name, slug: renamed.slug };
 }
