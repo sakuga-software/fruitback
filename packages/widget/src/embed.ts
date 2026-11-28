@@ -528,10 +528,7 @@ export function mountOptions(given: FruitbackOptions, words?: NotesWords): Mount
 }
 
 export function init(given: FruitbackOptions): Fruitback {
-  // FRU-647: a widget with `notes` writes a reply with no name, and a verdict, in the words of the
-  // reader. The transport asks for them at a call, after the translator below exists.
-  const options = mountOptions(given, (key) => translator.text(key));
-  const document = options.document ?? globalThis.document;
+  const document = given.document ?? globalThis.document;
   // Named rather than left to fail. This is the published entry point, so the first thing anyone
   // does wrong with it is call it while server-rendering — and `Cannot read properties of undefined`
   // is a stack trace through a bundle, in someone else's app, with no clue what to do about it.
@@ -541,18 +538,21 @@ export function init(given: FruitbackOptions): Fruitback {
     );
   }
 
+  const translator = createTranslator({
+    locale: given.locale,
+    messages: given.messages,
+    language: languageOf(document),
+  });
+  // FRU-647: a widget with `notes` writes a reply with no name, and a verdict, in the words of the
+  // reader. The translator exists before the transport that asks it for them (review of #1007).
+  const options = mountOptions(given, (key) => translator.text(key));
+
   const view = document.defaultView ?? globalThis.window;
   // FRU-700: the key of this browser, for a visitor the worker cannot name another way. A host that
   // mints a token names the reporter, and a transport of a host carries its own identity.
   if (options.identityToken === undefined && options.transport === undefined) {
     options.visitor = createVisitorKey(storageOf(view), options.clientId);
   }
-  const translator = createTranslator({
-    locale: options.locale,
-    messages: options.messages,
-    language: languageOf(document),
-  });
-
   // FRU-604: whether this browser answered « Want to know when it's fixed? » already. See `notify-ask.ts`.
   const notifyAsk = createNotifyAsk(storageOf(view));
 
