@@ -622,8 +622,10 @@ Since 0.2.0 an account also holds the language its person reads, taken from the 
   this browser on this site; after « No thanks » it asks again after 30 days.
 - `localStorage`, under `fruitback:notes` (or the `key` the integrator chose), only on a site that
   mounts the widget with `notes: localNotes()`: every note sent from this browser, whole,
-  with the name typed if any. Nothing leaves the browser. They stay until the site or the reporter
-  clears the storage of the site. Any script of the page can read and change them.
+  with the name typed if any, and its replies, its verdicts, its new text, its stage,
+  and the names of its files (never their bytes). Nothing leaves the browser. They stay until the
+  site or the reporter clears the storage of the site. Any script of the page can read and change
+  them.
 - `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): the notes a
   reporter chose to keep for later and has not sent yet, each a whole note, with the name
   they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
