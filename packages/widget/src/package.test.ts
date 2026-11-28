@@ -258,6 +258,28 @@ describe('a consumer installing this from npm', () => {
           'const kept: StoredNote[] = [];',
           'const mine: FruitbackNotes = { write: async (note) => (kept.push({ id: note.id, note }), { id: note.id }), read: async () => kept };',
           'export const offline = () => [init({ notes: localNotes() }), init({ notes: mine, clientId: "acme" })];',
+          // FRU-647: every other function of `notes`, as a host writes them, and what each is handed.
+          'import type { NewNoteReply, NewNoteVerdict, NoteSent, NoteVerdict, StoredAttachment, StoredReply } from "fruitback";',
+          'const said: StoredReply = { id: "r", text: "Seen.", createdAt: "2026-11-28T10:00:00.000Z", author: "Léa", verdict: "fixed" };',
+          'const file: StoredAttachment = { name: "shot.png" };',
+          'const verdict: NoteVerdict = "wrong";',
+          'const every: FruitbackNotes = {',
+          '  write: async (note, sent: NoteSent) => ({ id: `${note.id}:${sent.attachments.join(",")}` }),',
+          '  read: async () => [{ id: "n", note: kept[0]!.note, stage: "done", mine: true, replies: [said], attachments: [file] }],',
+          '  reply: async (id: string, reply: NewNoteReply) => ({ id: `${id}:${reply.text}:${reply.author ?? ""}` }),',
+          '  check: async (_id: string, given: NewNoteVerdict) => void (given.verdict === verdict && given.text),',
+          '  edit: async (_id: string, text: string) => void text,',
+          '  withdraw: async () => undefined,',
+          '  attach: async (picked: File) => ({ id: picked.name }),',
+          '};',
+          'export const everything = () => init({ notes: every });',
+          // And what a host cannot write: a verdict that is not one, a reply with no text, no `write`.
+          '// @ts-expect-error a verdict is `fixed` or `wrong`',
+          'export const maybe: NoteVerdict = "maybe";',
+          '// @ts-expect-error `reply` answers the id of the reply',
+          'export const noId: FruitbackNotes = { write: every.write, reply: async () => ({}) };',
+          '// @ts-expect-error `write` is required',
+          'export const noWrite: FruitbackNotes = { read: every.read };',
           // The two wrappers (FRU-126, FRU-127). Each forwards the options of `init`, so a consumer must
           // be able to name them through the wrapper alone.
           'import { FRUITBACK_TAG, defineFruitbackElement, type ElementOptions, type FruitbackElement } from "@fruitback/element";',
