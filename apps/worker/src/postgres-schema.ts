@@ -1151,6 +1151,30 @@ export const held_notes = pgTable(
 );
 
 /**
+ * The browsers of a site whose visitor confirmed an address (FRU-705), « A confirmed e-mail » of the
+ * tab « Access ». `visitor` is the digest of the key of the browser (FRU-700), `identity` the digest of
+ * the site and of the address (`emailVisitorDigestOf`): never the key, never the address. Every browser
+ * that confirmed the same address is the same visitor. It goes with its site.
+ */
+export const visitor_addresses = pgTable(
+  'visitor_addresses',
+  {
+    site_id: text('site_id').notNull(),
+    visitor: text('visitor').notNull(),
+    identity: text('identity').notNull(),
+    confirmed_at: instant('confirmed_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'visitor_addresses_pkey', columns: [table.site_id, table.visitor] }),
+    foreignKey({
+      name: 'visitor_addresses_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
  * The person to tell when a note is done (FRU-604): one row per note, sent once, then removed.
  *
  * - `account_id`: a member left the note. The address is read from the account when the message

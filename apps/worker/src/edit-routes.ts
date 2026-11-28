@@ -43,7 +43,7 @@ export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
 type Caller =
   | { ok: true; kind: 'member'; author: string }
   | { ok: true; kind: 'visitor'; author: string }
-  | { ok: false; status: 401 | 403; error: 'identity-required' | 'not-allowed' };
+  | { ok: false; status: 401 | 403; error: 'identity-required' | 'not-allowed' | 'email-required' };
 
 async function callerOf(
   request: Request,
@@ -61,6 +61,8 @@ async function callerOf(
     const visitor = await checks.visitorOf(request, route.policy, site);
     if (visitor === undefined) return { ok: false, status: 401, error: 'identity-required' };
     if (!checks.visitorMay(route.client, action)) return { ok: false, status: 403, error: 'not-allowed' };
+    // FRU-705: on a site that asks for a confirmed address, a browser that confirmed none has no right.
+    if (visitor.unconfirmed === true) return { ok: false, status: 403, error: 'email-required' };
 
     return { ok: true, kind: 'visitor', author: visitorAuthor(visitor.digest) };
   }

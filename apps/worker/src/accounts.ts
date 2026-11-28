@@ -361,9 +361,11 @@ export const DEFAULT_VISITOR_NOTES_PER_HOUR: VisitorNoteLimit = 10;
  *   (`identityKey`), in a token the widget sends (`init({ identityToken })`). Their notes are theirs on
  *   every device. A token that does not verify falls back on the key of the browser.
  *
- * « A confirmed e-mail » comes with FRU-705.
+ * - `email` (FRU-705): the key of the browser, and an address the visitor confirms by a link before
+ *   their first edit or deletion. Once confirmed, their notes are theirs on every browser that
+ *   confirmed the same address. An address not confirmed gives no right.
  */
-export const VISITOR_IDENTITIES = ['browser', 'signed'] as const;
+export const VISITOR_IDENTITIES = ['browser', 'signed', 'email'] as const;
 export type VisitorIdentity = (typeof VISITOR_IDENTITIES)[number];
 
 /**
@@ -1381,9 +1383,7 @@ export function clientOf(site: Site): ClientMap[string] {
           ...(site.keepNoteVersions ? { keepNoteVersions: true as const } : {}),
           // FRU-706: how a visitor is recognised, and the key of the site, still sealed: `app.ts`
           // opens it for the request that names this site. `signed` with no key is the browser.
-          ...(site.visitorIdentity === 'signed' && site.identityKey !== undefined
-            ? { visitorIdentity: 'signed' as const, sealedIdentityKey: site.identityKey }
-            : { visitorIdentity: 'browser' as const }),
+          ...visitorIdentityOf(site),
         }
       : {}),
     // The first place is where the client routes, as when a site had one destination.
@@ -1396,6 +1396,21 @@ export function clientOf(site: Site): ClientMap[string] {
           destinations: places,
         }),
   };
+}
+
+/**
+ * FRU-706, FRU-705: how the routes recognise a visitor of a site where anybody writes. `signed` with no
+ * key is the browser: nobody can sign. `email` stays `email`: `app.ts` reads it as the browser on a
+ * worker that sends no e-mail.
+ */
+function visitorIdentityOf(
+  site: Pick<Site, 'visitorIdentity' | 'identityKey'>,
+): { visitorIdentity: 'browser' | 'email' } | { visitorIdentity: 'signed'; sealedIdentityKey: string } {
+  if (site.visitorIdentity === 'signed' && site.identityKey !== undefined) {
+    return { visitorIdentity: 'signed', sealedIdentityKey: site.identityKey };
+  }
+
+  return { visitorIdentity: site.visitorIdentity === 'email' ? 'email' : 'browser' };
 }
 
 /**

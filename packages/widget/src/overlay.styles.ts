@@ -672,6 +672,9 @@ button.fruitback-thread-stage[aria-busy="true"] { cursor: progress; }
 .fruitback-thread-edit-sent { margin-inline-end: auto; font-size: 12px; color: var(--fruitback-color-text-muted); }
 /* FRU-701: what a visitor known by their browser may do with their note, under it. */
 .fruitback-thread-you-may { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* FRU-705: the form of an address, under the note: its line, then the field and its button. */
+.fruitback-thread-confirm .fruitback-thread-you-may { margin-bottom: 8px; }
+.fruitback-thread-confirm-said { margin: 0; padding: 0 12px 12px; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-edit-status:empty { display: none; }
 /* FRU-704: an edit keeps the text of before, for the team of the site. */
 .fruitback-thread-edit-kept { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }

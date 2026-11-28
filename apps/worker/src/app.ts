@@ -50,6 +50,13 @@ import { placedAt, routingFailure, targetsOf } from './note-helpers.ts';
 import { NO_PAGE } from './note-rows.ts';
 import { signedVisitorDigestOf, visitorAuthor, visitorDigestOf, visitorMay } from './visitor-key.ts';
 import { open } from './secrets.ts';
+import type { VisitorAddresses } from './visitor-addresses.ts';
+import {
+  VISITOR_CONFIRM_PATH,
+  VISITOR_EMAIL_PATH,
+  postVisitorConfirm,
+  postVisitorEmail,
+} from './visitor-email-routes.ts';
 
 import {
   accountStoreFor,
@@ -61,6 +68,7 @@ import {
   noteVersionsFor,
   sessionStoreFor,
   storeFor,
+  visitorAddressesFor,
 } from './worker-stores.ts';
 import { NOTIFY_PATH, postNotify } from './notify-route.ts';
 import type { DoneNoticeSeams } from './done-notices.ts';
@@ -151,20 +159,31 @@ async function readerOf(
   request: Request,
   policy: ClientPolicy,
   site: string,
-): Promise<{ author: string; by: 'account' | Visitor['by'] } | undefined> {
+  addresses: VisitorAddresses | undefined,
+): Promise<{ author: string; by: 'account' | Visitor['by']; unconfirmed?: true } | undefined> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token !== undefined && policy.sessions !== undefined) {
     const verified = await verifyForClient(token, policy);
     const account = verified?.ok === true && verified.session === true ? verified.reporter.id : undefined;
     if (account !== undefined) return { author: account, by: 'account' };
   }
-  const visitor = await visitorOf(request, policy, site);
+  const visitor = await visitorOf(request, policy, site, addresses);
 
-  return visitor === undefined ? undefined : { author: visitorAuthor(visitor.digest), by: visitor.by };
+  return visitor === undefined
+    ? undefined
+    : {
+        author: visitorAuthor(visitor.digest),
+        by: visitor.by,
+        ...(visitor.unconfirmed === true ? { unconfirmed: true as const } : {}),
+      };
 }
 
-/** A visitor with no account, as the index names them (FRU-700, FRU-706): a digest, and how it was made. */
-export type Visitor = { digest: string; by: 'browser' | 'signed' };
+/**
+ * A visitor with no account, as the index names them (FRU-700, FRU-706, FRU-705): a digest, and how it
+ * was made. `unconfirmed`: a browser on a site that asks for a confirmed address, which has none yet.
+ * It reads its own notes, and may neither edit nor delete one.
+ */
+export type Visitor = { digest: string; by: 'browser' | 'signed' | 'email'; unconfirmed?: true };
 
 /**
  * The visitor of this request on `site` (FRU-700, FRU-706), or `undefined`: the one function that says
@@ -182,6 +201,8 @@ async function visitorOf(
   request: Request,
   policy: ClientPolicy,
   site: string | undefined,
+  /** FRU-705: the confirmed browsers, on a worker that sends the link. Absent: an address is never asked. */
+  addresses?: VisitorAddresses,
 ): Promise<Visitor | undefined> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token !== undefined) {
@@ -196,8 +217,16 @@ async function visitorOf(
     if (!(await isNoIdentity(token, policy))) return undefined;
   }
   const digest = visitorDigestOf(request, site);
+  if (digest === undefined) return undefined;
+  // FRU-705: on a site that recognises its visitors by a confirmed address, a browser that confirmed one
+  // is the visitor of that address; one that did not is a browser with no right.
+  if (policy.visitorIdentity === 'email' && addresses !== undefined && site !== undefined) {
+    const identity = await addresses.identityOf(site, digest);
 
-  return digest === undefined ? undefined : { digest, by: 'browser' };
+    return identity === undefined ? { digest, by: 'browser', unconfirmed: true } : { digest: identity, by: 'email' };
+  }
+
+  return { digest, by: 'browser' };
 }
 
 /**
@@ -231,11 +260,12 @@ async function notesOfReader(
   site: string | undefined,
   issues: readonly NoteIssue[],
   noteIndex: NoteIndex | undefined,
-): Promise<{ notes: Set<string>; by?: 'account' | Visitor['by'] }> {
+  addresses?: VisitorAddresses,
+): Promise<{ notes: Set<string>; by?: 'account' | Visitor['by']; unconfirmed?: true }> {
   if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) {
     return { notes: new Set() };
   }
-  const reader = await readerOf(request, policy, site);
+  const reader = await readerOf(request, policy, site, addresses);
   if (reader === undefined) return { notes: new Set() };
   try {
     const authors = await noteIndex.authors(
@@ -254,6 +284,7 @@ async function notesOfReader(
         [...authors].flatMap(([note, author]) => (author === reader.author && counts(note) ? [note] : [])),
       ),
       by: reader.by,
+      ...(reader.unconfirmed === true ? { unconfirmed: true as const } : {}),
     };
   } catch (error) {
     console.error(
@@ -681,8 +712,10 @@ async function routed(
   const withdrawOf = WITHDRAW_PATH.exec(pathname)?.[1];
   const moveOf = PLACE_PATH.exec(pathname)?.[1];
   const notifyOf = NOTIFY_PATH.exec(pathname)?.[1];
+  const visitorAddress = pathname === VISITOR_EMAIL_PATH || pathname === VISITOR_CONFIRM_PATH;
   if (
     pathname !== '/feedback' &&
+    !visitorAddress &&
     notifyOf === undefined &&
     replyTo === undefined &&
     checkOf === undefined &&
@@ -695,6 +728,12 @@ async function routed(
   }
 
   const store = storeOfRequest();
+  // FRU-705: the confirmed browsers, on a worker with accounts that sends the link and signs it. Without
+  // them a site that asks for an address knows its visitors by their browser, as before.
+  const addresses =
+    accounts === undefined || done.mailer === undefined || served.authSecret === undefined
+      ? undefined
+      : (context.visitorAddresses ?? visitorAddressesFor(served));
   // The checks of the caller that the routes of the notes call, which stay in this file.
   const checks = {
     routeFor,
@@ -706,13 +745,17 @@ async function routed(
     REPLY_LENGTH,
     authorizeRead,
     writesHere,
-    notesOfReader,
+    notesOfReader: (...args: Parameters<typeof notesOfReader>) =>
+      notesOfReader(args[0], args[1], args[2], args[3], args[4], args[5], args[6], addresses),
     memberOf,
     seesTracker,
     signsNotes,
     attributionFor,
     chosenPlace,
-    visitorOf,
+    visitorOf: (each: Request, policy: ClientPolicy, site: string | undefined) =>
+      visitorOf(each, policy, site, addresses),
+    // FRU-705: this worker confirms the address of a visitor, on a site that asks for one.
+    asksEmail: addresses !== undefined,
     visitorMay,
     done,
     // FRU-721: when the widget was last seen on a site, by which way.
@@ -732,6 +775,25 @@ async function routed(
           },
         }),
   };
+
+  // FRU-705: the link that confirms the address of a visitor, asked then opened.
+  if (visitorAddress) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+    const seams = {
+      kv,
+      corsHeaders: cors.headers,
+      clientIp: context.clientIp,
+      addresses,
+      mailer: done.mailer,
+      secret: served.authSecret,
+      browserOf: visitorDigestOf,
+      now: Date.now(),
+    };
+
+    return pathname === VISITOR_EMAIL_PATH
+      ? postVisitorEmail(request, served, seams, checks)
+      : postVisitorConfirm(request, served, seams, checks);
+  }
 
   // FRU-604: the address a visitor with no account gives for the note they just sent.
   if (notifyOf !== undefined) {

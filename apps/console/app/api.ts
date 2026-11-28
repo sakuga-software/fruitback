@@ -41,7 +41,7 @@ export type Writers = 'members' | 'anyone';
 export type VisitorRight = 'never' | 'while-open';
 
 /** FRU-706: how a visitor with no account is recognised, as the worker stores it. */
-export type VisitorIdentity = 'browser' | 'signed';
+export type VisitorIdentity = 'browser' | 'signed' | 'email';
 /** FRU-704: the notes a visitor leaves on a site in an hour, as the worker takes them. `0` is « No limit ». */
 export const VISITOR_NOTE_LIMITS = [0, 5, 10, 20, 50] as const;
 export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
@@ -119,6 +119,8 @@ export type Site = {
    * whether this instance keeps none (`unavailable`). Never the key: the worker gives it once.
    */
   identityKey?: 'set' | 'none' | 'unavailable';
+  /** FRU-705: whether this instance can ask a visitor for a confirmed address (it sends e-mail). */
+  confirmedEmail?: 'available' | 'unavailable';
   destination?: Destination;
   destinations?: Destination[];
   /**

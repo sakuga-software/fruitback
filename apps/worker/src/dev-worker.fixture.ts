@@ -58,6 +58,9 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  * - **`POST /__dev/signed`** (FRU-706): the site `signed`, made at the first call, at the origin of the
  *   playground, in a workspace of its own, « No limit »: it signs its visitors, with a new key at each
  *   call, which the answer holds (`{ id, key }`) for a spec to sign a token with, as a backend does.
+ * - **`POST /__dev/email`** (FRU-705): the site `email`, made at the first call, at the origin of the
+ *   playground, in a workspace of its own, « No limit »: it recognises its visitors by a confirmed
+ *   address. The link goes to the mailer of development: `GET /__dev/mail` answers it.
  * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
  *   oldest first. The worker of development has no provider: it keeps them in this process. Only
  *   these messages: the sign-in by link stays off.
@@ -74,6 +77,8 @@ export const DEV_CONSOLE = 'http://localhost:5178';
 export const DEV_GUARDS_SITE = 'guards';
 /** The site of the specs of a visitor the site signs (FRU-706), in a workspace of its own. */
 export const DEV_SIGNED_SITE = 'signed';
+/** The site of the specs of a visitor known by a confirmed address (FRU-705), in a workspace of its own. */
+export const DEV_EMAIL_SITE = 'email';
 /** The person of the workspace: its owner, and whoever pairs through `/__dev/pair`. */
 export const DEV_OWNER = 'dev@fruitback.test';
 
@@ -292,6 +297,35 @@ async function setSigned(
   response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: DEV_SIGNED_SITE, key }));
 }
 
+/** The owner of the workspace of the site `email` (FRU-705). */
+const DEV_EMAIL_OWNER = 'email@fruitback.test';
+
+/** `POST /__dev/email` (FRU-705): the site `email`, made at the first call. */
+async function setEmail(database: PgDatabase, made: { workspace?: Promise<string> }, response: ServerResponse) {
+  const accounts = createPostgresAccountStore(database);
+  made.workspace ??= (async () => {
+    const owner = await accounts.signIn({
+      provider: 'email',
+      subject: DEV_EMAIL_OWNER,
+      email: DEV_EMAIL_OWNER,
+      name: 'Email',
+    });
+    const workspace = await accounts.createWorkspace('Email', owner.id);
+    const site = await accounts.addSite(workspace.id, {
+      origin: DEV_PLAYGROUND,
+      visibility: 'everyone',
+      writers: 'anyone',
+      visitorNotesPerHour: 0,
+      visitorIdentity: 'email',
+    });
+    await renameSite(database, site.id, DEV_EMAIL_SITE);
+
+    return workspace.id;
+  })();
+  await made.workspace;
+  response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: DEV_EMAIL_SITE }));
+}
+
 /** `POST /__dev/writers`: who may leave a note on the site of the playground (FRU-330). `400` for another value. */
 async function setWriters(
   database: PgDatabase,
@@ -462,6 +496,7 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   // FRU-704: the workspace of the site `guards`, once a spec asked for it.
   const guards: { workspace?: Promise<string> } = {};
   const signed: { workspace?: Promise<string> } = {};
+  const emailSite: { workspace?: Promise<string> } = {};
   // FRU-604: what a note done would send, kept here for `GET /__dev/mail`.
   const mailed: MailMessage[] = [];
   provideDevDoneMailer({
@@ -496,6 +531,13 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     }
     if (incoming.method === 'POST' && incoming.url === '/__dev/writers') {
       void setWriters(database, seeded.workspace, visibility, incoming, response);
+
+      return;
+    }
+    if (incoming.method === 'POST' && incoming.url === '/__dev/email') {
+      void setEmail(database, emailSite, response).catch((error: unknown) => {
+        response.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(error) }));
+      });
 
       return;
     }

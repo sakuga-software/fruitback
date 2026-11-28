@@ -175,6 +175,11 @@ INSERT INTO held_notes (site_id, note_id, workspace_id, payload, author_visitor,
   ('site_drill2', 'sd_held1', 'ws_drill1', '{"id":"sd_held1","text":"Held for a member."}', 'digest-of-a-test-key', 1, NULL),
   ('site_drill2', 'sd_held2', 'ws_drill1', '{"id":"sd_held2","text":"Being approved."}', NULL, 2, 3);
 
+-- The browsers whose visitor confirmed an address (FRU-705): digests of a test, never a key nor an
+-- address.
+INSERT INTO visitor_addresses (site_id, visitor, identity, confirmed_at) VALUES
+  ('site_drill1', 'digest-of-a-test-key', 'digest-of-a-test-address', 1);
+
 -- The versions of a note (FRU-704): the text of before an edit of its visitor, and a deletion by a
 -- member. Test words only.
 INSERT INTO note_versions (id, site_id, note_id, workspace_id, kind, text, author_kind, author_account_id, at) VALUES

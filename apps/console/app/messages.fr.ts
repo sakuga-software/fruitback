@@ -781,6 +781,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Make the key of the site, then save. Your backend signs a short token with it.':
     'Créez la clé du site, puis enregistrez. Votre backend signe un jeton court avec elle.',
   'Make a new key': 'Créer une nouvelle clé',
+  // FRU-705: « A confirmed e-mail ».
+  'This instance sends no e-mail, so it cannot confirm the address of a visitor.':
+    'Cette instance n’envoie aucun e-mail : elle ne peut pas confirmer l’adresse d’un visiteur.',
+  'Before their first edit or deletion, a visitor confirms an address by a link, valid 30 minutes. Fruitback keeps a digest of it, never the address.':
+    'Avant sa première modification ou suppression, un visiteur confirme une adresse par un lien, valable 30 minutes. Fruitback en garde une empreinte, jamais l’adresse.',
   Docs: 'Documentation',
   'Make the key': 'Créer la clé',
   'Make the key of the site before you save « Signed by your site ».':

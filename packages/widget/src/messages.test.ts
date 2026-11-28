@@ -35,6 +35,7 @@ import type { PlaceHelp } from './place-help.ts';
 import {
   type CheckAnswer,
   type CheckFailure,
+  type ConfirmWords,
   type EditAnswer,
   type EditFailure,
   type ReplyFailure,
@@ -1000,6 +1001,46 @@ describe('every word the widget shows', () => {
     (host.root.querySelector('.fruitback-thread-edit') as HTMLButtonElement).click();
     snapshots.push(...shown(host.root));
     byBrowser.destroy();
+
+    // FRU-705: the form of an address, on a note of the reader and on another, then each thing it says.
+    const confirmState: { email: string; said: ConfirmWords | undefined; inFlight: boolean } = {
+      email: '',
+      said: undefined,
+      inFlight: false,
+    };
+    let confirmNeeded = true;
+    const confirming = createOverlay({
+      document: page.document,
+      host: host.root,
+      dock: host.dock,
+      translator,
+      byBrowser: () => true,
+      confirmEmail: { needed: () => confirmNeeded, send: async () => 'sent', state: confirmState },
+    });
+    const ofAnother = noteIssueFixture({ stage: 'new', note: found.note });
+    for (const issue of [ofThisBrowser, ofAnother]) {
+      confirming.render([issue]);
+      confirming.select(issue.note.id);
+      snapshots.push(...shown(host.root));
+    }
+    const confirmWords: ConfirmWords[] = [
+      'confirm.sending',
+      'confirm.sent',
+      'confirm.invalid',
+      'confirm.wait',
+      'confirm.failed',
+      'confirm.done',
+      'confirm.expired',
+      'confirm.otherBrowser',
+    ];
+    for (const said of confirmWords) {
+      confirmState.said = said;
+      confirmNeeded = said !== 'confirm.done';
+      confirming.render([ofThisBrowser]);
+      confirming.select(ofThisBrowser.note.id);
+      snapshots.push(...shown(host.root));
+    }
+    confirming.destroy();
 
     // FRU-706: the same note, for a person the site signed: « You ».
     const bySite = createOverlay({

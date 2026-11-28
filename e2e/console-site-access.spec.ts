@@ -30,6 +30,8 @@ const SITES = [
     // FRU-706: known by their browser, and no key of the site yet, on a worker that keeps one.
     visitorIdentity: 'browser',
     identityKey: 'none',
+    // FRU-705: an instance that sends e-mail.
+    confirmedEmail: 'available',
   },
 ];
 
@@ -433,6 +435,26 @@ test('« Signed by your site » makes the key of the site, shows it once, and is
   await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
   expect(worker.posted.at(-1)).not.toHaveProperty('visitorIdentity');
+});
+
+test('« A confirmed e-mail » is chosen where the instance sends e-mail, and sent where anybody writes (FRU-705)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/sites/s2/access`);
+  const recognition = card(page, 'How a visitor is recognised');
+
+  await recognition.getByText('A confirmed e-mail', { exact: true }).click();
+  await expect(recognition.getByRole('radio', { name: 'A confirmed e-mail' })).toBeChecked();
+  await expect(recognition).toContainText('Fruitback keeps a digest of it, never the address.');
+  await page.getByRole('button', { name: 'Save the access of acme.dev' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved. The script on the site stays the same.');
+  expect(worker.posted.at(-1)).toMatchObject({ writers: 'anyone', visitorIdentity: 'email' });
+  await expectNoViolation(page, 'the card « How a visitor is recognised » with « A confirmed e-mail »');
+
+  // A site of a worker of before, or of an instance that sends no e-mail: it cannot be chosen.
+  await page.goto(`${CONSOLE}/w/w1/sites/s1/access`);
+  await expect(recognition.getByRole('radio', { name: /A confirmed e-mail/ })).toBeDisabled();
 });
 
 test('« Deleted notes » keeps 30 days by default, is sent where anybody writes, and said « n/a » where only members do (FRU-704)', async ({

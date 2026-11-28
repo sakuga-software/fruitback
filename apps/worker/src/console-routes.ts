@@ -250,6 +250,8 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         ...(noteVersions === undefined ? {} : { noteVersions }),
         ...(deletedNotes === undefined ? {} : { deletedNotes }),
         ...(done === undefined ? {} : { done }),
+        // FRU-705: « A confirmed e-mail » takes a worker that sends the link and signs it.
+        confirmsEmail: done?.mailer !== undefined && served.authSecret !== undefined,
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
         ...(githubApp === undefined ? {} : { githubApp }),
         ...(served.trackerApps === undefined ? {} : { trackerApps: served.trackerApps }),
