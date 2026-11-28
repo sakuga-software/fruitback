@@ -239,6 +239,15 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   pin (`npm`, `extension`), and on a pull request that changes the suite. A red run on `main` means
   that the worker of `main` breaks a client that people have: fix the worker, or publish a client
   that follows it before the worker is deployed.
+- **The pull request of a version runs these specs against the extension it releases** (FRU-612).
+  When a pull request moves the version of `apps/extension/package.json` (`tools/ci/extension-release.ts`),
+  `published.yml` builds the archive as `release-extension.yml` does (`pnpm --filter
+  @fruitback/extension zip`) and gives it to `fetch.ts` with `FRUITBACK_PUBLISHED_EXTENSION_ARCHIVE`.
+  A word of the extension that changed fails there, and the person who releases fixes the spec in
+  that pull request. Before, the spec passed until the release, then failed on every commit of
+  `main` for two days (FRU-555, 0.7.0). The npm packages stay the `latest` ones. Between the merge
+  of that pull request and the archive attached to the release, a run of `main` tests the new spec
+  against the old release.
 - **These specs drive the published interface with its own words**, and not with the helpers of
   `extension.ts` that click through the popup and the options page: those follow `main`. A release
   that changes these words changes these specs.

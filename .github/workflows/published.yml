@@ -6,8 +6,14 @@ name: Published
 #
 # Not a job of `ci.yml`: the CI of a pull request has a budget of 4 minutes, and this job boots the
 # servers of the E2E suite again. It runs after each merge, every night (a new release changes what
-# it fetches with no commit here), by hand with a version to pin, and on a pull request that changes
-# the suite itself.
+# it fetches with no commit here), by hand with a version to pin, on a pull request that changes the
+# suite itself, and on the pull request of a version (FRU-612).
+#
+# The pull request « chore: version x.y.z » of `version.yml` moves the version of the extension. On
+# it, the extension is not the last release but the archive this commit builds, the one the stores
+# will get: a published spec that still reads the words of the last release fails here, and is fixed
+# in the same pull request. Before, it passed until the release, then failed on every commit of
+# `main` (FRU-555, 0.7.0).
 on:
   push:
     branches: [main]
@@ -16,6 +22,9 @@ on:
       - e2e/published/**
       - playwright.published.config.ts
       - .github/workflows/published.yml
+      # The version of the extension. A pull request that changes only its dependencies runs the
+      # last release, as before: `extension-release.ts` reads whether the version moved.
+      - apps/extension/package.json
   schedule:
     # 04:41 UTC: after the night, before the day. The minute is not the one every repository picks.
     - cron: '41 4 * * *'
@@ -56,6 +65,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The merge commit of a pull request and its first parent, the head of its base:
+          # `extension-release.ts` compares the version of the extension on both.
+          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -80,18 +92,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # From npm and from the GitHub release, both public. The token only raises the rate limit of
-      # the GitHub API, and it can read this public repository and nothing more.
+      # FRU-612. `archive=` the archive to build, or nothing when the version did not move.
+      - name: Does this pull request move the version of the extension?
+        id: extension
+        if: github.event_name == 'pull_request'
+        run: node tools/ci/extension-release.ts >> "$GITHUB_OUTPUT"
+
+      # The playground, which is the site of the specs, reads the built widget of this commit. The
+      # extension bundles them too.
+      - name: Build what the playground reads
+        run: pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build
+
+      # The command of the job `package` of `release-extension.yml`: a production build for Chrome,
+      # with the version of `apps/extension/package.json`, which the tag will name. Nothing leaves
+      # the run: no store, no release, no key.
+      - name: Build the extension that this pull request releases
+        if: steps.extension.outputs.archive != ''
+        run: pnpm --filter @fruitback/extension zip
+
+      # From npm and from the GitHub release, both public, or the archive built above. The token only
+      # raises the rate limit of the GitHub API, and it can read this public repository and nothing
+      # more.
       - name: Fetch the published packages and extension
         env:
           FRUITBACK_PUBLISHED_VERSION: ${{ inputs.npm }}
           FRUITBACK_PUBLISHED_EXTENSION: ${{ inputs.extension }}
+          FRUITBACK_PUBLISHED_EXTENSION_ARCHIVE: ${{ steps.extension.outputs.archive }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node e2e/published/fetch.ts
-
-      # The playground, which is the site of the specs, reads the built widget of this commit.
-      - name: Build what the playground reads
-        run: pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build
 
       - name: Run the published code against this worker
         run: pnpm exec playwright test -c playwright.published.config.ts

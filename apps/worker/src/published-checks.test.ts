@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'vitest';
-import { checkDigest, checkInstalled } from '../../../e2e/published/checks.ts';
+import { builtArchiveVersion, checkDigest, checkInstalled } from '../../../e2e/published/checks.ts';
 
 /**
  * The checks of `e2e/published/fetch.ts` on what it fetched (FRU-460). It lives here because the root
@@ -32,6 +32,22 @@ describe('the checks of the published code', () => {
 
   it('take packages that all carry the version asked for', () => {
     assert.doesNotThrow(() => checkInstalled('0.4.0', { fruitback: '0.4.0', '@fruitback/widget': '0.4.0' }));
+  });
+
+  it('read the version of an archive built here from the name that wxt zip gives it (FRU-612)', () => {
+    assert.equal(builtArchiveVersion('apps/extension/.output/fruitback-0.9.0-chrome.zip'), '0.9.0');
+    assert.equal(builtArchiveVersion('fruitback-1.0.0-rc.1-chrome.zip'), '1.0.0-rc.1');
+  });
+
+  it('refuse an archive built here that is not the one for Chrome, or that names no version', () => {
+    for (const file of [
+      'apps/extension/.output/fruitback-0.9.0-firefox.zip',
+      'apps/extension/.output/fruitback-0.9.0-sources.zip',
+      'apps/extension/.output/fruitbackextension-0.9.0-chrome.zip',
+      'apps/extension/.output/fruitback-chrome.zip',
+    ]) {
+      assert.throws(() => builtArchiveVersion(file), /is not an archive for Chrome of wxt zip/, file);
+    }
   });
 
   it('refuse packages of mixed versions', () => {
