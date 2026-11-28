@@ -37,14 +37,20 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['github'], ['list']] : [['list']],
+  // On CI, `json` too: `tools/ci/e2e-flaky.ts` reads it to keep the traces of a part whose test
+  // passed only on its retry (FRU-737). The part is green then, and the trace was lost before.
+  reporter: process.env.CI
+    ? [['github'], ['list'], ['json', { outputFile: 'playwright-report/results.json' }]]
+    : [['list']],
   use: {
     baseURL: PLAYGROUND,
     ...devices['Desktop Chrome'],
     // The widget follows the browser's language (FRU-37), and the specs find its chrome by English names.
     locale: 'en-US',
     viewport: { width: 1440, height: 900 },
-    trace: 'on-first-retry',
+    // On CI, the trace of the first run of a test, kept when that run fails (FRU-737). It is the run
+    // that holds the cause: the retry of a flaky test passes, and `on-first-retry` kept that one.
+    trace: process.env.CI ? 'retain-on-first-failure' : 'on-first-retry',
     video: process.env.CI ? 'off' : 'retain-on-failure',
     // FRU-604: a browser of the suite answered « Want to know when it's fixed? » already, so a note
     // of a visitor closes its composer as before. `notify.spec.ts` starts from a browser that did not.
