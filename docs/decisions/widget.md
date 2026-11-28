@@ -914,13 +914,36 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ### The rules, in short
 
-- **`notes` is one more transport, not a second widget.** `notes.ts` turns `{ write, read? }` into a
-  `FruitbackTransport` that answers `GET /feedback` and `POST /feedback` as the worker does, and
-  `404` to every other call. `embed.ts` does not know about it: the errors, the drafts, the queue of
-  sends and the re-reads stay the paths a worker uses.
-- **A function that is absent hides what it serves.** The read answers `{ issues }` and nothing
-  else, so the widget offers no reply, no place, no batch, no address to ask and no file. Without
+- **`notes` is one more transport, not a second widget.** `notes.ts` turns `{ write, read?, … }` into
+  a `FruitbackTransport` that answers `GET /feedback` and `POST /feedback` as the worker does, and,
+  since FRU-647, `/replies`, `/check`, `/text`, `/withdraw` and `/attachments` when `notes` has their
+  function. Every other call gets a `404`. `embed.ts` barely knows about it: the errors, the drafts,
+  the queue of sends and the re-reads stay the paths a worker uses.
+- **A function that is absent hides what it serves.** The read says `canReply` only with `reply`, and
+  `canAttach` only with `attach`. It says `editable` and `withdrawable` only on a note `mine` that is
+  open, with `edit` and `withdraw`. It never offers a place, a batch or an address to ask. Without
   `read`, the read answers no issue, and the list says « no note », not « could not be read ».
+- **Two things the read cannot say go in `MountOptions.notesOffer`** (FRU-647). The widget offers the
+  verdict on any note `mine` at `done`, and a move with every edit. `mountOptions` sets
+  `notesOffer.check` from `notes.check`, and a widget with `notes` gets no move seam at all: no
+  function of the host takes a move.
+- **A reply of the reader, and a verdict, are written as the worker writes them** (FRU-647):
+  `**name** via Fruitback · you`, then the text quoted, so `replyFromPage` and `verdictFromPage` read
+  them. That is what keeps a reply of the reader out of « Léa marked it done », which names the
+  newest reply of the team, and what shows a verdict in the words of the reader. The name and « you »
+  come from the translator of the mount: `init` passes `mountOptions` a function that asks it at each
+  call. A reply that is not `mine` stays the text and its author, as a store gives them.
+- **Each action is checked against the last read** (FRU-647). The transport keeps, by id, the note,
+  its stage, `mine` and whether a verdict confirmed it. An edit or a withdrawal of a note that is not
+  the reader's or is not open is a `409`; a verdict on a note not at `done`, or confirmed, too; a
+  note no read gave is a `404`. The host's function is not called then. This checks the page, not a
+  person: the host's own route decides who may.
+- **Files: `attach` when the file is joined, `write` names them.** The composer sends each file when
+  it is joined, as to the worker. `attach(file)` gets a `File` and answers an id of the host; the
+  widget takes only `att_` and 32 hex digits, so the transport answers an id of that shape and keeps
+  the pair until `write`, which gets the ids of the host in `{ attachments }`. A write that names a
+  file the transport did not take is a `400`. `localNotes` keeps the name of a file and never its
+  bytes: `localStorage` holds a few megabytes for the whole site, and the thread shows no file.
 - **The address of the calls is `https://notes.fruitback.invalid`.** No DNS resolves `.invalid`: a
   call that took another way than the transport fails, and sends nothing. `notes.test.ts` forbids
   `fetch`, and `offline-notes.spec.ts` asserts that no request leaves the page.
