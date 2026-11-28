@@ -184,11 +184,3 @@ test('a member who is no admin has no way to the domain section', async ({ page 
   await expect(page.locator('main')).toContainText('Only an owner or an admin of the workspace sets these for a site.');
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toHaveCount(0);
 });
-
-// FRU-737, planted for one run of CI and reverted next: it fails on its first run and passes on its
-// retry, so the part stays green and keeps the trace of the first run.
-test('a planted test that fails on its first run only (FRU-737)', async ({ page }, testInfo) => {
-  await page.goto('/?case=flaky-proof&widget=off');
-  await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
-  expect(testInfo.retry, 'the first run fails on purpose (FRU-737)').toBe(1);
-});
