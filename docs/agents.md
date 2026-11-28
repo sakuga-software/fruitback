@@ -111,6 +111,10 @@ filters take both. Each entry says what it is in `kind`:
 
 Read `kind` before you read `task`: the same name holds the fields of a note, and the text of a task.
 
+`list_notes` answers a page at a time. Some filters (`status`, the known people of a key) apply after
+the page is read, so a page can hold fewer entries than `limit`, or none. Only `next` says that more
+wait: send it as `cursor` until an answer has no `next`.
+
 On a worker that keeps no task (`FRUITBACK_TASKS=off`), `task_choices`, `set_note_status`,
 `update_task` and `create_task` are not listed, and `list_notes` and `get_note` still give the fields of the tasks kept
 before.
