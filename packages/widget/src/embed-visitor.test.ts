@@ -277,7 +277,7 @@ describe('a visitor asked for a confirmed address, through init (FRU-705)', () =
     );
     const field = form.querySelector('input') as HTMLInputElement;
     field.value = 'ana@example.com';
-    field.dispatchEvent(new page.view.Event('input'));
+    field.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input'));
     form.requestSubmit();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
