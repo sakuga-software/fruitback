@@ -327,11 +327,19 @@ The orchestrator took the four recommendations on 2026-11-28.
    and only on a sign-in started by the extension. The setup stays the way of a person who starts from
    the console or the landing.
 
+### The tickets
+
+| Ticket  | What                                                                                    | Critical |
+| ------- | --------------------------------------------------------------------------------------- | -------- |
+| FRU-752 | `e2e/first-destination.spec.ts` counts the team side, and replaces the table above      | no       |
+| FRU-753 | Step 3 of the setup: « Where the notes go », and the connection becomes the destination | yes      |
+| FRU-754 | The page « Connect » makes the first workspace on a sign-in started by the extension    | no       |
+
 ## The funnel, on the Cloud only (FRU-644, a framing)
 
 Mathieu decided on 2026-11-19 (FRU-637) that a funnel measure is acceptable if it is aggregated,
 opt-in, on Fruitback Cloud only, and absent from a self-hosted instance. The orchestrator decided the
-rest on 2026-11-28. This section is the framing, written before any code. The tickets are at the end.
+rest on 2026-11-28. This section is the framing, written before any code. The tickets are at the end of this section.
 
 ### The rules, in short
 
@@ -428,6 +436,15 @@ no ticket counts them.
 
 Recommended: B. A count of a week with no identifier says nothing about anybody, and without it the
 funnel starts after the two steps that lose the most.
+
+### The tickets
+
+| Ticket  | What                                                                               | Critical |
+| ------- | ---------------------------------------------------------------------------------- | -------- |
+| FRU-755 | The worker: the consent of the owner, and the read by cohort, on the Cloud only    | yes      |
+| FRU-756 | The console: the switch in « General », and the section « Funnel » of « Instance » | no       |
+
+No ticket counts « Setup opened » or « Account created » until Mathieu answers the question above.
 
 ## The questions
 

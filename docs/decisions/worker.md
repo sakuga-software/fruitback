@@ -5776,3 +5776,19 @@ hides only the text. It took the five recommendations below on 2026-11-28.
    of the site, in a ticket of their own: Fruitback is not a connector, and has no `connectors.settings`.
 5. **A refused status, assignee or label makes the destination « Action required »**, with the cause,
    until a save of the settings. It is the only way the team learns that its issues lost a setting.
+
+### The tickets
+
+One ticket per setting, and one per group of tools where the API differs. FRU-743 comes first.
+
+| Ticket  | What                                                                                        | Critical |
+| ------- | ------------------------------------------------------------------------------------------- | -------- |
+| FRU-743 | The base: `connectors.settings` for every kind, the panel « Settings », « Action required » | yes      |
+| FRU-744 | The template of the title and the description, and the boxes of the details                 | yes      |
+| FRU-745 | The status of arrival in Linear                                                             | no       |
+| FRU-746 | The status of arrival in Jira (a transition), ClickUp and Asana (a section)                 | no       |
+| FRU-747 | The assignee by default in Linear, GitHub and GitLab                                        | no       |
+| FRU-748 | The assignee by default in Jira, ClickUp and Asana                                          | no       |
+| FRU-749 | Labels, a priority and a milestone by default                                               | no       |
+| FRU-750 | The capture joined by default, in the extension                                             | yes      |
+| FRU-751 | The defaults of a task that Fruitback keeps, a setting of the site (decision 4)             | yes      |
