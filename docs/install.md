@@ -273,7 +273,9 @@ init({ notes: localNotes() });
 
 `localNotes()` keeps the notes in `localStorage`, in this browser only, under `fruitback:notes`. It
 is for a demo, a test, or a page with no server. On a page with no build step, the script tag gives it
-as `Fruitback.localNotes()`.
+as `Fruitback.localNotes()`. It takes replies, verdicts, edits, withdrawals and files: every note it
+keeps is the reader's, since this browser wrote it. Of a file, it keeps the name only, as
+`localStorage` holds a few megabytes for the whole site.
 
 To send the notes to a route of your own, write the two functions:
 
@@ -303,17 +305,43 @@ function routeNotes(url: string): FruitbackNotes {
 init({ notes: routeNotes('/api/feedback') });
 ```
 
-- `write(note)` gets the note as `@fruitback/shared` describes it, the shape `parseNote` reads. It
-  answers `{ id }`. A rejection, or an answer with no `id`, is a send that failed: the composer keeps
-  the text and says so. The same note can come twice after a failed send, with the same `note.id`:
-  keep it once.
-- `read(page)` is optional. It answers the notes of `page.url`, each as `{ id, note, stage? }`. A note
-  with no `stage` is « New ». Without `read`, a note goes and no pin comes back.
-- With `notes`, the widget offers no reply, no place to choose, no address to ask and no file. It
+- `write(note, { attachments })` gets the note as `@fruitback/shared` describes it, the shape
+  `parseNote` reads, and the ids that `attach` gave for its files (empty without files). It answers
+  `{ id }`. A rejection, or an answer with no `id`, is a send that failed: the composer keeps the text
+  and says so. The same note can come twice after a failed send, with the same `note.id`: keep it once.
+- `read(page)` is optional. It answers the notes of `page.url`, each as
+  `{ id, note, stage?, mine?, replies?, attachments? }`. A note with no `stage` is « New ». Without
+  `read`, a note goes and no pin comes back.
+  - `mine: true` says that the reader wrote the note. Only then does its thread offer the edit, the
+    withdrawal and the verdict.
+  - `replies`, oldest first, are `{ id, text, createdAt, author?, mine?, verdict? }`. A reply with no
+    `author` reads « Anonymous ». `mine: true` marks a reply the reader wrote from the page: the thread
+    says « you » beside the name. `verdict` (`fixed` or `wrong`) marks the verdict of the author, with
+    what they typed in `text`. The newest verdict `fixed` on a note at `done` confirms it.
+  - `attachments` are `{ name, url? }`. The thread says how many files the note has, and shows none.
+- Every other function is optional too. **Without it, the widget offers nothing of what it serves.**
+
+  | Function                                 | What the widget offers with it                                            |
+  | ---------------------------------------- | ------------------------------------------------------------------------- |
+  | `reply(id, { text, author? })`           | the field to reply, in every thread. It answers the `{ id }` of the reply |
+  | `check(id, { verdict, text?, author? })` | « Looks fixed » / « Still wrong », on a note `mine` at `done`             |
+  | `edit(id, text)`                         | « Edit the note », on a note `mine` at `new`, `todo` or `progress`        |
+  | `withdraw(id)`                           | « Withdraw the note », on the same notes                                  |
+  | `attach(file)`                           | the files in the composer. It gets a `File`, and answers its `{ id }`     |
+
+  `id` is the id `write` gave. In `reply`, `author` is the name the person typed in the widget; in
+  `check`, the name on the note. Each is left out when there is none. After `check` with `wrong`, give the note at `new` at the next `read`, and after `withdraw`, at
+  `closed`, as the worker does. A rejection is an action that failed: the widget says so, and keeps
+  what was typed.
+
+- With `notes`, the widget offers no place to choose, no address to ask, and no move of a note. It
   sends no request of its own. `endpoint` and `transport` go with a worker, and `init` refuses them
   beside `notes`.
 - What `read` answers is checked: a note that `parseNote` refuses, or a note of another page, is
-  dropped.
+  dropped, and so is a reply or a file that is not one. Each action is checked against the last read
+  too: an edit of a note that is not the reader's, or of a closed note, is refused before your
+  function is called. Your route still decides who may do what: the widget runs in the page, and any
+  script of the page can call your functions.
 - With `@fruitback/react`, create `notes` once, outside the component or in a `useMemo`. The widget
   keeps the `notes` of its first mount. `@fruitback/element` sends to a worker only.
 
