@@ -1,4 +1,12 @@
-import type { DeletedNoteKeep, Site, Visibility, VisitorNoteLimit, VisitorRight, Writers } from './api.ts';
+import type {
+  DeletedNoteKeep,
+  Site,
+  Visibility,
+  VisitorIdentity,
+  VisitorNoteLimit,
+  VisitorRight,
+  Writers,
+} from './api.ts';
 
 /**
  * What a visitor with no account may do on a site (FRU-703), as the tab « Access » sets it. The worker
@@ -13,6 +21,8 @@ import type { DeletedNoteKeep, Site, Visibility, VisitorNoteLimit, VisitorRight,
  * - `holdVisitorNotes`: a note of a visitor waits for a member before it goes on (FRU-704), the same.
  * - `keepNoteVersions`: an edit or a deletion of a note keeps the version of before (FRU-704), the same.
  * - `deletedNotesKeepDays`: the days a note its visitor deleted is kept, then erased (FRU-704), the same.
+ * - `visitorIdentity`: how a visitor is recognised (FRU-706), the same: the key of their browser, or a
+ *   token the backend of the site signs.
  */
 export type Access = {
   visibility: Visibility;
@@ -24,6 +34,7 @@ export type Access = {
   holdVisitorNotes: boolean;
   keepNoteVersions: boolean;
   deletedNotesKeepDays: DeletedNoteKeep;
+  visitorIdentity: VisitorIdentity;
 };
 
 /**
@@ -40,7 +51,12 @@ export const LEVEL_ACCESS: Readonly<
     ChosenLevel,
     Omit<
       Access,
-      'notifyDone' | 'visitorNotesPerHour' | 'holdVisitorNotes' | 'keepNoteVersions' | 'deletedNotesKeepDays'
+      | 'notifyDone'
+      | 'visitorNotesPerHour'
+      | 'holdVisitorNotes'
+      | 'keepNoteVersions'
+      | 'deletedNotesKeepDays'
+      | 'visitorIdentity'
     >
   >
 > = {
@@ -66,6 +82,8 @@ export function accessOf(site: Site): Access {
     keepNoteVersions: site.keepNoteVersions === true,
     // A worker of before kept a deleted note as long as the note: the longest of the list stands for it.
     deletedNotesKeepDays: site.deletedNotesKeepDays ?? 90,
+    // FRU-706: a worker of before knew a visitor by their browser only.
+    visitorIdentity: site.visitorIdentity ?? 'browser',
   };
 }
 
@@ -110,7 +128,8 @@ export function sameAccess(draft: Access, stored: Access): boolean {
         draft.visitorNotesPerHour === stored.visitorNotesPerHour &&
         draft.holdVisitorNotes === stored.holdVisitorNotes &&
         draft.keepNoteVersions === stored.keepNoteVersions &&
-        draft.deletedNotesKeepDays === stored.deletedNotesKeepDays))
+        draft.deletedNotesKeepDays === stored.deletedNotesKeepDays &&
+        draft.visitorIdentity === stored.visitorIdentity))
   );
 }
 
@@ -149,6 +168,7 @@ export function accessBody(origin: string, access: Access): Record<string, unkno
           holdVisitorNotes: access.holdVisitorNotes,
           keepNoteVersions: access.keepNoteVersions,
           deletedNotesKeepDays: access.deletedNotesKeepDays,
+          visitorIdentity: access.visitorIdentity,
         }
       : {}),
   };

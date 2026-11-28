@@ -21,6 +21,7 @@ const CONTRIBUTE: Access = {
   holdVisitorNotes: false,
   keepNoteVersions: false,
   deletedNotesKeepDays: 30,
+  visitorIdentity: 'browser',
 };
 
 describe('the access of a site, in the tab « Access » (FRU-703)', () => {
@@ -36,6 +37,8 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 90,
+      // FRU-706: a worker of before knew a visitor by their browser.
+      visitorIdentity: 'browser',
     });
     assert.equal(accessOf({ ...SITE, visibility: 'members' }).writers, 'members');
     assert.deepEqual(
@@ -50,6 +53,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
         holdVisitorNotes: false,
         keepNoteVersions: false,
         deletedNotesKeepDays: 90,
+        visitorIdentity: 'browser',
       },
     );
     assert.equal(accessOf({ ...SITE, visitorNotesPerHour: 20 }).visitorNotesPerHour, 20);
@@ -79,6 +83,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30,
+      visitorIdentity: 'browser',
     });
   });
 
@@ -94,6 +99,7 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
       holdVisitorNotes: false,
       keepNoteVersions: false,
       deletedNotesKeepDays: 30,
+      visitorIdentity: 'browser',
     });
     // Where only members write, the table says « Never », and that is what is stored (#ca9e30): a
     // site opened again later brings back no right that nobody saw.
@@ -130,6 +136,15 @@ describe('the access of a site, in the tab « Access » (FRU-703)', () => {
     assert.equal(sameAccess({ ...closed, deletedNotesKeepDays: 7 }, closed), true);
     assert.equal(accessOf({ ...SITE, deletedNotesKeepDays: 7 }).deletedNotesKeepDays, 7);
     assert.equal(accessBody('https://acme.dev', { ...CONTRIBUTE, deletedNotesKeepDays: 90 }).deletedNotesKeepDays, 90);
+    // FRU-706: how a visitor is recognised counts where anybody writes, and nowhere else.
+    assert.equal(sameAccess(CONTRIBUTE, { ...CONTRIBUTE, visitorIdentity: 'signed' }), false);
+    assert.equal(sameAccess({ ...closed, visitorIdentity: 'signed' }, closed), true);
+    assert.equal(accessOf({ ...SITE, visitorIdentity: 'signed' }).visitorIdentity, 'signed');
+    assert.equal(
+      accessBody('https://acme.dev', { ...CONTRIBUTE, visitorIdentity: 'signed' }).visitorIdentity,
+      'signed',
+    );
+    assert.equal('visitorIdentity' in accessBody('https://acme.dev', { ...closed, visitorIdentity: 'signed' }), false);
   });
 
   it('lets a visitor reply where everyone reads and anybody writes, as the worker does', () => {

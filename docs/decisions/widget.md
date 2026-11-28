@@ -2036,9 +2036,12 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   after. A reader who never sent a note sends none. A storage that the browser refuses keeps it in
   memory for the page. A stored value of another shape is no key, and the next note puts a new one in
   its place.
-- **Only a mount of `init` with no `identityToken` and no `transport` has a key**
-  (`MountOptions.visitor`, never an option of a host). A host that mints a token names the reporter,
-  and the extension carries a session: the worker knows those readers another way.
+- **Only a mount of `init` with no `transport` has a key** (`MountOptions.visitor`, never an option
+  of a host). The extension carries a session: the worker knows that reader another way. FRU-706: a
+  host that mints a token keeps the key too, for the worker to fall back on when the token does not
+  verify. A read that says `visitor: 'signed'` is a person the site signed: a visitor all the same
+  (`byBrowser` of the overlay), whose note reads « You » (`signedVisitor`), as it is theirs on every
+  device.
 - **The worker decides who it is; the widget shows it.** A note the read says is `mine`, read with no
   `identified`, carries « You · this browser » after the word of its state (`byBrowser` of the
   overlay, `.fruitback-thread-you`), in the heading that wraps: at 320 px it goes to a line of its own.

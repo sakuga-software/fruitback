@@ -218,7 +218,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               author_kind: entry.author.kind,
               author_account_id: entry.author.account ?? null,
               // FRU-700: a digest for a note of a visitor only; `authorOf` gives none to anybody else.
-              author_visitor: entry.author.kind === 'visitor' ? (entry.author.visitor ?? null) : null,
+              author_visitor:
+                entry.author.kind === 'visitor' || entry.author.kind === 'site' ? (entry.author.visitor ?? null) : null,
               ...placeColumns(entry.place),
               reference: entry.issue.identifier,
               reference_url: entry.issue.url ?? null,
@@ -344,7 +345,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             and(
               eq(note_index.workspace_id, workspace),
               eq(note_index.site_id, site),
-              inArray(note_index.author_kind, ['member', 'visitor']),
+              // FRU-706: `site`, a person the site signed, by their digest, as a visitor.
+              inArray(note_index.author_kind, ['member', 'visitor', 'site']),
               inArray(note_index.note_id, [...new Set(ids)]),
             ),
           ),
@@ -353,7 +355,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       return new Map(
         rows.flatMap((row) => {
           if (row.kind === 'member') return row.account === null ? [] : [[row.note, row.account] as const];
-          // FRU-700: a visitor is the digest of the key of their browser, never an account.
+          // FRU-700: a visitor is the digest of the key of their browser, never an account. FRU-706: or of
+          // the person the site signed, a digest of another prefix (`signedVisitorDigestOf`).
           return row.visitor === null ? [] : [[row.note, visitorAuthor(row.visitor)] as const];
         }),
       );

@@ -215,7 +215,7 @@ export type CallerChecks = {
     site: string | undefined,
     issues: readonly NoteIssue[],
     noteIndex: NoteIndex | undefined,
-  ) => Promise<{ notes: Set<string>; by?: 'account' | 'browser' }>;
+  ) => Promise<{ notes: Set<string>; by?: 'account' | 'browser' | 'signed' }>;
   /** The account of a session of the extension that reads `site` in `workspace` now: `memberOf` of `app.ts`. */
   memberOf: (
     request: Request,
@@ -224,10 +224,15 @@ export type CallerChecks = {
     site: string | undefined,
   ) => Promise<string | undefined>;
   /**
-   * The digest of the key of the visitor's browser for `site`, or `undefined` with no key of the
-   * right shape (FRU-700): `visitorDigestOf` of `visitor-key.ts`, which `app.ts` alone imports.
+   * The visitor of this request on `site`, or `undefined` (FRU-700, FRU-706): the digest of the person
+   * the site signed, or of the key of their browser, and which. `visitorOf` of `app.ts`, which alone
+   * imports `visitorDigestOf` and `signedVisitorDigestOf`.
    */
-  visitorOf: (request: Request, site: string | undefined) => string | undefined;
+  visitorOf: (
+    request: Request,
+    policy: ClientPolicy,
+    site: string | undefined,
+  ) => Promise<{ digest: string; by: 'browser' | 'signed' } | undefined>;
   /**
    * Whether a visitor known by their browser may edit or withdraw a note of theirs on a site of this
    * policy (FRU-701, FRU-702): `visitorMay` of `visitor-key.ts`.

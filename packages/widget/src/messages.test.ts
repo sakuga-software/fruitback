@@ -1003,6 +1003,20 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     byBrowser.destroy();
 
+    // FRU-706: the same note, for a person the site signed: « You ».
+    const bySite = createOverlay({
+      document: page.document,
+      host: host.root,
+      dock: host.dock,
+      translator,
+      byBrowser: () => true,
+      signedVisitor: () => true,
+    });
+    bySite.render([ofThisBrowser]);
+    bySite.select(ofThisBrowser.note.id);
+    snapshots.push(...shown(host.root));
+    bySite.destroy();
+
     // FRU-702: « Delete the note », its question, each failure, then kept; a note in no tracker, and
     // the lines of a note that only edits or only deletes.
     const deleteAnswers: ((answer: WithdrawAnswer | WithdrawFailure) => void)[] = [];

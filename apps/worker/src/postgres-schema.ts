@@ -137,6 +137,12 @@ export const sites = pgTable(
     // for good (`deleted-notes.ts`): 7, 30 or 90. 30 by default, as the mockup draws it, those of
     // before included.
     deleted_notes_keep_days: integer('deleted_notes_keep_days').notNull().default(30),
+    // FRU-706: « How a visitor is recognised »: `browser` (the key of the browser, FRU-700), the value
+    // of every site of before, or `signed` (the backend of the site signs who the visitor is).
+    visitor_identity: text('visitor_identity').notNull().default('browser'),
+    // FRU-706: the key the backend of the site signs with, sealed with `FRUITBACK_SECRETS_KEY`
+    // (`secrets.ts`, AES-256-GCM). Empty until an admin makes one. Never the key in clear.
+    identity_key: text('identity_key'),
   },
   (table) => [
     foreignKey({

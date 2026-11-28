@@ -163,6 +163,25 @@ export async function verifyIdentityToken(
 }
 
 /**
+ * Whether `secret` signed this token (FRU-706), whatever its claims say: expired, not yet valid, or
+ * of another workspace. Only the header and the signature are read, as `verifyIdentityToken` reads
+ * them first. A site that recognises its visitors reads a token that verifies with none of its keys as
+ * no identity; a token that the worker key signed is a session, even one that ended, and is never that.
+ */
+export async function signedWith(token: string, secret: string): Promise<boolean> {
+  if (token.length > MAX_TOKEN_BYTES) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const [header, payload, signature] = parts as [string, string, string];
+  if (readJson<{ alg?: unknown }>(header)?.alg !== ALGORITHM) return false;
+  try {
+    return timingSafeEqual(base64UrlDecode(signature), new Uint8Array(await hmac(`${header}.${payload}`, secret)));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Whatever the client asserted, minus the one field it may not assert.
  *
  * A browser posting `reporter: { name: 'CEO', verified: true }` would otherwise read in Linear as an

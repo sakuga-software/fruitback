@@ -250,6 +250,12 @@ export async function getFeedback(
         ...offered,
         // Asked at each request like the places, and absent for a reader the worker cannot name.
         ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
+        // FRU-706: a visitor the site signed, whose notes are theirs on every device. The widget shows
+        // them as it shows a visitor known by their browser. Absent for anybody else.
+        ...(route.policy.visitorIdentity === 'signed' &&
+        (await checks.visitorOf(request, route.policy, clientId))?.by === 'signed'
+          ? { visitor: 'signed' }
+          : {}),
         // FRU-257: whether this reader may write a reply here. A reader of a site that not everybody
         // reads is one the worker let in above. Never in the cached answer: it is the reader's.
         ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
@@ -547,7 +553,7 @@ export async function postFeedback(
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
   // FRU-704: counted once the note is one the worker would take, before anything is written.
   const limited = identity.visitor
-    ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, 1, corsHeaders)
+    ? await visitorLimit(request, kv, clientIp, route, clientId, checks, 1, corsHeaders)
     : undefined;
   if (limited !== undefined) return limited;
   // FRU-704: « Hold new visitor notes ». The note of a visitor waits for a member, and goes nowhere yet.
@@ -557,7 +563,7 @@ export async function postFeedback(
     return heldAnswer(
       config,
       context,
-      checks.visitorOf(request, clientId),
+      (await checks.visitorOf(request, route.policy, clientId))?.digest,
       route.client,
       clientId,
       [attributed],
@@ -599,8 +605,9 @@ export async function postFeedback(
     let notify: { token: string } | undefined;
     const workspace = route.client?.workspace;
     if (workspace !== undefined && clientId !== undefined) {
-      // FRU-700: the digest of the key of this browser, so that it knows this note as its own.
-      const visitor = checks.visitorOf(request, clientId);
+      // FRU-700: the digest of the key of this browser, so that it knows this note as its own. FRU-706:
+      // or of the person the site signed, so that every device of theirs knows it.
+      const visitor = (await checks.visitorOf(request, route.policy, clientId))?.digest;
       const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue, visitor);
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
       // FRU-604: only on a site that offers it (Mathieu, 2026-11-06), for a visitor and a member alike.
@@ -666,15 +673,16 @@ async function visitorLimit(
   request: Request,
   kv: Kv,
   clientIp: string,
-  client: ClientConfig | undefined,
+  route: Extract<ClientResolution, { ok: true }>,
   clientId: string | undefined,
   checks: CallerChecks,
   amount: number,
   corsHeaders: Record<string, string>,
 ): Promise<Response | undefined> {
-  const perHour = client?.visitorNotesPerHour;
+  const perHour = route.client?.visitorNotesPerHour;
   if (perHour === undefined || clientId === undefined) return undefined;
-  const visitor = checks.visitorOf(request, clientId);
+  // FRU-706: a visitor the site signed is counted by their digest, on every device.
+  const visitor = (await checks.visitorOf(request, route.policy, clientId))?.digest;
   try {
     if (await checkVisitorNotes(kv, { site: clientId, visitor, clientIp, perHour, amount })) return undefined;
   } catch (error) {
@@ -847,7 +855,7 @@ async function postBatch(
   // (reviews of #984). Refused, the holds are given back at once.
   const limited =
     visitor && fresh.length > 0
-      ? await visitorLimit(request, kv, clientIp, route.client, clientId, checks, fresh.length, corsHeaders)
+      ? await visitorLimit(request, kv, clientIp, route, clientId, checks, fresh.length, corsHeaders)
       : undefined;
   if (limited !== undefined) {
     await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
@@ -860,7 +868,7 @@ async function postBatch(
     const answer = await heldAnswer(
       config,
       context,
-      checks.visitorOf(request, clientId),
+      (await checks.visitorOf(request, route.policy, clientId))?.digest,
       route.client,
       clientId,
       fresh,
@@ -925,7 +933,7 @@ async function postBatch(
   const workspace = route.client?.workspace;
   if (workspace !== undefined && clientId !== undefined) {
     // FRU-700: one browser for the whole batch, as one identity.
-    const visitor = checks.visitorOf(request, clientId);
+    const visitor = (await checks.visitorOf(request, route.policy, clientId))?.digest;
     const entries = attributed.flatMap((note, index) => {
       const result = results[index];
       const issue = result !== undefined && 'issue' in result ? result.issue : undefined;

@@ -273,6 +273,8 @@ export function accountCases(it: Declare<AccountStore>): void {
       keepNoteVersions: true,
       // FRU-704: a note its visitor deleted is kept 30 days, the value of the mockup.
       deletedNotesKeepDays: 30,
+      // FRU-706: a visitor is known by their browser on a new site.
+      visitorIdentity: 'browser',
       destinations: [],
     });
     // FRU-703: a caller that names no `writers` and opens a site to everyone opens it to anybody's notes.
@@ -287,6 +289,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
         keepNoteVersions: true,
+        visitorIdentity: 'browser',
       },
     });
   });
@@ -514,6 +517,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         visitorDelete: 'while-open',
         visitorNotesPerHour: 10,
         keepNoteVersions: true,
+        visitorIdentity: 'browser',
       },
     });
   });

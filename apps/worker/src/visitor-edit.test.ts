@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mutatedModule } from './conformance.fixture.ts';
+import { signIdentityToken } from './identity.ts';
 import { createMemoryStore } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { type Handle, KEY_A, KEY_B, aVisitorSite } from './visitor-site.fixture.ts';
@@ -48,8 +49,10 @@ describe('a visitor edits the text of their open note (FRU-701)', () => {
     assert.equal((await edit(issue, 'Nobody', { key: 'not-a-key' })).status, 401);
     // A member of the team does not rewrite the words of a visitor either.
     assert.equal((await edit(issue, 'The team', { token: bobToken })).status, 403);
-    // A token that is no session is never read as the browser it came with.
-    assert.equal((await edit(issue, 'A token', { key: KEY_A, token: 'not.a.session' })).status, 401);
+    // FRU-706: a token that is no identity gives nothing more than the browser it came with: another
+    // browser is refused, and no browser at all is nobody.
+    assert.equal((await edit(issue, 'A token', { key: KEY_B, token: 'not.a.session' })).status, 403);
+    assert.equal((await edit(issue, 'A token', { token: 'not.a.session' })).status, 401);
 
     assert.deepEqual(await textsOf(world), ['The button is too small.']);
     // Another browser is offered no edit.
@@ -174,12 +177,18 @@ describe('the guards of the edit of a visitor, each planted out (FRU-701)', () =
       },
     },
     {
-      guard: 'a token is never read as a browser',
-      file: 'edit-routes.ts',
-      from: 'const digest = token === undefined ? checks.visitorOf(request, site) : undefined;',
-      to: 'const digest = checks.visitorOf(request, site);',
-      holds: async ({ edit, issue }) =>
-        (await edit(issue, 'A token', { key: KEY_A, token: 'not.a.session' })).status === 401,
+      guard: 'a session of the worker that ended is never read as a browser (FRU-706)',
+      file: 'app.ts',
+      from: 'return policy.sessions === undefined || !(await signedWith(token, policy.sessions.secret));',
+      to: 'return true;',
+      holds: async ({ world, workspace, edit, issue }) => {
+        const ended = await signIdentityToken(
+          { sub: 'acct_gone', ws: workspace, exp: Math.floor(Date.now() / 1000) - 120 },
+          world.env.FRUITBACK_IDENTITY_SECRET as string,
+        );
+
+        return (await edit(issue, 'A token', { key: KEY_A, token: ended })).status === 401;
+      },
     },
     {
       guard: 'the edits of a visitor are counted',

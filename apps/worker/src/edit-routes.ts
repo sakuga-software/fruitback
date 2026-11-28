@@ -1,5 +1,4 @@
 import { json } from './http.ts';
-import { readBearerToken } from './identity.ts';
 import { NOTE_MAX_LENGTH, noteAnchorSchema, noteViewportSchema } from '@fruitback/shared';
 import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
@@ -34,8 +33,9 @@ export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
  *   person who writes in the workspace now (`writerIn`). Their account.
  * - **A visitor known by their browser** (FRU-701): no token, and the key of the browser in
  *   `X-Fruitback-Visitor`, on a site whose visitors may do `action` (`visitorMay`). `visitor:<digest>`.
- *   A request with a token is never read as a visitor: a token that no longer writes is a session
- *   that ended, and is told so.
+ *   FRU-706: or a person the site signed, by the digest of their `sub` (`visitorOf` of `app.ts`). A
+ *   session is never read as a visitor: a token that no longer writes is a session that ended, and is
+ *   told so.
  *
  * Anybody else: `401 identity-required`, or `403 not-allowed` for a person or a visitor this site does
  * not let write.
@@ -56,12 +56,13 @@ async function callerOf(
   const { workspace, site, accounts, context } = where;
   const session = await checks.sessionWrites(request, config, context);
   if (session === undefined) {
-    const token = readBearerToken(request.headers.get('Authorization'));
-    const digest = token === undefined ? checks.visitorOf(request, site) : undefined;
-    if (digest === undefined) return { ok: false, status: 401, error: 'identity-required' };
+    // FRU-706: `visitorOf` says who a visitor is: the person the site signed, or the key of the browser.
+    // A session of the worker, even one that ended, is never one, and is told `401`.
+    const visitor = await checks.visitorOf(request, route.policy, site);
+    if (visitor === undefined) return { ok: false, status: 401, error: 'identity-required' };
     if (!checks.visitorMay(route.client, action)) return { ok: false, status: 403, error: 'not-allowed' };
 
-    return { ok: true, kind: 'visitor', author: visitorAuthor(digest) };
+    return { ok: true, kind: 'visitor', author: visitorAuthor(visitor.digest) };
   }
   const account = await checks.writerIn(request, config, context, workspace, site);
   if (account === undefined) {

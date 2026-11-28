@@ -353,6 +353,20 @@ export type VisitorNoteLimit = (typeof VISITOR_NOTE_LIMITS)[number];
 export const DEFAULT_VISITOR_NOTES_PER_HOUR: VisitorNoteLimit = 10;
 
 /**
+ * How the worker knows a visitor with no account as the author of their notes (FRU-706), the card
+ * « How a visitor is recognised » of the tab « Access ».
+ *
+ * - `browser`: the key of their browser (FRU-700). The default, and the value of every site of before.
+ * - `signed`: the backend of the site signs who the visitor is, with the key of the site
+ *   (`identityKey`), in a token the widget sends (`init({ identityToken })`). Their notes are theirs on
+ *   every device. A token that does not verify falls back on the key of the browser.
+ *
+ * « A confirmed e-mail » comes with FRU-705.
+ */
+export const VISITOR_IDENTITIES = ['browser', 'signed'] as const;
+export type VisitorIdentity = (typeof VISITOR_IDENTITIES)[number];
+
+/**
  * How many days a note its visitor deleted is kept before it is erased for good (FRU-704), as the line
  * « Deleted notes » of the card « Safeguards » offers them: `deleted-notes.ts`. A member restores it
  * meanwhile. 30 by default, the value of the mockup, for the sites of before too.
@@ -428,6 +442,15 @@ export type Site = {
   keepNoteVersions: boolean;
   /** The days a note its visitor deleted is kept, then erased for good (FRU-704): `deleted-notes.ts`. */
   deletedNotesKeepDays: DeletedNoteKeep;
+  /** How a visitor is recognised (FRU-706). `signed` gives nothing to the routes without `identityKey`. */
+  visitorIdentity: VisitorIdentity;
+  /**
+   * FRU-706: the key the backend of the site signs its visitors with, sealed with `FRUITBACK_SECRETS_KEY`
+   * (`secrets.ts`). Absent: none was made. WARNING: never in an answer of the console. The console
+   * shows the key once, when it is made (`POST …/sites/<id>/identity-key`), and says only whether
+   * there is one after that.
+   */
+  identityKey?: string;
   /**
    * Whether a visitor is offered one e-mail when their note is done (FRU-604). Off by default, and of
    * no effect on a site whose notes come from its members only: `offersDoneNotice`.
@@ -822,7 +845,8 @@ export type AccountStore = {
    * caller that does not know the field opens nothing and closes nothing. The same for
    * `visitorEdit` and `visitorDelete` (FRU-703), with `DEFAULT_VISITOR_RIGHT` for a new site, and for
    * `visitorNotesPerHour` (FRU-704), with `DEFAULT_VISITOR_NOTES_PER_HOUR`, and `holdVisitorNotes`, off, and
-   * `keepNoteVersions`, on, and `deletedNotesKeepDays`, with `DEFAULT_DELETED_NOTE_KEEP`.
+   * `keepNoteVersions`, on, and `deletedNotesKeepDays`, with `DEFAULT_DELETED_NOTE_KEEP`, and
+   * `visitorIdentity` (FRU-706), `browser`. `addSite` never writes the key of the site.
    */
   addSite(
     workspace: string,
@@ -837,6 +861,7 @@ export type AccountStore = {
       holdVisitorNotes?: boolean;
       keepNoteVersions?: boolean;
       deletedNotesKeepDays?: DeletedNoteKeep;
+      visitorIdentity?: VisitorIdentity;
     },
   ): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
@@ -880,6 +905,11 @@ export type AccountStore = {
   siteTrackerColours(workspace: string, site: string): Promise<boolean | undefined>;
   /** Turns that switch. `false` when the site is not of this workspace. */
   setSiteTrackerColours(workspace: string, site: string, on: boolean): Promise<boolean>;
+  /**
+   * FRU-706: the key the backend of a site signs its visitors with, sealed, in place of the one before.
+   * `false` when the site is not of this workspace. The caller seals it; the store keeps what it gets.
+   */
+  setSiteIdentityKey(workspace: string, site: string, sealed: string): Promise<boolean>;
   /**
    * Adds a status to a site, or changes the one of that source and key: its name, stage, colours,
    * position and whether it is hidden. Its `origin` is written once, when it is added. A status the
@@ -1349,6 +1379,11 @@ export function clientOf(site: Site): ClientMap[string] {
           ...(site.holdVisitorNotes ? { holdVisitorNotes: true as const } : {}),
           // FRU-704: an edit or a deletion keeps the version of before. Absent: none is kept.
           ...(site.keepNoteVersions ? { keepNoteVersions: true as const } : {}),
+          // FRU-706: how a visitor is recognised, and the key of the site, still sealed: `app.ts`
+          // opens it for the request that names this site. `signed` with no key is the browser.
+          ...(site.visitorIdentity === 'signed' && site.identityKey !== undefined
+            ? { visitorIdentity: 'signed' as const, sealedIdentityKey: site.identityKey }
+            : { visitorIdentity: 'browser' as const }),
         }
       : {}),
     // The first place is where the client routes, as when a site had one destination.

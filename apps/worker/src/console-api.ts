@@ -5,7 +5,9 @@ import type { DeletedNotes } from './deleted-notes.ts';
 import type { HeldSent } from './feedback-routes.ts';
 import type { NoteIssue } from '@fruitback/shared';
 import type { DoneNoticeSeams } from './done-notices.ts';
+import { randomBytes } from 'node:crypto';
 import { isOneOf } from './one-of.ts';
+import { seal } from './secrets.ts';
 import { json } from './http.ts';
 import { handleNotes } from './console-notes.ts';
 import type { ReplyToNote } from './console-replies.ts';
@@ -39,7 +41,9 @@ import {
   type Site,
   VISIBILITIES,
   WRITERS,
+  VISITOR_IDENTITIES,
   VISITOR_RIGHTS,
+  type VisitorIdentity,
   type VisitorRight,
   VISITOR_NOTE_LIMITS,
   DELETED_NOTE_KEEPS,
@@ -238,6 +242,28 @@ function deletedNoteKeepOf(value: unknown): DeletedNoteKeep | undefined {
   return isOneOf(value, DELETED_NOTE_KEEPS) ? value : undefined;
 }
 
+function visitorIdentityOf(value: unknown): VisitorIdentity | undefined {
+  return isOneOf(value, VISITOR_IDENTITIES) ? value : undefined;
+}
+
+/**
+ * FRU-706: the key of a site, as the console shows it: there is one (`set`), there is none yet
+ * (`none`), or this worker cannot keep one (`unavailable`, no `FRUITBACK_SECRETS_KEY` to seal it with).
+ * Never the key: it is shown once, in the answer of `POST …/sites/<id>/identity-key`.
+ */
+type IdentityKeyState = 'set' | 'none' | 'unavailable';
+
+function identityKeyState(site: Site, keeps: boolean): IdentityKeyState {
+  if (!keeps) return 'unavailable';
+
+  return site.identityKey === undefined ? 'none' : 'set';
+}
+
+/** A key of a site (FRU-706): 32 random bytes in base64url, 43 characters, as a secret of HS256 takes it. */
+function newIdentityKey(): string {
+  return randomBytes(32).toString('base64url');
+}
+
 /** The fields of a site the console shows, and the client id a script tag names. */
 type SiteView = {
   id: string;
@@ -257,6 +283,10 @@ type SiteView = {
   keepNoteVersions: boolean;
   /** FRU-704: « Deleted notes », the days a note its visitor deleted is kept, as it is stored. */
   deletedNotesKeepDays: DeletedNoteKeep;
+  /** FRU-706: « How a visitor is recognised », as it is stored. */
+  visitorIdentity: VisitorIdentity;
+  /** FRU-706: whether the site has a key its backend signs visitors with. Never the key. */
+  identityKey: IdentityKeyState;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -267,7 +297,7 @@ type SiteView = {
  * `destination` is the first of `destinations`: where a note goes when nobody chose. It stays for a
  * console that knows one destination for a site.
  */
-function siteView(site: Site, seesTracker: boolean): SiteView {
+function siteView(site: Site, seesTracker: boolean, keeps: boolean): SiteView {
   const [first] = site.destinations;
 
   return {
@@ -282,6 +312,9 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     holdVisitorNotes: site.holdVisitorNotes,
     keepNoteVersions: site.keepNoteVersions,
     deletedNotesKeepDays: site.deletedNotesKeepDays,
+    visitorIdentity: site.visitorIdentity,
+    // WARNING: a state, never `site.identityKey`, which is the sealed key.
+    identityKey: identityKeyState(site, keeps),
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -912,7 +945,7 @@ export async function handleConsoleApi(
         : [undefined, undefined];
 
     return sites.map((site) => ({
-      ...siteView(site, seesTracker),
+      ...siteView(site, seesTracker, context.secretsKey !== undefined),
       ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
       ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
     }));
@@ -1002,6 +1035,18 @@ export async function handleConsoleApi(
     if (body?.deletedNotesKeepDays !== undefined && deletedNotesKeepDays === undefined) {
       return json(400, { error: 'invalid-deleted-notes-keep-days' }, headers);
     }
+    // FRU-706: absent, a new site knows a visitor by their browser and a site that exists keeps what it had.
+    // `signed` takes a site that has its key already: a site whose visitors nobody can sign recognises
+    // nobody, and the console makes the key first (`…/identity-key`).
+    const visitorIdentity = body?.visitorIdentity === undefined ? undefined : visitorIdentityOf(body.visitorIdentity);
+    if (body?.visitorIdentity !== undefined && visitorIdentity === undefined) {
+      return json(400, { error: 'invalid-visitor-identity' }, headers);
+    }
+    if (visitorIdentity === 'signed') {
+      if (context.secretsKey === undefined) return json(400, { error: 'identity-keys-unavailable' }, headers);
+      const known = (await context.accounts.sites(workspaceId as string)).find((each) => each.origin === origin);
+      if (known?.identityKey === undefined) return json(400, { error: 'identity-key-required' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -1014,13 +1059,14 @@ export async function handleConsoleApi(
       ...(holdVisitorNotes === undefined ? {} : { holdVisitorNotes }),
       ...(keepNoteVersions === undefined ? {} : { keepNoteVersions }),
       ...(deletedNotesKeepDays === undefined ? {} : { deletedNotesKeepDays }),
+      ...(visitorIdentity === undefined ? {} : { visitorIdentity }),
     });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.
     return json(
       201,
       {
-        ...siteView(site, allowed('see-tracker')),
+        ...siteView(site, allowed('see-tracker'), context.secretsKey !== undefined),
         ...(context.noteIndex === undefined ? {} : noNotes()),
         ...(context.noteIndex !== undefined && allowed('see-tracker') ? { undelivered: 0 } : {}),
       },
@@ -1082,6 +1128,24 @@ export async function handleConsoleApi(
     const removed = await context.accounts.removeSite(workspaceId as string, removal[1] as string);
 
     return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
+  }
+
+  // FRU-706: the key the backend of a site signs its visitors with. A new one replaces the one before,
+  // and is in this answer only: the worker keeps it sealed, and no route gives it again.
+  const identityKey = /^\/sites\/([A-Za-z0-9_-]+)\/identity-key$/.exec(rest);
+  if (identityKey !== null) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+    if (context.secretsKey === undefined) return json(404, { error: 'identity-keys-unavailable' }, headers);
+    const key = newIdentityKey();
+    const kept = await context.accounts.setSiteIdentityKey(
+      workspaceId as string,
+      identityKey[1] as string,
+      seal(key, context.secretsKey),
+    );
+    if (!kept) return json(404, { error: 'not-found' }, headers);
+
+    return json(201, { key }, { ...headers, 'Cache-Control': 'no-store' });
   }
 
   // Where the notes of a site go (FRU-121): a connector of this workspace, or the worker's own store.

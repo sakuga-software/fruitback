@@ -19,6 +19,7 @@ import {
   type Role,
   type Site,
   VISIBILITIES,
+  VISITOR_IDENTITIES,
   VISITOR_RIGHTS,
   type VisitorRight,
   DEFAULT_DELETED_NOTE_KEEP,
@@ -95,6 +96,9 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
   const deletedNotesKeepDays: DeletedNoteKeep = isOneOf(row.deleted_notes_keep_days, DELETED_NOTE_KEEPS)
     ? row.deleted_notes_keep_days
     : DEFAULT_DELETED_NOTE_KEEP;
+  // FRU-706: a value that is not one of the list is the key of the browser, the default.
+  const visitorIdentity = isOneOf(row.visitor_identity, VISITOR_IDENTITIES) ? row.visitor_identity : 'browser';
+  const identityKey = typeof row.identity_key === 'string' && row.identity_key !== '' ? row.identity_key : undefined;
 
   return {
     id: row.id,
@@ -109,6 +113,8 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     holdVisitorNotes,
     keepNoteVersions,
     deletedNotesKeepDays,
+    visitorIdentity,
+    ...(identityKey === undefined ? {} : { identityKey }),
     destinations,
   };
 }

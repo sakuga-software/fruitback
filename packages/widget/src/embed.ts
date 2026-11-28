@@ -548,9 +548,10 @@ export function init(given: FruitbackOptions): Fruitback {
   const options = mountOptions(given, (key) => translator.text(key));
 
   const view = document.defaultView ?? globalThis.window;
-  // FRU-700: the key of this browser, for a visitor the worker cannot name another way. A host that
-  // mints a token names the reporter, and a transport of a host carries its own identity.
-  if (options.identityToken === undefined && options.transport === undefined) {
+  // FRU-700: the key of this browser, for a visitor the worker cannot name another way. A transport of
+  // a host carries its own identity. FRU-706: a host that mints a token keeps the key too: a token that
+  // the worker does not take (expired, or a site that stopped signing) falls back on it.
+  if (options.transport === undefined) {
     options.visitor = createVisitorKey(storageOf(view), options.clientId);
   }
   // FRU-604: whether this browser answered « Want to know when it's fixed? » already. See `notify-ask.ts`.
@@ -671,8 +672,10 @@ export function init(given: FruitbackOptions): Fruitback {
     shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
     isDraft,
     statusOf: statusFor,
-    // FRU-700: a reader the worker knows by the key of this browser, not by a session or a token.
-    byBrowser: () => options.visitor !== undefined && !readerIdentity.identified,
+    // FRU-700: a reader the worker knows by the key of this browser, not by a session or a token. FRU-706:
+    // or a person the site signed, a visitor all the same.
+    byBrowser: () => byVisitor(),
+    signedVisitor: () => readerIdentity.signedVisitor === true,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
@@ -728,7 +731,7 @@ export function init(given: FruitbackOptions): Fruitback {
         const answer = await sendWithdraw(options, view, issue);
         if (typeof answer === 'string') return answer;
         // FRU-702: a visitor known by their browser deleted it: its pin goes when its thread closes.
-        if (options.visitor !== undefined && !readerIdentity.identified) deleted.add(issue.note.id);
+        if (byVisitor()) deleted.add(issue.note.id);
         sidebar.refresh();
         tellNotes({ kind: 'list' });
 
@@ -803,6 +806,12 @@ export function init(given: FruitbackOptions): Fruitback {
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
   const readerIdentity: ReaderIdentity = { identified: false, canReply: false, canWrite: true };
+  /**
+   * Whether the worker knows this reader as a visitor (FRU-700, FRU-706): by the key of this browser,
+   * with no identity the worker names, or as a person the site signed, as the last read said.
+   */
+  const byVisitor = (): boolean =>
+    readerIdentity.signedVisitor === true || (options.visitor !== undefined && !readerIdentity.identified);
   /** Whether the worker names the reporter: a token of the host, a session of the extension, or one that ended. */
   const identifiedNow = (): boolean => options.identityToken !== undefined || readerIdentity.identified || ended;
   /** The launch button offers no note (FRU-330): see `closeNotesIfRefused`. */
@@ -1732,6 +1741,7 @@ function createReader(
         statuses?: unknown;
         destinations?: unknown;
         identified?: unknown;
+        visitor?: unknown;
         batch?: unknown;
         canReply?: unknown;
         canWrite?: unknown;
@@ -1746,6 +1756,8 @@ function createReader(
       // Like the places: an answer without the field takes it back, so a reviewer whose session
       // ended is asked for a name again. A failed read changes nothing.
       identity.identified = body.identified === true;
+      // FRU-706: the same rule: a person the site signed, as long as the worker says so.
+      identity.signedVisitor = body.visitor === 'signed';
       // The same rule: a worker that stops offering a batch is sent one note at a time (FRU-124).
       identity.batch = offeredBatch(body.batch);
       // The same rule (FRU-257): a reader the worker no longer lets reply gets no field.
@@ -1976,6 +1988,8 @@ function feedbackUrl(
 /** What the last read of the page said of this reader. */
 type ReaderIdentity = {
   identified: boolean;
+  /** FRU-706: the worker knows this reader as a person the site signed (`visitor: 'signed'`). */
+  signedVisitor?: boolean;
   batch?: BatchOffer | undefined;
   canReply: boolean;
   /**

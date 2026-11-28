@@ -181,11 +181,16 @@ export type OverlayOptions = {
    */
   move?: (issue: NoteIssue) => Promise<boolean | 'busy' | undefined>;
   /**
-   * Whether the worker knows this reader by the key of their browser (FRU-700), and not by a session:
-   * a note `mine` then carries « You · this browser » in its head. Left out: the reader is known by a
-   * session, or not at all.
+   * Whether the worker knows this reader as a visitor (FRU-700), and not by a session: by the key of
+   * their browser, or as a person the site signed (FRU-706). A note `mine` then carries « You » in its
+   * head, and offers what a visitor may do. Left out: the reader is known by a session, or not at all.
    */
   byBrowser?: () => boolean;
+  /**
+   * FRU-706: whether that visitor is a person the site signed, and not the key of this browser: the
+   * note reads « You », as it is theirs on every device. It changes no right: `byBrowser` decides.
+   */
+  signedVisitor?: () => boolean;
   /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
@@ -1234,6 +1239,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       withdrawFor(entry.issue),
       options.byBrowser?.() === true,
       statusFor(entry.issue),
+      options.signedVisitor?.() === true,
     );
     const rebuilt = thread.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
     if (rebuilt !== null && foldOpen !== undefined) rebuilt.open = foldOpen;
@@ -1289,6 +1295,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       withdrawFor(entry.issue),
       options.byBrowser?.() === true,
       statusFor(entry.issue),
+      options.signedVisitor?.() === true,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1719,6 +1726,7 @@ function buildThread(
   withdraw?: WithdrawFooter,
   byBrowser = false,
   status?: StatusFooter,
+  signedVisitor = false,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1767,7 +1775,7 @@ function buildThread(
         ? element(document, 'span', 'fruitback-thread-stage', [ring, state])
         : statusMenu(document, issue, t, status, [ring, state], stateLabel(issue, t)),
       // FRU-700: after the state, in the heading that wraps, so a narrow thread puts it on a line of its own.
-      ...youChip(document, issue, t, byBrowser),
+      ...youChip(document, issue, t, byBrowser, signedVisitor),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
     ]),
@@ -1827,12 +1835,21 @@ function buildThread(
 
 /**
  * « You · this browser » (FRU-700): on a note the worker says is the reader's (`mine`), for a reader it
- * knows by the key of their browser. Words, never a colour alone; the worker decides who it is.
+ * knows by the key of their browser. « You » for a person the site signed (FRU-706), whose note is
+ * theirs on every device. Words, never a colour alone; the worker decides who it is.
  */
-function youChip(document: Document, issue: NoteIssue, t: Translator, byBrowser: boolean): HTMLElement[] {
+function youChip(
+  document: Document,
+  issue: NoteIssue,
+  t: Translator,
+  byBrowser: boolean,
+  signedVisitor: boolean,
+): HTMLElement[] {
   if (!byBrowser || issue.mine !== true || DRAFTS.has(issue)) return [];
 
-  return [element(document, 'span', 'fruitback-thread-you', t.text('thread.youBrowser'))];
+  return [
+    element(document, 'span', 'fruitback-thread-you', t.text(signedVisitor ? 'thread.youSigned' : 'thread.youBrowser')),
+  ];
 }
 
 /**

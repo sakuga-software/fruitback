@@ -705,6 +705,8 @@ const CONSOLE_WRITES: readonly Write[] = [
   { method: 'POST', rest: () => '/sites', body: () => ({ url: 'https://new.acme.dev' }), status: 201 },
   { method: 'DELETE', rest: (fx) => `/sites/${fx.spareSite}`, status: 204 },
   { method: 'POST', rest: (fx) => `/sites/${fx.site.id}/destination`, body: () => ({ connector: null }), status: 200 },
+  // FRU-706: the key a site signs its visitors with.
+  { method: 'POST', rest: (fx) => `/sites/${fx.site.id}/identity-key`, status: 201 },
   {
     method: 'POST',
     rest: (fx) => `/sites/${fx.site.id}/destinations`,

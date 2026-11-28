@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { isOneOf } from './one-of.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
@@ -54,6 +55,9 @@ import { setMemoryNoteStage } from './linear-memory.ts';
  *   owner, at the origin of the playground: a spec of a safeguard mounts the widget with this id, and
  *   the other specs, which share the site `playground`, are never counted by it. The site `playground`
  *   says « No limit »: the suite sends many notes from one address.
+ * - **`POST /__dev/signed`** (FRU-706): the site `signed`, made at the first call, at the origin of the
+ *   playground, in a workspace of its own, « No limit »: it signs its visitors, with a new key at each
+ *   call, which the answer holds (`{ id, key }`) for a spec to sign a token with, as a backend does.
  * - **`GET /__dev/mail`** (FRU-604): the messages of a note done that the worker would have sent,
  *   oldest first. The worker of development has no provider: it keeps them in this process. Only
  *   these messages: the sign-in by link stays off.
@@ -68,6 +72,8 @@ export const DEV_PLAYGROUND = 'http://localhost:5177';
 export const DEV_CONSOLE = 'http://localhost:5178';
 /** The site of the specs of the safeguards (FRU-704), in a workspace of its own. */
 export const DEV_GUARDS_SITE = 'guards';
+/** The site of the specs of a visitor the site signs (FRU-706), in a workspace of its own. */
+export const DEV_SIGNED_SITE = 'signed';
 /** The person of the workspace: its owner, and whoever pairs through `/__dev/pair`. */
 export const DEV_OWNER = 'dev@fruitback.test';
 
@@ -88,6 +94,9 @@ export function devEnvironment(given: WorkerEnv): WorkerEnv {
     FRUITBACK_CONSOLE_URL: DEV_CONSOLE,
     // A value of development, in a public repository: it signs nothing outside this machine.
     FRUITBACK_IDENTITY_SECRET: 'dev-only-identity-secret-never-deployed',
+    // FRU-706: seals the key of a site that signs its visitors (and of a connector), as on the Cloud. A
+    // value of development, in a public repository: it seals nothing outside this machine.
+    FRUITBACK_SECRETS_KEY: 'dev-only-secrets-key-never-deployed-0123456789',
     // FRU-225: a worker with a database has its console and its sign-in, in development too. A value
     // of development as well, and not the identity secret: the worker refuses one secret for two jobs.
     FRUITBACK_AUTH_SECRET: 'dev-only-sign-in-secret-never-deployed',
@@ -230,6 +239,57 @@ async function setGuards(
       keepNoteVersions: site.keepNoteVersions,
     }),
   );
+}
+
+/** The owner of the workspace of the site `signed` (FRU-706). */
+const DEV_SIGNED_OWNER = 'signed@fruitback.test';
+
+/**
+ * `POST /__dev/signed` (FRU-706): the site `signed`, made at the first call, that signs its visitors
+ * with a new key, sealed as the console seals it. `400` on a worker with no `FRUITBACK_SECRETS_KEY`.
+ */
+async function setSigned(
+  database: PgDatabase,
+  made: { workspace?: Promise<string> },
+  response: ServerResponse,
+  secretsKey: string | undefined,
+): Promise<void> {
+  if (secretsKey === undefined) {
+    response
+      .writeHead(400, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify({ error: 'identity-keys-unavailable' }));
+
+    return;
+  }
+  const accounts = createPostgresAccountStore(database);
+  made.workspace ??= (async () => {
+    const owner = await accounts.signIn({
+      provider: 'email',
+      subject: DEV_SIGNED_OWNER,
+      email: DEV_SIGNED_OWNER,
+      name: 'Signed',
+    });
+    const workspace = await accounts.createWorkspace('Signed', owner.id);
+    const site = await accounts.addSite(workspace.id, {
+      origin: DEV_PLAYGROUND,
+      visibility: 'everyone',
+      writers: 'anyone',
+      visitorNotesPerHour: 0,
+    });
+    await renameSite(database, site.id, DEV_SIGNED_SITE);
+
+    return workspace.id;
+  })();
+  const workspace = await made.workspace;
+  const key = randomBytes(32).toString('base64url');
+  await accounts.setSiteIdentityKey(workspace, DEV_SIGNED_SITE, seal(key, secretsKey));
+  await accounts.addSite(workspace, {
+    origin: DEV_PLAYGROUND,
+    visibility: 'everyone',
+    writers: 'anyone',
+    visitorIdentity: 'signed',
+  });
+  response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: DEV_SIGNED_SITE, key }));
 }
 
 /** `POST /__dev/writers`: who may leave a note on the site of the playground (FRU-330). `400` for another value. */
@@ -401,6 +461,7 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
 
   // FRU-704: the workspace of the site `guards`, once a spec asked for it.
   const guards: { workspace?: Promise<string> } = {};
+  const signed: { workspace?: Promise<string> } = {};
   // FRU-604: what a note done would send, kept here for `GET /__dev/mail`.
   const mailed: MailMessage[] = [];
   provideDevDoneMailer({
@@ -435,6 +496,13 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     }
     if (incoming.method === 'POST' && incoming.url === '/__dev/writers') {
       void setWriters(database, seeded.workspace, visibility, incoming, response);
+
+      return;
+    }
+    if (incoming.method === 'POST' && incoming.url === '/__dev/signed') {
+      void setSigned(database, signed, response, config.config.secretsKey).catch((error: unknown) => {
+        response.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(error) }));
+      });
 
       return;
     }
