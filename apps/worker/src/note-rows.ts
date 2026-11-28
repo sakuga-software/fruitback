@@ -26,6 +26,13 @@ import type { ForgetSelector } from './store.ts';
  */
 export const NO_PAGE = '';
 
+/**
+ * The site of a task written by hand that belongs to its workspace only (FRU-672), in `notes`
+ * (`client_id`) and in the index (`site_id`): none. No site has an empty id (`newId`), so no route of
+ * a site, no share with a guest and no grant of a key ever names it.
+ */
+export const NO_SITE = '';
+
 /** How many replies travel with a pin. A longer thread belongs wherever the team actually talks. */
 export const COMMENTS_PER_ISSUE = 20;
 

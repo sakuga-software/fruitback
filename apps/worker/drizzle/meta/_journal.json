@@ -435,6 +435,13 @@
       "when": 1795771984215,
       "tag": "0061_deleted_notes_keep_days",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1795873632199,
+      "tag": "0062_tasks_with_no_site",
+      "breakpoints": true
     }
   ]
 }

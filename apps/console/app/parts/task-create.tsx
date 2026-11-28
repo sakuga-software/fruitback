@@ -4,7 +4,7 @@ import { type SiteChoice, call } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { type StatusChoice, statusName } from '../note-status';
-import { STAGE_NAMES, type Stage } from '../stages';
+import { STAGES, STAGE_NAMES, type Stage } from '../stages';
 import { Button, Checks, Choice, Dialog, Field, Problem, TextBox } from '../ui';
 import { useLocale } from '../use-locale';
 import type { TaskLabel, TaskPerson } from './task-menu';
@@ -15,6 +15,13 @@ const TEXT_LENGTH = 5_000;
 const NONE = 'none';
 /** A built-in status, which every site has (`own:<stage>`); any other is a status of one site. */
 const BUILT_IN = /^own:(new|todo|progress|done|closed)$/u;
+/**
+ * The choice of no site (FRU-672): a task of the workspace itself. No site id has an `@`. The worker
+ * names it with no site in the body, and lists it with the site `''`.
+ */
+const WORKSPACE = '@workspace';
+/** The statuses of a task of the workspace: the built-in ones, as the worker gives them. */
+const BUILT_IN_STATUSES: readonly StatusChoice[] = STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage }));
 
 /** The sentence for a task the worker did not write (FRU-657). */
 const CREATE_PROBLEMS: Readonly<Record<string, string>> = {
@@ -61,7 +68,7 @@ const EMPTY: Draft = {
 
 /**
  * « New task » (FRU-657): a dialog that writes a task by hand, with no page and no pin, in a site of
- * the workspace. A title, and the rest if the person likes: a text, the site, a status and the fields
+ * the workspace, or, for a member, in no site (FRU-672): a task of the workspace itself. A title, and the rest if the person likes: a text, the site, a status and the fields
  * of a task. `POST …/notes` writes it; the list is read again, and the task opens in its panel.
  *
  * **What is typed stays until the task is written**: a refusal, Escape or « Cancel » keep the draft,
@@ -71,6 +78,7 @@ const EMPTY: Draft = {
 export function useTaskCreate({
   base,
   sites,
+  workspaceTasks,
   siteInView,
   statusesOf,
   people,
@@ -79,6 +87,8 @@ export function useTaskCreate({
 }: {
   base: string;
   sites: readonly SiteChoice[];
+  /** FRU-672: whether the person writes a task of the workspace, with no site: a member, never a guest. */
+  workspaceTasks: boolean;
   /** The site of the filter, or the only one. */
   siteInView: string | undefined;
   /** The statuses of the worker's store of a site, when the list read them. */
@@ -95,9 +105,12 @@ export function useTaskCreate({
   const [problem, setProblem] = useState<string | undefined>();
   const [titleMissing, setTitleMissing] = useState(false);
 
-  // A site that is no longer offered leaves the draft: the choice shows the first one.
-  const site = sites.some((one) => one.id === draft.site) ? draft.site : (siteInView ?? sites[0]?.id ?? '');
-  const statuses = (statusesOf(site) ?? []).filter((status) => status.hidden !== true);
+  // A site that is no longer offered leaves the draft: the choice shows the first one, or no site.
+  const offered = (id: string) => sites.some((one) => one.id === id) || (workspaceTasks && id === WORKSPACE);
+  const site = offered(draft.site) ? draft.site : (siteInView ?? sites[0]?.id ?? (workspaceTasks ? WORKSPACE : ''));
+  const statuses = (site === WORKSPACE ? BUILT_IN_STATUSES : (statusesOf(site) ?? [])).filter(
+    (status) => status.hidden !== true,
+  );
   // The status asked, when the site has it, or when it is a built-in one and the list did not read
   // the statuses of the site; else the first status of the site, or none.
   const kept =
@@ -146,7 +159,7 @@ export function useTaskCreate({
     setSaving(true);
     setProblem(undefined);
     const answer = await call<{ id: string; identifier: string }>('POST', `${base}/notes`, {
-      site,
+      ...(site === WORKSPACE ? {} : { site }),
       title,
       ...(draft.text.trim() === '' ? {} : { text: draft.text }),
       ...(status === '' ? {} : { status }),
@@ -200,7 +213,7 @@ export function useTaskCreate({
           onChange={(text) => set('text', text)}
           maxLength={TEXT_LENGTH}
         />
-        {sites.length < 2 ? null : (
+        {sites.length + (workspaceTasks ? 1 : 0) < 2 ? null : (
           <Choice
             label={t('Site')}
             value={site}
@@ -212,7 +225,10 @@ export function useTaskCreate({
                 ...(was.site === chosen || BUILT_IN.test(was.status) ? {} : { status: '', chosenStatus: false }),
               }))
             }
-            options={sites.map((one) => ({ value: one.id, label: one.origin }))}
+            options={[
+              ...sites.map((one) => ({ value: one.id, label: one.origin })),
+              ...(workspaceTasks ? [{ value: WORKSPACE, label: t('No site: the whole workspace') }] : []),
+            ]}
           />
         )}
         <div className="grid gap-[16px] sm:grid-cols-2">

@@ -364,7 +364,11 @@ export function TaskPanel({
             )}
             {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
             {written === undefined ? null : (
-              <p className="text-small text-muted">{t('Written by hand: no page and no pin.')}</p>
+              <p className="text-small text-muted">
+                {t('Written by hand: no page and no pin.')}
+                {/* FRU-672: a task of the workspace itself, which a guest does not see. */}
+                {copied.site.id === '' ? ` ${t('No site: the whole workspace.')}` : ''}
+              </p>
             )}
             {issue === undefined ? null : <Preview issue={issue} />}
             <Activity comments={replies} synced={placeName} />

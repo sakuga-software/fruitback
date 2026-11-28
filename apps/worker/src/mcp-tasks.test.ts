@@ -354,3 +354,135 @@ describe('the tools of a task in /mcp (FRU-659)', () => {
     }
   });
 });
+
+describe('the tasks written by hand in list_notes (FRU-708)', () => {
+  /** Alice writes a task by hand in `shop`, with every field, after the note of `/pricing`. */
+  async function withTask() {
+    const made = await acme();
+    const { world, alice, bob, workspace, shop, label } = made;
+    const urgent = await label('Urgent');
+    const written = await callOn(world, 'POST', `/console/workspaces/${workspace}/notes`, {
+      token: alice.token,
+      body: {
+        site: shop.id,
+        title: 'Write the changelog',
+        text: 'For the next version.',
+        assignee: bob.id,
+        priority: 'high',
+        dueOn: day(-1),
+        labels: [urgent],
+      },
+    });
+    assert.equal(written.status, 201, await written.clone().text());
+    const task = ((await written.json()) as { id: string }).id;
+
+    return { ...made, urgent, task };
+  }
+
+  it('lists a task written by hand with the notes, newest first, each told apart by its kind', async () => {
+    const { world, bob, shop, key, urgent, task } = await withTask();
+    const { secret } = await key('read');
+
+    const all = (await listed(world, secret, { site: shop.id })) as any[];
+    assert.ok(Array.isArray(all), String(all));
+    const note = all.find((one) => one.kind === 'note');
+    assert.deepEqual(
+      all.map((one) => [one.kind, one.id]),
+      [
+        ['task', task],
+        ['note', note.id],
+      ],
+    );
+    assert.equal(note.note.id, 'sd_one');
+    assert.deepEqual(note.task, { labels: [] }, 'a note gives its fields in `task`, as before');
+
+    const [written] = all;
+    assert.equal(written.site, shop.id);
+    assert.equal(written.task.kind, 'fruitback.task');
+    assert.equal(written.task.title, 'Write the changelog');
+    assert.equal(written.task.text, 'For the next version.');
+    assert.equal(written.status, 'own:new');
+    assert.equal(written.stage, 'new');
+    assert.equal(written.fields.assignee.id, bob.id);
+    assert.equal(written.fields.priority, 'high');
+    assert.equal(written.fields.dueOn, day(-1));
+    assert.deepEqual(
+      written.fields.labels.map((one: { id: string; name: string }) => [one.id, one.name]),
+      [[urgent, 'Urgent']],
+    );
+    assert.equal('position' in written.fields, false, 'the place in a column is the board’s');
+    assert.equal('note' in written, false, 'a task has no page, no element and no pin');
+
+    // The same task as `get_note` reads it, and the same note.
+    const got = await call(world, secret, 'get_note', { id: task });
+    assert.deepEqual(got.body.result.structuredContent.task, written);
+    const gotNote = await call(world, secret, 'get_note', { id: note.id });
+    assert.deepEqual(gotNote.body.result.structuredContent.note, note);
+  });
+
+  it('filters a task written by hand as the list of the console does', async () => {
+    const { world, alice, bob, workspace, shop, key, urgent, task } = await withTask();
+    const { secret } = await key('read');
+    const [note] = ((await listed(world, secret, { site: shop.id })) as any[]).filter((one) => one.kind === 'note');
+    const ids = async (args: Record<string, unknown>) => {
+      const notes = await listed(world, secret, { site: shop.id, ...args });
+      assert.ok(Array.isArray(notes), String(notes));
+
+      return notes.map((one: { id: string }) => one.id);
+    };
+
+    assert.deepEqual(await ids({ assignee: bob.id }), [task]);
+    assert.deepEqual(await ids({ assignee: 'none' }), [note.id]);
+    assert.deepEqual(await ids({ priority: 'high' }), [task]);
+    assert.deepEqual(await ids({ priority: 'none' }), [note.id]);
+    assert.deepEqual(await ids({ label: urgent }), [task]);
+    assert.deepEqual(await ids({ due: 'overdue', today: day(0) }), [task]);
+    assert.deepEqual(await ids({ due: 'none' }), [note.id]);
+    assert.deepEqual(await ids({ status: 'own:new' }), [task, note.id]);
+    assert.deepEqual(await ids({ stage: 'new' }), [task, note.id]);
+    assert.deepEqual(await ids({ status: 'own:progress' }), []);
+    assert.deepEqual(await ids({ q: 'changelog' }), [task]);
+    assert.deepEqual(await ids({ limit: 8, since: new Date(0).toISOString() }), [task, note.id]);
+
+    // An archived task leaves the list, and is the only one of `archived`.
+    const archived = await callOn(world, 'POST', `/console/workspaces/${workspace}/notes/${task}/task`, {
+      token: alice.token,
+      body: { archived: true },
+    });
+    assert.equal(archived.status, 204, await archived.clone().text());
+    assert.deepEqual(await ids({}), [note.id]);
+    assert.deepEqual(await ids({ archived: true }), [task]);
+  });
+
+  it('gives a task whose row names no known person to no key that reads the known people only', async () => {
+    const { world, shop, key, task } = await withTask();
+    const known = await key('read');
+    assert.deepEqual(
+      ((await listed(world, known.secret, { site: shop.id })) as any[]).map((one) => one.kind),
+      ['task', 'note'],
+      'the control: the worker wrote the author of the task from the session, `verified`',
+    );
+    // An operator edits the row: its author is no longer the worker's word.
+    const edited = await rowsOf(
+      world.database,
+      `UPDATE notes SET payload = (payload::jsonb #- '{reporter,verified}')::text WHERE client_id = '${shop.id}' AND payload LIKE '%fruitback.task%' RETURNING id`,
+    );
+    assert.equal(edited.length, 1);
+    const anyone = await key('read');
+    await rowsOf(world.database, `UPDATE agent_keys SET verified_only = false WHERE id = '${anyone.id}'`);
+    assert.deepEqual(
+      ((await listed(world, anyone.secret, { site: shop.id })) as any[]).map((one) => one.kind),
+      ['task', 'note'],
+      'the control: the row still reads as a task, by a key that reads everyone',
+    );
+
+    assert.deepEqual(
+      ((await listed(world, known.secret, { site: shop.id })) as any[]).map((one) => one.kind),
+      ['note'],
+    );
+    const got = await call(world, known.secret, 'get_note', { id: task });
+    assert.equal(got.body.result.isError, true);
+    const text = await call(world, known.secret, 'notes_as_text', { site: shop.id });
+    assert.doesNotMatch(text.body.result.structuredContent.text, /Write the changelog/);
+  });
+});

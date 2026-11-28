@@ -5506,7 +5506,8 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `agent_writes` (`task`, `status`), and one charge of the limit for the call.
 - **The tools of a task follow the module** (FRU-651): with `FRUITBACK_TASKS=off`, `task_choices`,
   `set_note_status` and `update_task` are not listed and `tools/call` refuses them. `set_note_status`
-  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `3` since `create_task`.
+  could only answer `statuses-not-taken` there. `TOOLS_VERSION` is `3` since `create_task`, and `4`
+  since FRU-708.
 - **`create_task` writes a task by hand (FRU-657) as the console does**: `readNewTask`, then
   `createTask` of the accounts, with the member of the key as its author. Before them, an argument it
   does not take is refused, not dropped: an agent that sends `due` for `dueOn` would read a task with
@@ -5518,8 +5519,38 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
 - **`update_task` and `set_note_status` take a task written by hand**: its page is `NO_PAGE`, so no
   store of the notes holds it; `setTaskFields` then `setNoteStatus` of the accounts write it, with
   the member of the key and `manages: true`, in the order and with the answers of a note.
-  `list_notes` still lists the notes of the pages only: a task in it would need a shape of its own
-  beside a note, which is a change of the contract of its own.
+  `list_notes` lists them since FRU-708 (below).
+
+## The tasks written by hand in `list_notes` (FRU-708)
+
+### The rules, in short
+
+- **`list_notes` lists the tasks written by hand with the notes of the pages**, in the order of the
+  index, newest first. The index already holds them (`page_url` is `NO_PAGE`), so its filters (the
+  stage, `since`, `q`, and the filters of a task of FRU-655) take them as they take a note, and
+  `limit` and `next` count them. Before FRU-708 the read of the pages left them out, and an agent
+  that went through its tasks with `list_notes` never saw the ones a person wrote: a page of the
+  index that held 50 tasks answered no entry, and a `next`.
+- **Each entry says its kind**: `kind: 'note'` for a note of a page, `kind: 'task'` for a task
+  written by hand. A task is the object `get_note` gives as `{ task }`: what was written in `task`
+  (`fruitback.task`), and its fields in `fields`. A note keeps its shape, with its fields in `task`.
+  The shape of `get_note` stays as it was, with `kind` added, so a reader reads the same object in
+  both tools.
+- **Considered: one shape for both**, a task with its fields in `task` and what was written in
+  `note`. Refused: `note` is a note of a page for every reader (a pin, a page, an element), and a
+  task has none of them. `kind` costs one field, and keeps the shape of `get_note`.
+- **The tasks of a page of the index are read at once**, by `readTasks` of the accounts: three
+  statements whatever their number (the rows of the index, the rows of the notes, and the newest
+  replies of each, through `repliesOf` of the store of the notes). `readTask` is `readTasks` of one
+  task, so `get_note` reads the same object. Measured on PGlite, a page of 50 tasks: 13 statements
+  and 8 to 27 ms for the call; one `readTask` for each task made 160 statements and 33 to 104 ms.
+  `notes_as_text` of a whole site reads its tasks the same way.
+- **`verifiedOnly` reads a task as a note**: by the `verified` of its `reporter`. The worker writes
+  it from the session, so every task it wrote passes; a row whose author is no longer the worker's
+  word does not, in `list_notes`, `get_note` and `notes_as_text`.
+- **`status` filters a task by its `status`**, `own:<key>`, after the page of the index, as for a
+  note.
+- **`TOOLS_VERSION` is `4`**: `list_notes` answers what it did not answer before.
 
 ## A task written by hand (FRU-657)
 
@@ -5529,8 +5560,7 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   labels? }`, `201 { id, identifier, stage }`. `createTask` of the store of the accounts writes it in
   one transaction: the row of `notes`, its status, its fields, its labels and its row of the index.
   `readNewTask` of `task-fields.ts` reads the body; `/mcp` takes the same two (FRU-659).
-- **The site is required.** The index, the statuses, the rights of a guest and the removal of a site
-  are all by site: a task with no site needs them by workspace, which is a ticket of its own.
+- **The site was required here.** A task with no site came with FRU-672 (below).
 - **The task is kept by the worker, whatever the destination of its site**: place `fruitback`,
   reference `FB-<n>`. It never goes to a connector, so no `note.*` event of a REST address carries
   it. The routes of a task kept by the worker (status, fields, archive, deletion) take it as they
@@ -5545,6 +5575,39 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `get_note`, where a note of a page is `{ note }`.
 - **A task put in To do at its creation starts the agent of its site** (`moved-to-todo`), as a move
   of a person there does.
+
+## A task with no site (FRU-672)
+
+### The rules, in short
+
+- **A task written by hand may have no site: it belongs to its workspace.** `POST …/notes` with no
+  `site` (absent or `null`) writes it; `create_task` of `/mcp` still needs a site, since a key reads
+  the sites of its grant only.
+- **Its site is `NO_SITE`, the empty string**, in `notes` (`client_id`) and in the index (`site_id`),
+  as its page is `NO_PAGE`. No site has an empty id, so no route of a site, no share with a guest and
+  no grant of a key names it, and the id of the task (`noteIdOf('', note)`) goes through every route
+  of a task as it is. The primary key of the index stays `(site_id, note_id)`, and so do the keys of
+  `done_notices` and `note_versions` that point at it.
+- **Migration `0062_tasks_with_no_site`** (0063 in the plan of the wave, renumbered as the others
+  merge): the foreign key of the index to `sites` moves from `site_id` to `site_ref`, a column that
+  PostgreSQL computes as `NULLIF(site_id, '')`, with its index for the removal of a site. A row of a
+  site still goes with its site; a row with no site goes with its workspace
+  (`note_index_workspace_id_fkey`). `dropWorkspace` deletes its rows of `notes`, which have no key.
+  No row of before changes. Considered: `site_id` NULL. Refused: it is in the primary key and in two
+  foreign keys of other tables, and every comparison of a cursor (`(created_at, site_id, note_id) <`)
+  would need a `COALESCE`.
+- **Its statuses are the built-in ones only** (the decision asked in the ticket): no row of `statuses`
+  has the site `''`, so `ownStatusOf` takes `own:new` to `own:closed` and refuses any other
+  (`status-changed`), and the list gives them for the site `''`. Statuses of the workspace would be a
+  screen and a table of their own, for no need seen yet.
+- **A member reads and writes it, a guest never** (the decision of the orchestrator): a guest reaches
+  the sites shared with them, which never hold `''`, so every route of a task answers `404` to her, as
+  for a site she does not reach, and the list, the counts of the bar and the search leave it out. The
+  rights of a change are those of a task of a site: its author, or a role that manages the sites.
+- **What a site gives, it does not have**: no trigger of an agent, no event to an address, no notice
+  when it is done, no destination. The list joins `sites` by `site_ref` and keeps it with no address;
+  the list of the notes of the instance too.
+- **It stays when a site goes**, and goes with its workspace.
 
 ## The views of a person (FRU-723)
 

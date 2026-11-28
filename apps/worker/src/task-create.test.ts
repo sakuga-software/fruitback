@@ -4,6 +4,7 @@ import { noteFixture } from '@fruitback/shared/note.fixture';
 import { noteIdOf, noteKeyOf } from './console-notes.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteStore } from './notes-postgres.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
 /**
@@ -103,6 +104,40 @@ describe('a task written by hand (FRU-657)', () => {
     assert.equal(note.body.note.note.id, 'sd_1');
   });
 
+  it('reads several tasks at once in the order asked, each with its own replies, and no note of a page', async () => {
+    const { world, alice, workspace, site, call } = await acme();
+    const first = await call('POST', '/notes', alice.token, { site, title: 'First' });
+    const second = await call('POST', '/notes', alice.token, { site, title: 'Second' });
+    const one = noteKeyOf(first.body.id)?.note as string;
+    const two = noteKeyOf(second.body.id)?.note as string;
+    // Two replies on the first task, one on the second, by their rows.
+    const rows = (await rowsOf(
+      world.database,
+      `SELECT id, payload FROM notes WHERE client_id = '${site}' AND payload LIKE '%fruitback.task%' ORDER BY id`,
+    )) as { id: number }[];
+    const [rowOne, rowTwo] = rows.map((row) => Number(row.id));
+    await rowsOf(
+      world.database,
+      `INSERT INTO note_comments (note_id, author, body, created_at) VALUES (${rowOne}, 'Bob', 'Seen.', 1000), (${rowTwo}, 'Gina', 'Mine.', 2000), (${rowOne}, 'Bob', 'Done.', 3000)`,
+    );
+
+    const read = await world.accounts.readTasks(workspace, site, [two, 'sd_1', one, 'nope', two], {
+      account: alice.id,
+    });
+    assert.deepEqual(
+      read.map((task) => [task.task.title, (task.comments ?? []).map((reply) => reply.body), task.mine]),
+      [
+        ['Second', ['Mine.'], true],
+        ['First', ['Seen.', 'Done.'], true],
+        ['Second', ['Mine.'], true],
+      ],
+    );
+    // One task reads as readTask reads it.
+    assert.deepEqual(await world.accounts.readTask(workspace, site, one, { account: alice.id }), read[1]);
+    assert.deepEqual(await world.accounts.readTasks(workspace, site, []), []);
+    assert.deepEqual(await world.accounts.readTasks(workspace, 'elsewhere', [one]), []);
+  });
+
   it('takes its status and its fields at once, and the list filters on them', async () => {
     const { world, alice, bob, workspace, site, call, listed } = await acme();
     const label = (await world.accounts.addLabel(workspace, { name: 'Billing', color: '#aa0000' })) as any;
@@ -154,7 +189,9 @@ describe('a task written by hand (FRU-657)', () => {
     // Counted in code points, as zod counts them in `taskSchema`: 201 emoji are refused here, never a 500.
     assert.deepEqual(await refused({ site, title: '🍓'.repeat(201) }), [400, 'title']);
     assert.deepEqual(await refused({ site, title: 'A', text: '🍓'.repeat(5_001) }), [400, 'text']);
-    assert.deepEqual(await refused({ title: 'No site' }), [400, 'site']);
+    // FRU-672: no site is a task of the workspace (`task-no-site.test.ts`); a site that is no id is refused.
+    assert.deepEqual(await refused({ site: 'not a site', title: 'A' }), [400, 'site']);
+    assert.deepEqual(await refused({ site: 7, title: 'A' }), [400, 'site']);
     assert.deepEqual(await refused({ site, title: 'A', status: 'done' }), [400, 'status']);
     assert.deepEqual(await refused({ site, title: 'A', priority: 'soon' }), [400, 'priority']);
     assert.deepEqual(await refused({ site: 'site_none', title: 'A' }), [404, 'not-found']);
@@ -211,7 +248,7 @@ describe('a task written by hand (FRU-657)', () => {
     );
   });
 
-  it('is read by get_note of /mcp as a task, and left out of the notes that list_notes reads', async () => {
+  it('is read by get_note of /mcp as a task, and listed by list_notes with the notes, as a task', async () => {
     const { world, alice, workspace, site, call } = await acme();
     const made = await call('POST', '/notes', alice.token, { site, title: 'For the agent', text: 'Fix the footer.' });
     const key = await answerOf(
@@ -236,11 +273,16 @@ describe('a task written by hand (FRU-657)', () => {
     const got = await tool('get_note', { id: made.body.id });
     assert.equal(got.structuredContent.task.id, made.body.id);
     assert.equal(got.structuredContent.task.task.text, 'Fix the footer.');
+    // FRU-708: newest first, each with its kind; the task as get_note reads it.
     const notes = await tool('list_notes', { site });
     assert.deepEqual(
-      notes.structuredContent.notes.map((note: { note: { id: string } }) => note.note.id),
-      ['sd_1'],
+      notes.structuredContent.notes.map((note: { kind: string; id: string }) => [note.kind, note.id]),
+      [
+        ['task', made.body.id],
+        ['note', noteIdOf(site, 'sd_1')],
+      ],
     );
+    assert.deepEqual(notes.structuredContent.notes[0], got.structuredContent.task);
     const text = await tool('notes_as_text', { site });
     assert.equal(text.isError ?? false, false);
     // FRU-658: the tasks written by hand come after the pages, under a heading of their own.
