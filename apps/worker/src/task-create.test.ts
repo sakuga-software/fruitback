@@ -108,7 +108,8 @@ describe('a task written by hand (FRU-657)', () => {
     const { world, alice, workspace, site, call } = await acme();
     const first = await call('POST', '/notes', alice.token, { site, title: 'First' });
     const second = await call('POST', '/notes', alice.token, { site, title: 'Second' });
-    const [one, two] = [noteKeyOf(first.body.id)?.note, noteKeyOf(second.body.id)?.note] as string[];
+    const one = noteKeyOf(first.body.id)?.note as string;
+    const two = noteKeyOf(second.body.id)?.note as string;
     // Two replies on the first task, one on the second, by their rows.
     const rows = (await rowsOf(
       world.database,
@@ -124,7 +125,7 @@ describe('a task written by hand (FRU-657)', () => {
       account: alice.id,
     });
     assert.deepEqual(
-      read.map((task) => [task.task.title, task.comments.map((reply) => reply.body), task.mine]),
+      read.map((task) => [task.task.title, (task.comments ?? []).map((reply) => reply.body), task.mine]),
       [
         ['Second', ['Mine.'], true],
         ['First', ['Seen.', 'Done.'], true],
