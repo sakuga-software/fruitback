@@ -5628,7 +5628,8 @@ tickets are at the end.
   refusal of the whole issue keeps answering `502`, as today.
 - **`docs/privacy.md` and `SECURITY.md` change with each setting that changes what is sent.** Turning
   a detail or the capture off removes it from the text of the issue and from the files sent, not from
-  the block: the pages say so.
+  the block. `privacy.md` says what the product does today, so the pull request that ships a setting
+  writes it there (FRU-744 for the template and the details), never a framing.
 
 ### What exists today
 
