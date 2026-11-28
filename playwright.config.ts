@@ -50,7 +50,10 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     // On CI, the trace of the first run of a test, kept when that run fails (FRU-737). It is the run
     // that holds the cause: the retry of a flaky test passes, and `on-first-retry` kept that one.
-    trace: process.env.CI ? 'retain-on-first-failure' : 'on-first-retry',
+    // No screencast: with it, the traces took 29 % more test time on CI (4 browsers on 4 cores), and
+    // one test of 15 s ran out of its 30 s. The trace keeps the DOM of each action, the network,
+    // the console and the sources.
+    trace: process.env.CI ? { mode: 'retain-on-first-failure', screenshots: false } : 'on-first-retry',
     video: process.env.CI ? 'off' : 'retain-on-failure',
     // FRU-604: a browser of the suite answered « Want to know when it's fixed? » already, so a note
     // of a visitor closes its composer as before. `notify.spec.ts` starts from a browser that did not.

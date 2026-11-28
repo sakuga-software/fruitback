@@ -41,12 +41,12 @@ const REPORT = {
   ],
 };
 
-/** What the script writes to `$GITHUB_OUTPUT` for a report, or for no report at all. */
+/** What the script writes to `$GITHUB_OUTPUT` for a report, a text that is not one, or no report at all. */
 function outputOf(report: unknown): string {
   const directory = mkdtempSync(join(tmpdir(), 'e2e-flaky-'));
   try {
     const path = join(directory, 'results.json');
-    if (report !== undefined) writeFileSync(path, JSON.stringify(report));
+    if (report !== undefined) writeFileSync(path, typeof report === 'string' ? report : JSON.stringify(report));
     const output = join(directory, 'output');
     writeFileSync(output, '');
     execFileSync('node', [SCRIPT, path], { env: { ...process.env, GITHUB_OUTPUT: output }, stdio: 'pipe' });
@@ -71,6 +71,11 @@ describe('the traces of a flaky test of the E2E suite', () => {
 
   it('writes flaky=false when the run stopped before the report was written', () => {
     assert.equal(outputOf(undefined), 'flaky=false\n');
+  });
+
+  it('keeps the traces, and does not fail, when the report was cut while it was written', () => {
+    const cut = JSON.stringify(REPORT).slice(0, 80);
+    assert.equal(outputOf(cut), 'flaky=true\n');
   });
 
   it('keeps the traces of a part with a flaky test, as of a part that failed', () => {
@@ -98,13 +103,13 @@ describe('the traces of a flaky test of the E2E suite', () => {
       return JSON.parse(
         execFileSync('node', ['--input-type=module', '-e', read], { env, encoding: 'utf8', stdio: 'pipe' }),
       ) as {
-        trace: string;
+        trace: unknown;
         reporter: unknown[];
       };
     };
 
     const onCi = config('true');
-    assert.equal(onCi.trace, 'retain-on-first-failure');
+    assert.deepEqual(onCi.trace, { mode: 'retain-on-first-failure', screenshots: false });
     assert.deepEqual(
       onCi.reporter.find((reporter) => Array.isArray(reporter) && reporter[0] === 'json'),
       ['json', { outputFile: 'playwright-report/results.json' }],
