@@ -1,5 +1,12 @@
 # @fruitback/shared
 
+## 0.9.0
+
+### Minor Changes
+
+- 0dcf745: A site can keep every version of its notes: « Keep every version », the third line of the card « Safeguards » in its tab « Access », on by default. An edit of the text of a note keeps the text of before, and a deletion keeps the note as it was, with who did it and when. The members of the workspace read them in a section « History » of the panel of the note; a guest reads none. The widget tells the author, in the form of an edit, that the team keeps the text of before (`versionsKept` of a read). A note keeps 50 versions at most, and they go with the note.
+- 5925594: A member changes the status of a note from the head of its thread: the chip of the status becomes a button with a chevron, and its menu lists the five stages, the one of the note checked. The widget sends the built-in status of the stage through `POST /feedback/<id>/status`, the route the console and the extension already had, with its rights: the person who left the note or a role that manages the sites, with a session. The read says `canSetStatus` on each note the reader may move, after the cache. A visitor, a guest with no right on the note and a note of a tracker keep the status read only. The extension relays `/feedback/<id>/status` with the session.
+
 ## 0.8.0
 
 ### Minor Changes

@@ -1,5 +1,27 @@
 # @fruitback/extension
 
+## 0.9.0
+
+### Minor Changes
+
+- 51a12e5: Extension mode on a site of Fruitback Cloud that its members read: the popup says it in plain words and offers what fixes it. Signed out, « Only the members of this site see its notes and leave one here » with « Sign in to Fruitback ». Signed in as a member, « Turn on with my account » turns the site of the workspace on in place of the extension-mode rule, and the widget reads and writes with the account. Signed in with an account that is not a member, the popup says to ask the team of the site for an invitation. Extension mode stays available on the Cloud, and a server run by somebody else keeps its sentences.
+- 5925594: A member changes the status of a note from the head of its thread: the chip of the status becomes a button with a chevron, and its menu lists the five stages, the one of the note checked. The widget sends the built-in status of the stage through `POST /feedback/<id>/status`, the route the console and the extension already had, with its rights: the person who left the note or a role that manages the sites, with a session. The read says `canSetStatus` on each note the reader may move, after the cache. A visitor, a guest with no right on the note and a note of a tracker keep the status read only. The extension relays `/feedback/<id>/status` with the session.
+- 581d4f8: « To check » in the side panel lists the notes to check of the other pages of the site, the ones the badge counts, under « On other pages ». Each has « Looks fixed », « Still wrong » and « Open on its page », and its verdict goes from the panel. Before, the badge could count notes that no list showed. `GET /session/notes` takes `check=1`: the notes of the reader that wait for their verdict.
+
+### Patch Changes
+
+- cc03fa9: « Private mode » is now « Extension mode » (« mode extension » in French): the mode where the extension shows the widget on a site that embeds nothing. The popup and the options page offer « Extension · the extension shows the widget », the table of the sites says « Extension », and the messages of the popup, of the servers page and of « Who can leave a note » in the console use the new name. Team mode keeps its name. The stored value of a rule stays `private`, so a rule saved before and a rules file written by an older version work as before.
+- deda90e: Extension mode on a site of Fruitback Cloud that its members read: when the session of the account has ended (expired, or signed out from the console), the side panel now says « Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member. », with « Open Fruitback », as the popup does. It said « your account is not one of them », as if the account were still signed in.
+- 574c250: Extension mode on a site of Fruitback Cloud that its members read: the side panel now says what the popup says, in place of « The notes of this page could not be read ». Signed out, « Only the members of this site see its notes and leave one here. Sign in to Fruitback to review it as a member. », with « Open Fruitback », which opens the popup where « Sign in to Fruitback » is. Signed in as a member, it says to turn the site on with the account. Where the site takes no note from extension mode, the panel no longer offers « Leave a note ». A server run by somebody else keeps « could not be read ».
+- Updated dependencies [87b59e4]
+- Updated dependencies [0dcf745]
+- Updated dependencies [2a54654]
+- Updated dependencies [5925594]
+- Updated dependencies [cdc234d]
+- Updated dependencies [57a3835]
+  - @fruitback/widget@0.9.0
+  - @fruitback/shared@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

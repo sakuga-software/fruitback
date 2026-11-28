@@ -1,5 +1,22 @@
 # @fruitback/widget
 
+## 0.9.0
+
+### Minor Changes
+
+- 87b59e4: A site can hold the notes of its visitors for a member: « Hold new visitor notes », the second line of the card « Safeguards » in its tab « Access », off by default. A note sent with no account then waits in the database, `POST /feedback` answers `202` with `held: true`, and the widget says « Sent for review » with no pin. A member finds the notes in « To approve », a new entry of the views in the bar, and approves one (it goes to its place, as the visitor's own) or rejects it. A note waits 30 days at most.
+- 0dcf745: A site can keep every version of its notes: « Keep every version », the third line of the card « Safeguards » in its tab « Access », on by default. An edit of the text of a note keeps the text of before, and a deletion keeps the note as it was, with who did it and when. The members of the workspace read them in a section « History » of the panel of the note; a guest reads none. The widget tells the author, in the form of an edit, that the team keeps the text of before (`versionsKept` of a read). A note keeps 50 versions at most, and they go with the note.
+- 2a54654: `notes` takes five more functions, each optional: `reply(id, { text, author? })`, `check(id, { verdict, text?, author? })`, `edit(id, text)`, `withdraw(id)` and `attach(file)`. The widget offers the field to reply, « Looks fixed » / « Still wrong », « Edit the note », « Withdraw the note » and the files of the composer only where `notes` has the function. `write` gets the ids `attach` gave as its second argument, `{ attachments }`. `read` may give back `mine`, `replies` and `attachments` with each note: `mine` is what offers the edit, the withdrawal and the verdict to the author. `localNotes()` takes them all: every note it keeps is the reader's, and of a file it keeps the name only. A widget with `notes` never offers to move a note.
+- 5925594: A member changes the status of a note from the head of its thread: the chip of the status becomes a button with a chevron, and its menu lists the five stages, the one of the note checked. The widget sends the built-in status of the stage through `POST /feedback/<id>/status`, the route the console and the extension already had, with its rights: the person who left the note or a role that manages the sites, with a session. The read says `canSetStatus` on each note the reader may move, after the cache. A visitor, a guest with no right on the note and a note of a tracker keep the status read only. The extension relays `/feedback/<id>/status` with the session.
+- cdc234d: A site limits the notes a visitor with no account leaves in an hour: the line « Notes per visitor » of the new card « Safeguards » in its tab « Access », « No limit », 5, 10, 20 or 50, and 10 by default. The worker counts them by the key of the browser and by the address, on the site, before anything is written, and answers `429 visitor-limit` over it. The widget then says « Send it again later » and keeps the text. A member and a page that signs its reporter are not counted. The migration gives 10 to every site, those of before included.
+
+### Patch Changes
+
+- 57a3835: A key typed in a field of the widget no longer reaches the shortcuts of the page. On the console, each « c » of a note opened « New task » and was missing from the note. The keys of the widget (Escape, Cmd or Ctrl and Enter, a paste, an IME) work as before, and while a field of the page has focus, the capture mode and the thread leave its keys to it.
+- Updated dependencies [0dcf745]
+- Updated dependencies [5925594]
+  - @fruitback/shared@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
