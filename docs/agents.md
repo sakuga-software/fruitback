@@ -111,6 +111,10 @@ filters take both. Each entry says what it is in `kind`:
 
 Read `kind` before you read `task`: the same name holds the fields of a note, and the text of a task.
 
+`list_notes` answers a page at a time. Some filters (`status`, the known people of a key) apply after
+the page is read, so a page can hold fewer entries than `limit`, or none. Only `next` says that more
+wait: send it as `cursor` until an answer has no `next`.
+
 A task that a person wrote with no site belongs to the whole workspace. A key reads the sites it
 names, so no tool reads such a task, and `create_task` always names a site.
 
