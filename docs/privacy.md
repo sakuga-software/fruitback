@@ -292,6 +292,11 @@ The table `done_notices` keeps one row for each note that waits:
 
 ### What the worker keeps besides the note
 
+- On a site that recognises its visitors by a confirmed address: for each browser that confirmed one,
+  a digest of the key of the browser and a digest of the site and of the address, in
+  `visitor_addresses`, until the site goes. Never the address: the worker sends the link to it once,
+  and keeps it nowhere. The link names digests only, and works 30 minutes, once.
+
 - The key of a site that signs its visitors, « Signed by your site » in the tab « Access »:
   sealed with `FRUITBACK_SECRETS_KEY`, in `sites.identity_key`, until a new key replaces it or the site
   goes. It is a secret of the site, about no person. The token the backend of the site signs is never

@@ -165,6 +165,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO held_notes (site_id, note_id, workspace_id, payload, held_at)
        VALUES ('site_acme', 'hn_1', 'ws_acme', '{}', 1)`,
   );
+  // FRU-705: one browser whose visitor confirmed an address.
+  await rowsOf(
+    database,
+    `INSERT INTO visitor_addresses (site_id, visitor, identity, confirmed_at)
+       VALUES ('site_acme', 'digest-of-a-key', 'digest-of-an-address', 1)`,
+  );
   // FRU-704: one version of the note of the index, the text of before an edit.
   await rowsOf(
     database,
@@ -288,6 +294,7 @@ it('knows the sixty-eight BIGINT columns of the worker, and that better-auth has
     'sites.created_at',
     'sites.extension_seen_at',
     'sites.script_seen_at',
+    'visitor_addresses.confirmed_at',
     'workspace_logos.updated_at',
     'workspace_suspensions.since',
   ]);

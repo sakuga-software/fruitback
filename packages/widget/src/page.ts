@@ -97,3 +97,28 @@ function readPlatform(navigator: Navigator): string | undefined {
 
   return navigator.platform || undefined;
 }
+
+/** FRU-705: the part of the fragment that carries the link of an address, as `fruitback-note=` a note. */
+const CONFIRM_KEY = 'fruitback-confirm=';
+
+/** The token of the link of an address in a fragment, or `undefined`. A token is digests and digits. */
+export function confirmToken(hash: string): string | undefined {
+  const part = hash
+    .replace(/^#/, '')
+    .split('&')
+    .find((each) => each.startsWith(CONFIRM_KEY));
+  const token = part?.slice(CONFIRM_KEY.length);
+
+  return token !== undefined && /^[A-Za-z0-9_.-]{1,300}$/u.test(token) ? token : undefined;
+}
+
+/** The same fragment without the link of an address. */
+export function withoutConfirmToken(hash: string): string {
+  const rest = hash
+    .replace(/^#/, '')
+    .split('&')
+    .filter((each) => !each.startsWith(CONFIRM_KEY))
+    .join('&');
+
+  return rest === '' ? '' : `#${rest}`;
+}

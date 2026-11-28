@@ -149,11 +149,13 @@ export async function getFeedback(
     // place whose store takes an edit. The route decides again; this only says where to offer it.
     // FRU-701: a visitor known by their browser too, where the site lets its visitors edit.
     const byAccount = own.size > 0 && reader.by === 'account';
-    const mayEdit = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'edit'));
+    // FRU-705: a browser that confirmed no address, on a site that asks for one, may do nothing yet.
+    const visitorActs = own.size > 0 && reader.unconfirmed !== true;
+    const mayEdit = byAccount || (visitorActs && checks.visitorMay(route.client, 'edit'));
     const editsHere = mayEdit && places.length < 2 && (await takesEdits(store, route.client, route.policy));
     // FRU-605: and withdraw it, where the store takes a withdrawal. The route decides again. FRU-702: a
     // visitor known by their browser too, where the site lets its visitors delete.
-    const mayWithdraw = byAccount || (own.size > 0 && checks.visitorMay(route.client, 'withdraw'));
+    const mayWithdraw = byAccount || (visitorActs && checks.visitorMay(route.client, 'withdraw'));
     const withdrawalsHere = mayWithdraw && places.length < 2 && (await takesWithdrawals(store, route.client));
     // FRU-718: and change the status of a note from its thread, with the rights of the route of a status.
     const setsStatus = await statusSetterOf(request, config, store, route.client, clientId, checks);
@@ -252,10 +254,7 @@ export async function getFeedback(
         ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
         // FRU-706: a visitor the site signed, whose notes are theirs on every device. The widget shows
         // them as it shows a visitor known by their browser. Absent for anybody else.
-        ...(route.policy.visitorIdentity === 'signed' &&
-        (await checks.visitorOf(request, route.policy, clientId))?.by === 'signed'
-          ? { visitor: 'signed' }
-          : {}),
+        ...(await visitorWord(request, route.policy, clientId, checks)),
         // FRU-257: whether this reader may write a reply here. A reader of a site that not everybody
         // reads is one the worker let in above. Never in the cached answer: it is the reader's.
         ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
@@ -278,6 +277,28 @@ export async function getFeedback(
     }
     throw error;
   }
+}
+
+/**
+ * What the read says of a visitor known another way than by their browser (FRU-706, FRU-705), for the
+ * widget: `visitor: 'signed'`, a person the site signed; `visitor: 'email'`, a browser that confirmed an
+ * address; `confirm: 'email'`, a browser that must confirm one before an edit or a deletion. Nothing
+ * for anybody else.
+ */
+async function visitorWord(
+  request: Request,
+  policy: ClientPolicy,
+  site: string | undefined,
+  checks: CallerChecks,
+): Promise<{ visitor?: 'signed' | 'email'; confirm?: 'email' }> {
+  if (policy.visitorIdentity !== 'signed' && policy.visitorIdentity !== 'email') return {};
+  const visitor = await checks.visitorOf(request, policy, site);
+  if (visitor?.unconfirmed === true) return { confirm: 'email' };
+  if (visitor?.by === 'signed' || visitor?.by === 'email') return { visitor: visitor.by };
+  // No key yet, on a site that asks for an address: the widget asks before the first edit or deletion.
+  return visitor === undefined && policy.visitorIdentity === 'email' && checks.asksEmail === true
+    ? { confirm: 'email' }
+    : {};
 }
 
 /**

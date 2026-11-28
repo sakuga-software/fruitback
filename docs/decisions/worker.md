@@ -1849,6 +1849,27 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
 - **Why the fallback is limited to the sites where anybody writes.** Elsewhere a note needs a
   session, and a token that does not verify keeps its `401`, as FRU-330 says.
 
+## A visitor known by a confirmed address (FRU-705)
+
+- **`visitor_identity` takes `email` too**, « A confirmed e-mail ». The console offers it only on a
+  worker that sends e-mail and signs the link (`confirmsEmail`), else `400 identity-email-unavailable`.
+  A worker that lost its mailer reads such a site as `browser`.
+- **`visitor_addresses` (`0063`): one row by confirmed browser**, the digest of its key and the digest of
+  the site and of the address (`emailVisitorDigestOf`). `confirm` writes it and gives the notes of the
+  browser on the site (`note_index`, `held_notes`) to the identity, in one transaction.
+- **`visitorOf` reads it** on such a site: a confirmed browser is `email`, by the identity; one with no
+  row is `browser`, `unconfirmed`. The read says `confirm: 'email'` to it, and offers no edit nor
+  deletion; `callerOf` refuses them with `403 email-required`.
+- **The link reuses the token of FRU-604**: the same HMAC construction under another derived key, the
+  same 30 minutes. Single use is an atomic `Kv` count of its MAC, claimed before the confirmation and
+  given back when the database did not keep it (reviews of #1013): two opens at once confirm once, and
+  a database that did not answer does not spend the link. The link opens the page of the site, and the
+  widget sends the token with its key: only the browser that asked confirms (`403 other-browser`
+  elsewhere, and the link stays good). Decision of the orchestrator, 2026-11-28: the mailer the worker
+  has, the link expires after 30 minutes.
+- **Why not the token of FRU-604 itself.** It names a note, and is given to the browser that sent it;
+  a link of an address names a browser and an address, and must serve once.
+
 ## Who can leave a note (FRU-330)
 
 ### The rules, in short

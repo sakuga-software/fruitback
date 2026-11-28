@@ -84,6 +84,9 @@ import { type FruitbackMessages, createTranslator, languageOf } from './messages
 import {
   type CheckAnswer,
   type CheckFailure,
+  type ConfirmAnswer,
+  type ConfirmSeam,
+  type ConfirmWords,
   type EditAnswer,
   type EditFailure,
   type Overlay,
@@ -94,7 +97,7 @@ import {
   replyFromPage,
 } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
-import { captureViewport, linkedNote, withoutLinkedNote } from './page.ts';
+import { captureViewport, confirmToken, linkedNote, withoutConfirmToken, withoutLinkedNote } from './page.ts';
 
 /**
  * One call that mounts the whole widget on a page (FRU-16).
@@ -662,6 +665,12 @@ export function init(given: FruitbackOptions): Fruitback {
 
   /** The notes a visitor known by their browser deleted (FRU-702), whose pin goes at the next read. */
   const deleted = new Set<string>();
+  /** FRU-705: « A confirmed e-mail »: the form under a note, and what the link of this page said. */
+  const confirmEmail: ConfirmSeam = {
+    needed: () => readerIdentity.confirmEmail === true,
+    send: (email) => askVisitorLink(options, view, email, translator.locale),
+    state: { email: '', said: undefined, inFlight: false },
+  };
   const overlay: Overlay = createOverlay({
     document,
     translator,
@@ -676,6 +685,8 @@ export function init(given: FruitbackOptions): Fruitback {
     // or a person the site signed, a visitor all the same.
     byBrowser: () => byVisitor(),
     signedVisitor: () => readerIdentity.signedVisitor === true,
+    // FRU-705: the form of an address, where the worker asks for one. Not for the extension.
+    ...(options.transport === undefined ? { confirmEmail } : {}),
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
@@ -882,6 +893,8 @@ export function init(given: FruitbackOptions): Fruitback {
       tellNotes({ kind: 'list' });
       // A link to a note waits for the notes: this is when they are in hand.
       openLinked();
+      // FRU-705: the link of an address, once: it needs the key of this browser, not the notes.
+      confirmLinked();
       // A page whose elements came with the read gets its note back now, if the mount was too early.
       restoreTyping();
     });
@@ -974,6 +987,31 @@ export function init(given: FruitbackOptions): Fruitback {
    * runs, the fragment waits in the address: for the composer to close, or for the next read.
    */
   let droppingFragment = false;
+  /**
+   * FRU-705: the link of an address, `#fruitback-confirm=<token>`, which the message opened on this page.
+   * Taken out of the address at once, so a reload does not send it again, then sent with the key of this
+   * browser. What came of it is said under the open notes of the visitor, and a read follows.
+   */
+  let confirming = false;
+  function confirmLinked(): void {
+    const token = confirmToken(view.location.hash);
+    if (token === undefined || confirming || options.transport !== undefined) return;
+    confirming = true;
+    droppingFragment = true;
+    try {
+      const { pathname, search, hash } = view.location;
+      view.history.replaceState(view.history.state, '', `${pathname}${search}${withoutConfirmToken(hash)}`);
+    } catch {
+      // A page that forbids `replaceState` keeps its fragment: the link serves once all the same.
+    } finally {
+      droppingFragment = false;
+    }
+    void confirmVisitorLink(options, token).then((said) => {
+      confirmEmail.state.said = said;
+      if (said === 'confirm.done') void read();
+    });
+  }
+
   function openLinked(): void {
     const id = linkedNote(view.location.hash);
     if (id === undefined || readState !== 'read') return;
@@ -1742,6 +1780,7 @@ function createReader(
         destinations?: unknown;
         identified?: unknown;
         visitor?: unknown;
+        confirm?: unknown;
         batch?: unknown;
         canReply?: unknown;
         canWrite?: unknown;
@@ -1757,7 +1796,10 @@ function createReader(
       // ended is asked for a name again. A failed read changes nothing.
       identity.identified = body.identified === true;
       // FRU-706: the same rule: a person the site signed, as long as the worker says so.
-      identity.signedVisitor = body.visitor === 'signed';
+      // FRU-705: an address confirmed is a visitor known on every browser, as one the site signs.
+      identity.signedVisitor = body.visitor === 'signed' || body.visitor === 'email';
+      // FRU-705: the same rule: the worker asks this reader for an address before an edit or a deletion.
+      identity.confirmEmail = body.confirm === 'email';
       // The same rule: a worker that stops offering a batch is sent one note at a time (FRU-124).
       identity.batch = offeredBatch(body.batch);
       // The same rule (FRU-257): a reader the worker no longer lets reply gets no field.
@@ -1920,6 +1962,47 @@ function notifyOffer(
   };
 }
 
+/**
+ * FRU-705: asks the worker for the link of an address, to this page. The key of this browser is made
+ * first when it has none: the link confirms this browser, and a reader on another device has sent no
+ * note yet.
+ */
+async function askVisitorLink(
+  options: MountOptions,
+  view: Window & typeof globalThis,
+  email: string,
+  locale: string,
+): Promise<ConfirmAnswer> {
+  const response = await callWorker(options, {
+    url: `${options.endpoint}/feedback/visitor/email?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ email, url: canonicalizePageUrl(view.location.href), locale }),
+    asAuthor: true,
+  }).catch(() => undefined);
+  if (response === undefined) return 'failed';
+  if (response.ok) return 'sent';
+  if (response.status === 400 && errorOf(response.body) === 'invalid-email') return 'invalid';
+  if (response.status === 429) return 'wait';
+
+  return 'failed';
+}
+
+/** FRU-705: sends the token of the link this page was opened with, and says what came of it. */
+async function confirmVisitorLink(options: MountOptions, token: string): Promise<ConfirmWords> {
+  const response = await callWorker(options, {
+    url: `${options.endpoint}/feedback/visitor/confirm?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ token }),
+  }).catch(() => undefined);
+  if (response?.ok === true) return 'confirm.done';
+  if (response?.status === 403 && errorOf(response.body) === 'other-browser') return 'confirm.otherBrowser';
+  if (response?.status === 410) return 'confirm.expired';
+
+  return 'confirm.failed';
+}
+
 /** `notify.token` of the answer to a note (FRU-604): a short string, or nothing. */
 function notifyTokenOf(body: string): string | undefined {
   try {
@@ -1990,6 +2073,8 @@ type ReaderIdentity = {
   identified: boolean;
   /** FRU-706: the worker knows this reader as a person the site signed (`visitor: 'signed'`). */
   signedVisitor?: boolean;
+  /** FRU-705: the worker asks this reader for a confirmed address (`confirm: 'email'`). */
+  confirmEmail?: boolean;
   batch?: BatchOffer | undefined;
   canReply: boolean;
   /**

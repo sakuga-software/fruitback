@@ -21,6 +21,8 @@ const ACCESS_PROBLEMS: Readonly<Record<string, string>> = {
   // FRU-706: « Signed by your site » takes the key of the site first.
   'identity-key-required': msg('Make the key of the site before you save « Signed by your site ».'),
   'identity-keys-unavailable': msg('This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.'),
+  // FRU-705.
+  'identity-email-unavailable': msg('This instance sends no e-mail, so it cannot confirm the address of a visitor.'),
 };
 const KEY_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace makes the key of a site.'),
@@ -150,6 +152,7 @@ export default function SiteAccessPage() {
             disabled={!manages || busy}
             onChange={change}
             keyState={site.identityKey ?? 'unavailable'}
+            emailState={site.confirmedEmail ?? 'unavailable'}
             madeKey={madeKey}
             making={making}
             onMakeKey={() => void makeKey()}

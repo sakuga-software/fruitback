@@ -15,6 +15,7 @@ import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { DoneNoticeSeams, DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
+import type { VisitorAddresses } from './visitor-addresses.ts';
 import type { NoteVersions } from './note-versions.ts';
 import type { DeletedNotes } from './deleted-notes.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
@@ -76,6 +77,8 @@ export type RequestContext = {
   heldNotes?: HeldNotes;
   /** The versions of the notes (FRU-704). A suite hands over one on PGlite. */
   noteVersions?: NoteVersions;
+  /** The confirmed browsers of the sites (FRU-705). A suite hands over one on PGlite. */
+  visitorAddresses?: VisitorAddresses;
   /** « Deleted notes » (FRU-704). A suite hands over one on PGlite. */
   deletedNotes?: DeletedNotes;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
@@ -215,7 +218,7 @@ export type CallerChecks = {
     site: string | undefined,
     issues: readonly NoteIssue[],
     noteIndex: NoteIndex | undefined,
-  ) => Promise<{ notes: Set<string>; by?: 'account' | 'browser' | 'signed' }>;
+  ) => Promise<{ notes: Set<string>; by?: 'account' | 'browser' | 'signed' | 'email'; unconfirmed?: true }>;
   /** The account of a session of the extension that reads `site` in `workspace` now: `memberOf` of `app.ts`. */
   memberOf: (
     request: Request,
@@ -228,11 +231,13 @@ export type CallerChecks = {
    * the site signed, or of the key of their browser, and which. `visitorOf` of `app.ts`, which alone
    * imports `visitorDigestOf` and `signedVisitorDigestOf`.
    */
+  /** FRU-705: whether this worker confirms the address of a visitor (it sends e-mail, it keeps accounts). */
+  asksEmail?: boolean;
   visitorOf: (
     request: Request,
     policy: ClientPolicy,
     site: string | undefined,
-  ) => Promise<{ digest: string; by: 'browser' | 'signed' } | undefined>;
+  ) => Promise<{ digest: string; by: 'browser' | 'signed' | 'email'; unconfirmed?: true } | undefined>;
   /**
    * Whether a visitor known by their browser may edit or withdraw a note of theirs on a site of this
    * policy (FRU-701, FRU-702): `visitorMay` of `visitor-key.ts`.

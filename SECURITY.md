@@ -2796,6 +2796,46 @@ browser, and no more.
 - Each guard is taken out of a copy of its module in `visitor-signed.test.ts`, and the case that
   holds it fails.
 
+### A visitor known by a confirmed address
+
+A site can recognise its visitors by an address they confirm: « A confirmed e-mail » in the tab
+« Access ». Their notes are theirs on every browser that confirmed the same address, with the rights
+of a visitor and no more.
+
+- An address not confirmed gives no right. On such a site, a browser that confirmed none reads its own
+  notes, and its edit and its deletion are refused with `403 email-required`.
+  test:`gives no right to a browser that confirmed no address, and says so in the read`.
+- The link. `POST /feedback/visitor/email` takes an address and a page of the site, with the key of
+  the browser, and sends one message: a link to that page, `#fruitback-confirm=<token>`. The token is
+  an HMAC-SHA256 under a key derived from `FRUITBACK_AUTH_SECRET` for this use alone, and names the
+  site, the digest of the key of the browser that asked, the digest of the address and the expiry. It
+  works 30 minutes, and once: the first open claims it in `Kv` with one atomic count, so a second open,
+  at the same moment too, is refused; a confirmation that the database did not keep gives the claim
+  back, and the link stays good. The worker keeps nothing for a link nobody opens.
+  test:`keeps the link good when the confirmation was not kept, then spends it once it is (review of #1013)`,
+  test:`confirms once when the link is opened twice at the same moment (review of #1013)`.
+- What a confirmation proves, and no more: that the person who opened the link reads the mailbox of
+  the address, in the browser that asked for it. It is the design: whoever reads a mailbox is the
+  visitor of that address on the site, and gets the open notes of every browser that confirmed it.
+  An address typed and never opened from its mailbox proves nothing and gives nothing.
+  test:`sends a link to the page, holding no address and no key, and lets the browser that asked confirm it once`,
+  test:`refuses a link that ran out, of another site, or edited`.
+- Only the browser that asked confirms. `POST /feedback/visitor/confirm` compares the key of the
+  browser with the one the link names: a link sent to the address of somebody else, or forwarded,
+  opens nothing in another browser (`403 other-browser`), and stays good for the browser that asked.
+  test:`confirms only in the browser that asked: a link opened elsewhere opens nothing, and stays good`.
+- What is kept. `visitor_addresses` holds the digest of the key of the browser and the digest of the
+  site and of the address, never the key and never the address. Once confirmed, the notes of that
+  browser on the site are the notes of the address, on every browser that confirms it.
+  test:`gives the notes of the address to another browser that confirms the same address, and to nobody else`.
+- The sends are counted as the address of a note done: per caller and per site, before any message.
+  A page of another origin, or an address of another shape, sends nothing.
+  test:`refuses an address of another shape, and a page of another origin`.
+- A worker that sends no e-mail has neither route, and the console refuses the option.
+  test:`refuses « A confirmed e-mail » on a worker that sends no e-mail, and offers it on one that does`.
+- The guards are taken out of a copy of their module in `visitor-email.test.ts`, and the case that
+  holds each one fails.
+
 ### The versions of a note (FRU-704)
 
 The line « Keep every version » of the card « Safeguards » keeps, for the members of the site, what an

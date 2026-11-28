@@ -211,7 +211,7 @@ describe('the key of a site in the console (FRU-706)', () => {
     assert.equal(elsewhere.status, 404);
   });
 
-  it('refuses « Signed by your site » for a site with no key, and a value that is not one of the two', async () => {
+  it('refuses « Signed by your site » for a site with no key, and a value that is not one of the list', async () => {
     const { world, workspace, alice } = await aVisitorSite();
     const post = (visitorIdentity: unknown) =>
       callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
@@ -220,7 +220,7 @@ describe('the key of a site in the console (FRU-706)', () => {
       });
     // This world has no key to seal with: no key, and no « Signed by your site ».
     assert.deepEqual((await (await post('signed')).json()) as unknown, { error: 'identity-keys-unavailable' });
-    assert.deepEqual((await (await post('email')).json()) as unknown, { error: 'invalid-visitor-identity' });
+    assert.deepEqual((await (await post('phone')).json()) as unknown, { error: 'invalid-visitor-identity' });
     const listed = (await (await post('browser')).json()) as Record<string, unknown>;
     assert.deepEqual([listed.visitorIdentity, listed.identityKey], ['browser', 'unavailable']);
   });

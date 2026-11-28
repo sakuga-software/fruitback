@@ -243,3 +243,87 @@ describe('a visitor the site signs, through init (FRU-706)', () => {
     assert.equal(root.querySelector('.fruitback-thread-you'), null);
   });
 });
+
+describe('a visitor asked for a confirmed address, through init (FRU-705)', () => {
+  /** `fetch` of the page: each call, and the read answering `body`, every other call `{ sent: true }`. */
+  function pageCalls(body: string): { url: string; method: string; headers: Record<string, string>; body?: string }[] {
+    const calls: { url: string; method: string; headers: Record<string, string>; body?: string }[] = [];
+    mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+      calls.push({
+        url,
+        method: init?.method ?? 'GET',
+        headers: { ...(init?.headers as Record<string, string>) },
+        ...(typeof init?.body === 'string' ? { body: init.body } : {}),
+      });
+
+      return new Response(init?.method === 'POST' ? JSON.stringify({ sent: true }) : body, {
+        status: init?.method === 'POST' ? 202 : 200,
+      });
+    });
+
+    return calls;
+  }
+
+  it('asks for an address under a note of theirs, and sends it with the key of this browser and the page', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    const calls = pageCalls(JSON.stringify({ issues: [aNote({ mine: true })], confirm: 'email' }));
+    const root = await threadOf(page, {});
+
+    const form = root.querySelector('.fruitback-thread-confirm') as HTMLFormElement;
+    assert.equal(
+      form.querySelector('.fruitback-thread-you-may')?.textContent,
+      'Confirm your address to edit or delete your note, here and on your other browsers.',
+    );
+    const field = form.querySelector('input') as HTMLInputElement;
+    field.value = 'ana@example.com';
+    field.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input'));
+    form.requestSubmit();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const asked = calls.find((call) => call.url.includes('/feedback/visitor/email'));
+    assert.equal(asked?.method, 'POST');
+    assert.equal(asked?.headers[VISITOR_HEADER], 'K'.repeat(43));
+    assert.deepEqual(JSON.parse(asked?.body ?? '{}'), {
+      email: 'ana@example.com',
+      url: 'https://preview.acme.test/pricing',
+      // The language of the widget: the worker writes the message in it.
+      locale: 'en-US',
+    });
+    assert.equal(
+      root.querySelector('.fruitback-thread-confirm .fruitback-thread-reply-status')?.textContent,
+      'Open the link we sent, in this browser, within 30 minutes.',
+    );
+  });
+
+  it('asks for nothing where the worker does not: a note of theirs offers the edit as before', async () => {
+    const page = mounted();
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    pageCalls(readOf(aNote({ mine: true, editable: true })));
+    const root = await threadOf(page, {});
+
+    assert.equal(root.querySelector('.fruitback-thread-confirm'), null);
+  });
+
+  it('sends the link the page was opened with, once, and takes it out of the address', async () => {
+    const page = mountPage('<main><button data-testid="cta">Commander</button></main>', {
+      width: 1_000,
+      height: 1_000,
+      url: 'https://preview.acme.test/pricing#fruitback-confirm=123.abc.def.ghi',
+    });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    page.view.localStorage.setItem(`${VISITOR_KEY_PREFIX}site_acme`, 'K'.repeat(43));
+    const calls = pageCalls(readOf(aNote({ mine: true })));
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'site_acme' });
+    cleanup.push(() => widget.destroy());
+    await widget.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const confirms = calls.filter((call) => call.url.includes('/feedback/visitor/confirm'));
+    assert.equal(confirms.length, 1);
+    assert.deepEqual(JSON.parse(confirms[0]?.body ?? '{}'), { token: '123.abc.def.ghi' });
+    assert.equal(confirms[0]?.headers[VISITOR_HEADER], 'K'.repeat(43));
+    assert.equal(page.view.location.hash, '');
+  });
+});

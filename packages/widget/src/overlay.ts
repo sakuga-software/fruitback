@@ -192,6 +192,11 @@ export type OverlayOptions = {
    */
   signedVisitor?: () => boolean;
   /**
+   * FRU-705: on a site that recognises its visitors by a confirmed address, the form that asks for one,
+   * under an open note of a visitor who has not confirmed it yet. Left out: no form.
+   */
+  confirmEmail?: ConfirmSeam;
+  /**
    * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
    * note, and the selector is for a developer. The note and the issue keep it either way.
    */
@@ -1240,6 +1245,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       options.byBrowser?.() === true,
       statusFor(entry.issue),
       options.signedVisitor?.() === true,
+      options.confirmEmail,
     );
     const rebuilt = thread.querySelector<HTMLDetailsElement>('.fruitback-thread-tech');
     if (rebuilt !== null && foldOpen !== undefined) rebuilt.open = foldOpen;
@@ -1296,6 +1302,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       options.byBrowser?.() === true,
       statusFor(entry.issue),
       options.signedVisitor?.() === true,
+      options.confirmEmail,
     );
     wireThread(thread);
     mountThread(thread, entry);
@@ -1727,6 +1734,7 @@ function buildThread(
   byBrowser = false,
   status?: StatusFooter,
   signedVisitor = false,
+  confirm?: ConfirmSeam,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1811,6 +1819,7 @@ function buildThread(
       ]),
       ...moreSaid(document, issue, t, more),
       ...withdrawBlock(document, issue, t, withdraw),
+      ...confirmBlock(document, issue, t, byBrowser, confirm),
       ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
       // checks; a reader who is told nothing believes it.
@@ -1865,6 +1874,111 @@ function youMay(document: Document, issue: NoteIssue, t: Translator, byBrowser: 
   if (edits) words = deletes ? 'thread.youMayEditOrDelete' : 'thread.youMayEdit';
 
   return [element(document, 'p', 'fruitback-thread-you-may', t.text(words))];
+}
+
+/** What asking for the link of an address answered (FRU-705). */
+export type ConfirmAnswer = 'sent' | 'invalid' | 'wait' | 'failed';
+
+/**
+ * The form of « A confirmed e-mail » (FRU-705), and what it holds across the builds of a thread: the
+ * address typed, what was said last, and whether a link is on its way. One for the reader, not one by
+ * note: the address is theirs.
+ */
+export type ConfirmSeam = {
+  /** Whether the worker asks this reader for an address before an edit or a deletion. */
+  needed: () => boolean;
+  send: (email: string) => Promise<ConfirmAnswer>;
+  state: { email: string; said: ConfirmWords | undefined; inFlight: boolean };
+};
+
+/** The words of the form of an address, by what happened last. */
+export type ConfirmWords =
+  | 'confirm.sending'
+  | 'confirm.sent'
+  | 'confirm.invalid'
+  | 'confirm.wait'
+  | 'confirm.failed'
+  | 'confirm.done'
+  | 'confirm.expired'
+  | 'confirm.otherBrowser';
+
+const CONFIRM_SAID: Readonly<Record<ConfirmAnswer, ConfirmWords>> = {
+  sent: 'confirm.sent',
+  invalid: 'confirm.invalid',
+  wait: 'confirm.wait',
+  failed: 'confirm.failed',
+};
+
+/**
+ * « Confirm your address » (FRU-705): under an open note, for a visitor the worker asks for a confirmed
+ * address. On a note of theirs, to edit or delete it; on another note, to find theirs from another
+ * browser. The worker decides; the widget asks and says what came of it. What a link said once opened
+ * (`confirm.done` and its failures) is said here too, under any open note of a visitor.
+ */
+function confirmBlock(
+  document: Document,
+  issue: NoteIssue,
+  t: Translator,
+  byBrowser: boolean,
+  confirm: ConfirmSeam | undefined,
+): HTMLElement[] {
+  if (confirm === undefined || !byBrowser || DRAFTS.has(issue)) return [];
+  if (issue.stage === 'done' || issue.stage === 'closed') return [];
+  const { state } = confirm;
+  if (!confirm.needed()) {
+    return state.said === undefined
+      ? []
+      : [element(document, 'p', 'fruitback-thread-confirm-said', t.text(state.said))];
+  }
+  const form = document.createElement('form');
+  form.className = 'fruitback-thread-reply-form fruitback-thread-confirm';
+  const lead = element(
+    document,
+    'p',
+    'fruitback-thread-you-may',
+    t.text(issue.mine === true ? 'confirm.leadMine' : 'confirm.leadOther'),
+  );
+  const field = document.createElement('input');
+  field.type = 'email';
+  field.autocomplete = 'email';
+  field.className = 'fruitback-thread-reply-field';
+  field.setAttribute('aria-label', t.text('confirm.label'));
+  field.placeholder = t.text('confirm.placeholder');
+  field.value = state.email;
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.className = 'fruitback-thread-reply-send';
+  send.textContent = t.text('confirm.send');
+  send.disabled = state.inFlight;
+  const status = document.createElement('span');
+  status.className = 'fruitback-thread-reply-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.textContent = state.said === undefined ? '' : t.text(state.said);
+
+  field.addEventListener('input', () => {
+    state.email = field.value;
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (state.inFlight || field.value.trim() === '') return;
+    state.inFlight = true;
+    state.said = 'confirm.sending';
+    send.disabled = true;
+    status.textContent = t.text('confirm.sending');
+    void confirm
+      .send(field.value.trim())
+      .catch((): ConfirmAnswer => 'failed')
+      .then((answer) => {
+        state.inFlight = false;
+        state.said = CONFIRM_SAID[answer];
+        send.disabled = false;
+        status.textContent = t.text(CONFIRM_SAID[answer]);
+      });
+  });
+  form.append(lead, element(document, 'div', 'fruitback-thread-reply-row', [field, send]), status);
+
+  return [form];
 }
 
 /** The tracker of an issue by its address, for the words of a deletion (FRU-702), or nothing. */

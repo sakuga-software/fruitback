@@ -358,6 +358,7 @@ export function VisitorRecognition({
   disabled,
   onChange,
   keyState,
+  emailState,
   madeKey,
   making,
   onMakeKey,
@@ -366,6 +367,8 @@ export function VisitorRecognition({
   disabled: boolean;
   onChange: (access: Access) => void;
   keyState: 'set' | 'none' | 'unavailable';
+  /** FRU-705: whether this instance sends the link that confirms an address. */
+  emailState: 'available' | 'unavailable';
   /** The key just made, shown this once. */
   madeKey: string | undefined;
   making: boolean;
@@ -388,7 +391,7 @@ export function VisitorRecognition({
       icon: 'mail',
       title: t('A confirmed e-mail'),
       detail: t('A link by e-mail before the first edit. Works on any device.'),
-      later: true,
+      later: emailState === 'unavailable',
     },
     {
       id: 'signed',
@@ -408,7 +411,9 @@ export function VisitorRecognition({
         value={writes ? access.visitorIdentity : 'browser'}
         disabled={disabled || !writes}
         onChange={(chosen) => {
-          if (chosen === 'browser' || chosen === 'signed') onChange({ ...access, visitorIdentity: chosen });
+          if (chosen === 'browser' || chosen === 'signed' || chosen === 'email') {
+            onChange({ ...access, visitorIdentity: chosen });
+          }
         }}
         options={ways.map((way) => ({
           value: way.id,
@@ -422,6 +427,18 @@ export function VisitorRecognition({
         {unavailable ? (
           <p className="text-hint text-muted">
             {t('This instance keeps no key of a site: FRUITBACK_SECRETS_KEY is not set.')}
+          </p>
+        ) : null}
+        {emailState === 'unavailable' ? (
+          <p className="text-hint text-muted">
+            {t('This instance sends no e-mail, so it cannot confirm the address of a visitor.')}
+          </p>
+        ) : null}
+        {writes && access.visitorIdentity === 'email' ? (
+          <p className="text-hint text-muted">
+            {t(
+              'Before their first edit or deletion, a visitor confirms an address by a link, valid 30 minutes. Fruitback keeps a digest of it, never the address.',
+            )}
           </p>
         ) : null}
         {signing && madeKey !== undefined ? (

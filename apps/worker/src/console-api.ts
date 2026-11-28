@@ -120,6 +120,8 @@ export type ConsoleApiContext = {
   done?: DoneNoticeSeams;
   /** FRU-704: the notes of visitors that wait for a member. Absent: the queue is empty. */
   heldNotes?: HeldNotes;
+  /** FRU-705: whether this worker confirms the address of a visitor (it sends e-mail and signs the link). */
+  confirmsEmail?: boolean;
   /** FRU-704: sends a note a member approved to its place. Absent: an approval answers `502`. */
   sendHeld?: (held: HeldNote) => Promise<HeldSent>;
   /** FRU-704: the versions of the notes. Absent: the page of a note shows none. */
@@ -287,6 +289,8 @@ type SiteView = {
   visitorIdentity: VisitorIdentity;
   /** FRU-706: whether the site has a key its backend signs visitors with. Never the key. */
   identityKey: IdentityKeyState;
+  /** FRU-705: whether this worker can ask a visitor for a confirmed address: it sends e-mail. */
+  confirmedEmail: 'available' | 'unavailable';
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -297,7 +301,7 @@ type SiteView = {
  * `destination` is the first of `destinations`: where a note goes when nobody chose. It stays for a
  * console that knows one destination for a site.
  */
-function siteView(site: Site, seesTracker: boolean, keeps: boolean): SiteView {
+function siteView(site: Site, seesTracker: boolean, keeps: boolean, mails = false): SiteView {
   const [first] = site.destinations;
 
   return {
@@ -315,6 +319,7 @@ function siteView(site: Site, seesTracker: boolean, keeps: boolean): SiteView {
     visitorIdentity: site.visitorIdentity,
     // WARNING: a state, never `site.identityKey`, which is the sealed key.
     identityKey: identityKeyState(site, keeps),
+    confirmedEmail: mails ? 'available' : 'unavailable',
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -945,7 +950,7 @@ export async function handleConsoleApi(
         : [undefined, undefined];
 
     return sites.map((site) => ({
-      ...siteView(site, seesTracker, context.secretsKey !== undefined),
+      ...siteView(site, seesTracker, context.secretsKey !== undefined, context.confirmsEmail === true),
       ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
       ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
     }));
@@ -1047,6 +1052,10 @@ export async function handleConsoleApi(
       const known = (await context.accounts.sites(workspaceId as string)).find((each) => each.origin === origin);
       if (known?.identityKey === undefined) return json(400, { error: 'identity-key-required' }, headers);
     }
+    // FRU-705: « A confirmed e-mail » takes a worker that sends the link.
+    if (visitorIdentity === 'email' && context.confirmsEmail !== true) {
+      return json(400, { error: 'identity-email-unavailable' }, headers);
+    }
 
     const site = await context.accounts.addSite(workspaceId as string, {
       origin,
@@ -1066,7 +1075,7 @@ export async function handleConsoleApi(
     return json(
       201,
       {
-        ...siteView(site, allowed('see-tracker'), context.secretsKey !== undefined),
+        ...siteView(site, allowed('see-tracker'), context.secretsKey !== undefined, context.confirmsEmail === true),
         ...(context.noteIndex === undefined ? {} : noNotes()),
         ...(context.noteIndex !== undefined && allowed('see-tracker') ? { undelivered: 0 } : {}),
       },

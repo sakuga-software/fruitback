@@ -167,7 +167,7 @@ export type ClientConfig = z.infer<typeof clientSchema> & {
    * writes says it, and only such a site falls back on the key of the browser when a token is no
    * identity (`visitorOf` of `app.ts`). `signed` comes with the key of the site.
    */
-  visitorIdentity?: 'browser' | 'signed';
+  visitorIdentity?: 'browser' | 'signed' | 'email';
   /**
    * FRU-706: the key of the site, sealed with `FRUITBACK_SECRETS_KEY`, as the accounts keep it.
    * `app.ts` opens it into `identitySecret` for the request that names the site, and drops it.
@@ -315,7 +315,7 @@ export type ClientPolicy = {
    * FRU-706: how a visitor with no account is recognised, on a site of a workspace where anybody
    * writes: `ClientConfig.visitorIdentity`. Absent anywhere else.
    */
-  visitorIdentity?: 'browser' | 'signed';
+  visitorIdentity?: 'browser' | 'signed' | 'email';
   /**
    * The language the issue description is written in (FRU-39), for the team that triages it.
    *

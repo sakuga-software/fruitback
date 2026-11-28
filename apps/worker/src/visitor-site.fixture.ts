@@ -64,6 +64,8 @@ export async function aVisitorSite(
      * makes in the console (`siteKey`). The world seals it with `SECRETS_KEY`.
      */
     signed?: boolean;
+    /** FRU-705: the site recognises its visitors by an address they confirm (`askLink`, `confirm`). */
+    email?: boolean;
   } = {},
 ) {
   const handle = options.handle ?? handleRequest;
@@ -89,6 +91,14 @@ export async function aVisitorSite(
     const set = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
       token: alice.token,
       body: { url: ORIGIN, visibility: 'everyone', writers: 'anyone', visitorIdentity: 'signed' },
+    });
+    assert.equal(set.status, 201, await set.clone().text());
+  }
+  // FRU-705: the owner says the site recognises its visitors by a confirmed address.
+  if (options.email === true) {
+    const set = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+      token: alice.token,
+      body: { url: ORIGIN, visibility: 'everyone', writers: 'anyone', visitorIdentity: 'email' },
     });
     assert.equal(set.status, 201, await set.clone().text());
   }
@@ -180,7 +190,23 @@ export async function aVisitorSite(
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
   };
 
+  /** FRU-705: asks for a link to `email`, from the page, with the key of this browser. */
+  const askLink = (email: string, who: Who = {}, url = PAGE) =>
+    call('POST', `/feedback/visitor/email?client=${site}`, who, { email, url, locale: 'en' });
+  /** FRU-705: the token of the last link the worker sent, as the page reads it after `#fruitback-confirm=`. */
+  const lastLink = (): string | undefined => {
+    const text = world.mail.sent.at(-1)?.text ?? '';
+
+    return /#fruitback-confirm=([^\s]+)/u.exec(text)?.[1];
+  };
+  /** FRU-705: the widget sends the token of the link it was opened with. */
+  const confirm = (token: string | undefined, who: Who = {}) =>
+    call('POST', `/feedback/visitor/confirm?client=${site}`, who, { token });
+
   return {
+    askLink,
+    lastLink,
+    confirm,
     world,
     store,
     workspace,

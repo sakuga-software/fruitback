@@ -4,6 +4,7 @@ import type { InstanceAdminReads } from './instance-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import type { DoneNotices } from './done-notices.ts';
 import type { HeldNotes } from './held-notes.ts';
+import type { VisitorAddresses } from './visitor-addresses.ts';
 import type { NoteVersions } from './note-versions.ts';
 import type { DeletedNotes } from './deleted-notes.ts';
 import { z } from 'zod';
@@ -314,6 +315,16 @@ export function postgresHeldNotes(url: string, schema: string): HeldNotes {
     done: true,
     release: true,
     sweep: true,
+  });
+}
+
+/** The confirmed browsers of the sites (FRU-705): `visitor-addresses-postgres.ts`, loaded at the first call. */
+export function postgresVisitorAddresses(url: string, schema: string): VisitorAddresses {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./visitor-addresses-postgres.ts')).createPostgresVisitorAddresses(database), {
+    identityOf: true,
+    confirm: true,
   });
 }
 
