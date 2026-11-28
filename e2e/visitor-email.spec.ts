@@ -90,10 +90,12 @@ test('a visitor confirms an address before their first edit, and finds their not
   await mount(first.page, path);
   let thread = await openThread(first.page);
   await expect(thread.getByText('You · this browser', { exact: true })).toBeVisible();
-  await expect(thread.getByRole('button', { name: 'More actions on your note' })).toHaveCount(0);
   await expect(thread.locator('.fruitback-thread-confirm')).toContainText(
     'Confirm your address to edit or delete your note',
   );
+  // No edit nor deletion before the address is confirmed: the menu of the author only copies the link.
+  await thread.getByRole('button', { name: 'More actions on your note' }).click();
+  await expect(thread.getByRole('menuitem')).toHaveText(['Copy link to the note']);
   await first.page.keyboard.press('Escape');
   await confirmHere(first.page, path);
 
