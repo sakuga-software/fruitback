@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
-import { checkDigest, checkInstalled } from './checks.ts';
+import { builtArchiveVersion, checkDigest, checkInstalled } from './checks.ts';
 
 /**
  * Fetch what the people who use Fruitback have now (FRU-460): the last published npm packages and
@@ -16,6 +17,11 @@ import { checkDigest, checkInstalled } from './checks.ts';
  *
  * `FRUITBACK_PUBLISHED_VERSION` and `FRUITBACK_PUBLISHED_EXTENSION` pin a version (`0.4.0`), for
  * example to replay a run. `GITHUB_TOKEN`, if set, only raises the rate limit of the GitHub API.
+ *
+ * `FRUITBACK_PUBLISHED_EXTENSION_ARCHIVE` takes an archive built here instead of the release
+ * (FRU-612): `apps/extension/.output/fruitback-<version>-chrome.zip`, as `wxt zip` writes it. The
+ * pull request of a version runs the specs against the archive it is about to release, so a spec that
+ * still reads the words of the last release fails there, before the release.
  *
  * Usage: node e2e/published/fetch.ts
  */
@@ -57,8 +63,19 @@ async function downloadChecked(asset: Release['assets'][number], to: string): Pr
 }
 
 const npmVersion = process.env.FRUITBACK_PUBLISHED_VERSION || npmLatest();
-const extensionRelease = await release(process.env.FRUITBACK_PUBLISHED_EXTENSION || undefined);
-const extensionVersion = extensionRelease.tag_name.replace(/^v/, '');
+const builtArchive = process.env.FRUITBACK_PUBLISHED_EXTENSION_ARCHIVE || undefined;
+if (builtArchive !== undefined && process.env.FRUITBACK_PUBLISHED_EXTENSION) {
+  throw new Error(
+    'FRUITBACK_PUBLISHED_EXTENSION and FRUITBACK_PUBLISHED_EXTENSION_ARCHIVE name two extensions: set one',
+  );
+}
+/** Where the archive comes from: a release of GitHub, or a build of this commit. */
+const source: { release: Release } | { built: string } =
+  builtArchive === undefined
+    ? { release: await release(process.env.FRUITBACK_PUBLISHED_EXTENSION || undefined) }
+    : { built: builtArchive };
+const extensionVersion =
+  'built' in source ? builtArchiveVersion(source.built) : source.release.tag_name.replace(/^v/, '');
 
 fs.rmSync(PUBLISHED, { recursive: true, force: true });
 fs.mkdirSync(PUBLISHED);
@@ -96,9 +113,18 @@ await build({
 });
 
 const archive = path.join(PUBLISHED, 'extension-chrome.zip');
-const chrome = extensionRelease.assets.find((asset) => asset.name === `fruitback-${extensionVersion}-chrome.zip`);
-if (chrome === undefined) throw new Error(`the release v${extensionVersion} holds no archive for Chrome`);
-await downloadChecked(chrome, archive);
+/** The SHA-256 of the archive: the one GitHub gives for an asset, or the one of the bytes built here. */
+let archiveDigest: string | null;
+if ('built' in source) {
+  const bytes = fs.readFileSync(source.built);
+  archiveDigest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  fs.writeFileSync(archive, bytes);
+} else {
+  const chrome = source.release.assets.find((asset) => asset.name === `fruitback-${extensionVersion}-chrome.zip`);
+  if (chrome === undefined) throw new Error(`the release v${extensionVersion} holds no archive for Chrome`);
+  await downloadChecked(chrome, archive);
+  archiveDigest = chrome.digest;
+}
 // Python and not `unzip`: the image of Playwright that CI runs in has no `unzip`. `zipfile` also
 // refuses a name that climbs out of the directory.
 execFileSync('python3', ['-I', '-m', 'zipfile', '-e', archive, path.join(PUBLISHED, 'extension')], {
@@ -108,7 +134,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PUBLISHED, 'extension', 'm
   version: string;
 };
 if (manifest.version !== extensionVersion) {
-  throw new Error(`the archive of v${extensionVersion} holds the extension ${manifest.version}`);
+  throw new Error(`the archive of ${extensionVersion} holds the extension ${manifest.version}`);
 }
 
 // What npm installed, read from the disk, and not the version it was asked for: `fruitback` names
@@ -128,6 +154,19 @@ checkInstalled(npmVersion, installed);
 
 fs.writeFileSync(
   path.join(PUBLISHED, 'versions.json'),
-  `${JSON.stringify({ npm: npmVersion, extension: extensionVersion, installed, archive: chrome.digest }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      npm: npmVersion,
+      extension: extensionVersion,
+      // Where the archive comes from: the release, or a build of this commit (FRU-612).
+      extensionFrom: builtArchive ?? `release v${extensionVersion}`,
+      installed,
+      archive: archiveDigest,
+    },
+    null,
+    2,
+  )}\n`,
 );
-console.log(`published versions: npm ${npmVersion}, extension ${extensionVersion}`);
+console.log(
+  `published versions: npm ${npmVersion}, extension ${extensionVersion} from ${builtArchive ?? 'its release'}`,
+);

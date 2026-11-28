@@ -208,6 +208,8 @@ jobs:
             echo "**Merging this pull request releases $VERSION:** \`version.yml\` publishes the release \`v$VERSION\` on GitHub, which makes the tag and starts \`release-npm.yml\`, \`release-extension.yml\` and \`release-image.yml\`. Then approve the environments \`npm\` and \`stores\`."
             echo
             echo "Before the merge: read the changelogs, and check that \`apps/extension/wxt.config.ts\` asks for no new permission since the last tag."
+            echo
+            echo "The check **published npm and extension** runs the published specs against the extension that this pull request builds, the archive the stores will get (FRU-612). If it fails on a word of the extension, update \`e2e/published/\` here, before the release."
           } > "$RUNNER_TEMP/version/body.md"
           open=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
           if [ -z "$open" ]; then

@@ -23,3 +23,16 @@ export function checkInstalled(asked: string, installed: Record<string, string>)
   const mixed = Object.entries(installed).filter(([, version]) => version !== asked);
   if (mixed.length > 0) throw new Error(`npm ${asked} was asked for, and installed ${JSON.stringify(installed)}`);
 }
+
+/**
+ * The version of an archive built here, read from its name: `wxt zip` writes
+ * `fruitback-<version>-chrome.zip`, the name a release attaches (FRU-612). Any other name is refused:
+ * the run would test an archive that no release gives to the stores.
+ */
+export function builtArchiveVersion(file: string): string {
+  const version = /(?:^|\/)fruitback-(\d+\.\d+\.\d+(?:-[\w.]+)?)-chrome\.zip$/.exec(file)?.[1];
+  if (version === undefined)
+    throw new Error(`${file} is not an archive for Chrome of wxt zip (fruitback-<version>-chrome.zip)`);
+
+  return version;
+}
