@@ -207,6 +207,10 @@ test('`?new` leads nowhere for a person who cannot add a connector', async ({ pa
   await expect(rows(page)).toHaveCount(2);
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/connectors`);
   await expect(search(page)).not.toBeFocused();
+  // FRU-738: with no action, the box of the actions of the head is there and draws nothing.
+  const actions = page.locator('main header > div');
+  await expect(actions).toHaveCount(1);
+  expect(await styles(actions, ['display'])).toEqual({ display: 'none' });
 
   // A worker that cannot keep a key: the same, also after a later read that can.
   await page.unrouteAll({ behavior: 'ignoreErrors' });

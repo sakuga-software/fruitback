@@ -29,9 +29,8 @@ export function ScreenHead({ title, children }: { title: string; children?: Reac
       className={`${SCREEN_BLEED} -mt-[40px] flex min-h-[48px] items-center gap-[8px] border-b border-line pr-[16px] pl-[20px]`}
     >
       <h1 className="text-step font-semibold text-ink">{title}</h1>
-      {children === undefined || children === null || children === false ? null : (
-        <div className="ml-auto flex items-center gap-[8px]">{children}</div>
-      )}
+      {/* `empty:hidden`: no action draws no box, whatever form the nothing takes (a `null`, a fragment of nulls). */}
+      <div className="ml-auto flex items-center gap-[8px] empty:hidden">{children}</div>
     </header>
   );
 }
