@@ -26,7 +26,7 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
   test.afterEach(({ context }) => finished(context, worker));
 
   /** The workspaces of the person signed in in `page`, as the worker lists them. */
-  const workspaces = (page: Page): Promise<{ id: string; name: string }[]> =>
+  const workspaces = (page: Page): Promise<{ id: string; name: string; slug: string }[]> =>
     page.evaluate(async (origin) => {
       const answer = await fetch(`${origin}/console/me`, { credentials: 'include' });
 
@@ -103,7 +103,8 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.goto(`${CONSOLE}/setup`);
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
     await page.goto(CONSOLE);
-    await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
+    // FRU-715: the console is at the short name of the workspace, read in its name.
+    await expect(page).toHaveURL(`${CONSOLE}/w/acme/sites`);
   });
 
   // FRU-635 (board S1): the landing sends `/setup?site=`. The address is said before the sign-in, the
@@ -264,7 +265,8 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     expect(new Set(toSite)).toEqual(new Set(['https://staging.acme.dev/']));
     // The way on is always there: nothing tells the console that a first note came.
     await page.getByRole('link', { name: 'Open the console' }).click();
-    await expect(page).toHaveURL(`${CONSOLE}/w/${workspace!.id}/sites`);
+    // FRU-715: at the short name the worker answers for the workspace.
+    await expect(page).toHaveURL(`${CONSOLE}/w/${workspace!.slug}/sites`);
   });
 
   test('a name the worker refuses stays in its field, with the reason', async ({ page }) => {

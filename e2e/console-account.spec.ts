@@ -834,8 +834,13 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
   }) => {
     const first = await browserOf(browser, 'ana@acme.dev');
     const second = await browserOf(browser, 'ana@acme.dev');
-    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(first.page.url())?.[1];
-    expect(workspace).toBeDefined();
+    // FRU-715: the address names the short name of the workspace; its id is the one `/console/me` answers.
+    await expect(first.page).toHaveURL(/\/w\/acme\//);
+    const me = await fetch(`${worker.origin}/console/me`, {
+      headers: { Origin: WORKER_CONSOLE, Cookie: await cookieOf(first.context) },
+    });
+    const workspace = ((await me.json()) as { workspaces: { id: string }[] }).workspaces[0]?.id;
+    expect(workspace).toMatch(/^ws_[0-9a-f]{20}$/);
 
     // The extension is paired as the console pairs it: a code for this person in this workspace,
     // spent by the extension on `/session/pair` (FRU-100, FRU-92).

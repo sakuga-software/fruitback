@@ -1746,8 +1746,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the one of its short name, keeping the rest of the path, the query, the hash and the state, in the
   history too (`replace`): the old address opens the workspace, and no step of the history holds it.
   An address that names no workspace of the person leads to the front door, as an unknown id did.
-- **Before `/console/me` answers, an address with a `_` is an id**, and the reads of the bar start at
-  once, as before. A short name waits for the answer, which says which workspace it is.
+- **Before `/console/me` answers, an address that cannot be a short name is an id** (`mayBeSlug`:
+  `ws_…` holds a `_`), and the reads of the bar start at once, as before. A short name waits for
+  the answer, which says which workspace it is.
 - **A link that leaves the console names the id**: a copied link of a note (`task-copy.tsx`), and the
   links the worker writes. An id opens the workspace for life; a short name can change, and after 30
   days opens whatever workspace took it.

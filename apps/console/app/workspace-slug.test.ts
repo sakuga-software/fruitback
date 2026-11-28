@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { type Workspace, workspaceAddress, workspaceNamed, workspaceOf } from './api.ts';
-import { slugOf, slugRefusal } from './workspace-slug.ts';
+import { mayBeSlug, slugOf, slugRefusal } from './workspace-slug.ts';
 
 /** The address of a workspace in the console (FRU-715): its short name, and every name that opens it. */
 
@@ -40,5 +40,12 @@ describe('a short name typed in « General » (FRU-715)', () => {
     for (const typed of ['ab', '-acme', 'acme-', 'ac_me', 'ac me', 'acmé', '', `a${'b'.repeat(39)}c`]) {
       assert.equal(slugRefusal(typed), 'invalid-slug', typed);
     }
+  });
+});
+
+describe('an address before the worker answers (FRU-715)', () => {
+  it('is read as an id when it cannot be a short name', () => {
+    for (const named of ['ws_0123456789abcdef0123', 'w1', 'Acme']) assert.equal(mayBeSlug(named), false, named);
+    for (const named of ['acme', 'acme-labs', '007']) assert.equal(mayBeSlug(named), true, named);
   });
 });

@@ -84,8 +84,14 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.getByRole('button', { name: 'Add site' }).click();
     await expect(owner.getByRole('heading', { name: 'Current step: Put it on the site' })).toBeVisible();
     await owner.goto(CONSOLE);
-    await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
-    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
+    // FRU-715: the console is at the short name of the workspace, read in its name.
+    await expect(owner).toHaveURL(`${CONSOLE}/w/acme/sites`);
+    const workspace = await owner.evaluate(async (origin) => {
+      const answer = await fetch(`${origin}/console/me`, { credentials: 'include' });
+
+      return ((await answer.json()) as { workspaces: { id: string }[] }).workspaces[0]?.id as string;
+    }, WORKER_ORIGIN);
+    expect(workspace).toMatch(/^ws_[0-9a-f]{20}$/);
     await expect(owner.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
@@ -132,7 +138,8 @@ test.describe('an invited reviewer (FRU-104)', () => {
     );
     await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
-    await expect(paul).toHaveURL(`${CONSOLE}/w/${workspace}/sites`);
+    // FRU-715: the link names the id, and the console moves to the short name.
+    await expect(paul).toHaveURL(`${CONSOLE}/w/acme/sites`);
     await expect(paul.getByRole('link', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     // The owner sees Paul as a member, and the invitation is gone.

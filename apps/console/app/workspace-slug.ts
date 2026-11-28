@@ -23,6 +23,14 @@ export function slugOf(typed: string): string {
   return typed.trim().toLowerCase();
 }
 
+/**
+ * Whether an address of the console can be a short name, as it is (FRU-715). An id of the worker
+ * holds a `_` (`ws_…`) and cannot: the frame reads it as an id before `/console/me` answers.
+ */
+export function mayBeSlug(named: string): boolean {
+  return SLUG.test(named);
+}
+
 /** The code of what is wrong with a typed short name, as the worker would say it, or `undefined`. */
 export function slugRefusal(typed: string): 'invalid-slug' | undefined {
   return SLUG.test(slugOf(typed)) ? undefined : 'invalid-slug';

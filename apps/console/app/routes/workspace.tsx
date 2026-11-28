@@ -29,6 +29,7 @@ import { RailIcon, type RailIconName } from '../rail-icons';
 import { manages } from '../setup-stage';
 import { useLocale } from '../use-locale';
 import { underSettings } from '../settings-path';
+import { mayBeSlug } from '../workspace-slug';
 import { CONSOLE_VERSION, RELEASES, hasNews, markSeen, seenVersion } from '../whats-new';
 import {
   type PersonalView,
@@ -164,12 +165,12 @@ export default function WorkspaceFrame() {
       : (contextOf(knownMe(), named) ?? read);
   // The id of the workspace the address names: every call of the worker names the id, never the short
   // name. An answer of the worker says which workspace a short name is. Before any answer, an address
-  // that holds a `_` is an id (`ws_…`; a short name holds none), and the reads of the bar start at
-  // once, as they did before short names.
+  // that cannot be a short name is an id (`ws_…` holds a `_`, which no short name holds), and the
+  // reads of the bar start at once, as they did before short names.
   let id: string | undefined;
   if (context !== undefined && named !== undefined && workspaceNamed(context.workspace, named))
     id = context.workspace.id;
-  else if (context === undefined && named?.includes('_') === true) id = named;
+  else if (context === undefined && named !== undefined && !mayBeSlug(named)) id = named;
   // FRU-715: an address that names the workspace by its id or by a name it left is replaced by the
   // one of its short name, with the rest of the path, the query and the hash: the address bar, a copy
   // and the history show the short name, and the old address stays in no history.

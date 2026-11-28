@@ -4627,7 +4627,9 @@ client map were refused together at boot.
 - **`POST /console/workspaces/<id>` takes `slug` beside `name`**, for an owner or an admin. The
   short name is written first, by `setWorkspaceSlug` in one transaction: a name another workspace
   holds is `409 slug-taken`, and the name of the call is not written either. Then the plugin writes
-  the name, and answers the workspace with its short name.
+  the name, and answers the workspace with its short name. A plugin that does not answer then is
+  `502`, with the new short name kept and the name of before: « Save » sent again writes the name
+  alone, the short name being already the one kept.
 - **A name a workspace leaves waits 30 days** (`FORMER_SLUG_DAYS`), a row of
   `workspace_former_slugs` with the instant it is free (`until`): it still opens the workspace, no
   other workspace takes it, and the workspace takes it back at once. 5 at most by workspace
