@@ -1037,11 +1037,8 @@ export function workspaceOf(workspaces: readonly Workspace[], named: string | un
 
 /**
  * Renames a workspace (FRU-236): its owner or an admin. The worker answers the workspace as
- * `/console/me` lists it, with the role of the person.
- */
-/**
- * Renames a workspace (FRU-236), and gives it the short name `slug` when there is one (FRU-715): the
- * worker writes the short name first, and a refusal of it keeps the name too.
+ * `/console/me` lists it, with the role of the person. With `slug`, it also gives the workspace that
+ * short name (FRU-715): the worker writes the short name first, and a refusal of it keeps the name too.
  */
 export function renameWorkspace(workspace: Workspace, name: string, slug?: string): Promise<Answer<Workspace>> {
   return call<Workspace>('POST', `/console/workspaces/${workspace.id}`, slug === undefined ? { name } : { name, slug });
