@@ -12,7 +12,10 @@ import { join, relative } from 'node:path';
  * the trace of its first run, and the cause had to be read again in the logs of each job (FRU-736).
  *
  * A missing report is not an error: the run can stop before the reporter writes it, and the upload
- * then runs on the failure of the run. It writes `flaky=false` and says so.
+ * then runs on the failure of the run. It writes `flaky=false` and says so. A report that is not
+ * JSON (a run killed while the reporter wrote it) does not fail the part either: this step only
+ * chooses what to keep. It writes `flaky=true`, so the traces are kept when no one can tell, and a
+ * warning (raised in review).
  */
 
 /** The parts of the `json` reporter's report that this script reads. */
@@ -55,7 +58,16 @@ function main([path = '']: string[]): void {
     return;
   }
 
-  const flaky = flakyOf(JSON.parse(readFileSync(path, 'utf8')) as Report, process.cwd());
+  let report: Report;
+  try {
+    report = JSON.parse(readFileSync(path, 'utf8')) as Report;
+  } catch (error) {
+    console.log(`::warning title=e2e-flaky::${path} is not JSON (${String(error)}): the traces are kept.`);
+    write(true);
+
+    return;
+  }
+  const flaky = flakyOf(report, process.cwd());
   for (const test of flaky) console.log(`flaky: ${test.file}:${test.line} › ${test.title}`);
   console.log(
     flaky.length === 0
