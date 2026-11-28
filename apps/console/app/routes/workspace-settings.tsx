@@ -222,12 +222,6 @@ function IdentityCard({
               <Problem>{t(problem)}</Problem>
             </div>
           )}
-          <p
-            role="status"
-            className={kept === undefined ? 'sr-only' : 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]'}
-          >
-            {kept === undefined ? '' : t(KEPT_WORDS[kept])}
-          </p>
         </li>
         <li className="kit-settings-row border-t border-line px-[16px]">
           {may && workspace.slug !== undefined ? (
@@ -261,6 +255,13 @@ function IdentityCard({
               </span>
             </div>
           )}
+          {/* What « Save » kept, the name, the address or both: under the last row of the form. */}
+          <p
+            role="status"
+            className={kept === undefined ? 'sr-only' : 'pb-[12px] text-hint text-muted min-[640px]:ps-[52px]'}
+          >
+            {kept === undefined ? '' : t(KEPT_WORDS[kept])}
+          </p>
         </li>
       </ul>
     </SettingsCard>
