@@ -7,6 +7,7 @@ import { useLocale } from '../use-locale';
 import { hostOf, siteName } from '../site-address';
 import { SiteTile } from './notes-table';
 import { useSlashKey } from './notes-filters';
+import { ScreenHead } from '../routes/workspace';
 
 /** The head, the tabs and the lists go from one edge of the screen to the other (FRU-691). */
 const BLEED = '-mx-[clamp(16px,4vw,48px)]';
@@ -25,14 +26,7 @@ export const ROLE_WORDS: Readonly<Record<Role, string>> = {
 export function MembersHead({ action }: { action: ReactNode }) {
   useLocale();
 
-  return (
-    <header
-      className={`${BLEED} -mt-[40px] flex min-h-[48px] items-center gap-[8px] border-b border-line pr-[16px] pl-[20px]`}
-    >
-      <h1 className="text-step font-semibold text-ink">{t('Members')}</h1>
-      <div className="ml-auto flex items-center gap-[8px]">{action}</div>
-    </header>
-  );
+  return <ScreenHead title={t('Members')}>{action}</ScreenHead>;
 }
 
 export type MembersTab = 'members' | 'invitations';

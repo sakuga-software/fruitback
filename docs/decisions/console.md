@@ -928,6 +928,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   dialog of the settings), `connector-add.tsx` (the forms), `connector-linear.tsx`,
   `connector-rest.tsx` and the others (the settings), `connector-parts.tsx` (what they share),
   `connector-logos.tsx` (the logos). **The rules, in short:**
+  - **The spaces are the ones of Sites and Members** (FRU-738, Mathieu: « the spacing of this page
+    is not the one of the others »). The screen kept the large title of before, 40 px down and 48 px
+    in, with a sentence under it, and its table 48 px in. Now it has the head of 48 px of the redesign
+    (`ScreenHead` of `routes/workspace.tsx`, which Sites and Members draw too): « Connectors » at 14
+    px, 20 px in, « New connector » with its plus at the right, and no sentence, as the mockup of
+    FRU-690 draws it. The content starts 24 px under the head, 20 px from each edge (`SCREEN_INSET`,
+    the inset of the band under the table of Sites), with 24 px between its parts. The wider table
+    showed that « Used by » kept 12 to 32 px between 850 and 900 px: under 900 px « Account » is an
+    automatic column, which takes the room left first. `console-connectors-table.spec.ts` measures the
+    head on Sites and on Connectors in the same browser, and the spaces of the content.
   - **« Your connectors » is a table** (`DataTable`, a card for each row under 680 px): the
     connector with its logo and its name (FRU-404), its account (one line, cut at its end, the whole
     in its tooltip, FRU-321), « Used by » (the sites that send there, from the read of the sites,
