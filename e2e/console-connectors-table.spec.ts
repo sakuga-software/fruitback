@@ -35,12 +35,80 @@ import { unfolded } from './settled.ts';
  * Connecteurs »), on the tokens of the console. The catalogue is in
  * `console-connectors-catalogue.spec.ts`. The worker is answered by stubs.
  */
+/**
+ * FRU-738: the screen has the spaces of the other screens of the bar. Mathieu saw a large title
+ * 40 px down and 48 px in, and the table 48 px in, where Sites and Members have a head of 48 px with
+ * their title 20 px in. The head and its button are measured on Sites in the same browser, so the
+ * two screens cannot drift apart; the content starts 24 px under the head, 20 px from each edge.
+ */
+test('the head and the spaces are the ones of Sites: a head of 48 px, the content 20 px in (FRU-738)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  const room = page.locator('main');
+  const head = room.locator('header').first();
+  /** Where the head, its title and its button are, from the room of the screen, and their type. */
+  const headOf = async (button: string) => {
+    const frame = await box(room);
+    const drawn = await box(head);
+    const title = await box(head.locator('h1'));
+    const action = await box(head.getByRole('button', { name: button, exact: true }));
+
+    return {
+      head: [drawn.x - frame.x, drawn.y - frame.y, drawn.width - frame.width, drawn.height],
+      title: title.x - frame.x,
+      button: [frame.x + frame.width - (action.x + action.width), action.height],
+      plus: await head.getByRole('button', { name: button, exact: true }).locator('svg').count(),
+      ...(await styles(head.locator('h1'), ['font-size', 'font-weight', 'line-height'])),
+      ...(await styles(head, ['border-bottom-width', 'padding-left', 'padding-right'])),
+    };
+  };
+
+  await page.goto(`${CONSOLE}/w/w1/sites`);
+  await expect(head.locator('h1')).toHaveText('Sites');
+  const sites = await headOf('Add a site');
+  // The control: the head of Sites is the one of the mockup of FRU-688.
+  expect(sites).toEqual({
+    head: [0, 0, 0, 48],
+    title: 20,
+    button: [16, 28],
+    plus: 1,
+    'font-size': '14px',
+    'font-weight': '600',
+    'line-height': '20px',
+    'border-bottom-width': '1px',
+    'padding-left': '20px',
+    'padding-right': '16px',
+  });
+
+  await open(page);
+  await expect(head.locator('h1')).toHaveText('Connectors');
+  expect(await headOf('New connector')).toEqual(sites);
+  // No sentence under the title, as on Sites and Members.
+  await expect(page.getByText('Connect a tracker once. Every site of Acme can then send its notes there.')).toHaveCount(
+    0,
+  );
+
+  // The content: 24 px under the head, 20 px from each edge of the room, 24 px between its parts.
+  const frame = await box(room);
+  const connected = await box(page.getByRole('heading', { level: 2, name: /^Your connectors/ }));
+  expect.soft(connected.y - frame.y, '« Your connectors », under the head').toBe(48 + 24);
+  expect.soft(connected.x - frame.x, '« Your connectors », from the left edge').toBe(20);
+  const table = await box(page.locator('.kit-table').first());
+  expect.soft(table.x - frame.x, 'the table, from the left edge').toBe(20);
+  expect.soft(frame.x + frame.width - (table.x + table.width), 'the table, from the right edge').toBe(20);
+  const added = await box(catalogue(page));
+  expect.soft(added.x - frame.x, '« Add a connector », from the left edge').toBe(20);
+  const above = await box(
+    page.locator('main section').filter({ has: page.getByRole('heading', { level: 2, name: /^Your connectors/ }) }),
+  );
+  expect.soft(added.y - (above.y + above.height), 'between « Your connectors » and « Add a connector »').toBe(24);
+  expect(await sideScroll(page)).toBe(0);
+});
+
 test('the table of the connectors, and the settings of a Linear in their dialog', async ({ page }) => {
   await workerWith(page);
   await open(page);
-  await expect(
-    page.getByText('Connect a tracker once. Every site of Acme can then send its notes there.'),
-  ).toBeVisible();
 
   // « Your connectors » and how many.
   const title = page.getByRole('heading', { level: 2, name: /^Your connectors/ });

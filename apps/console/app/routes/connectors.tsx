@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Site, call } from '../api';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Dialog, Problem } from '../ui';
-import { PageHead, useWorkspace } from './workspace';
+import { SettingsIcon } from '../settings-icons';
+import { useWorkspace } from './workspace';
+import { SCREEN_INSET, ScreenHead } from '../parts/screen-head';
 import { msg, t } from '../i18n';
 import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
 import { useLocale } from '../use-locale';
@@ -437,18 +439,16 @@ export default function Connectors() {
 
   return (
     <>
-      <PageHead
-        title={t('Connectors')}
-        lead={t('Connect a tracker once. Every site of {workspace} can then send its notes there.', {
-          workspace: workspace.name,
-        })}
-        {...(connected && !cannot
-          ? {
-              // FRU-690: the catalogue is on the page; « New connector » leads to its search.
-              action: <Button onClick={toCatalogue}>{t('New connector')}</Button>,
-            }
-          : {})}
-      />
+      {/* FRU-738: the head of 48 px of Sites and Members, as the mockup of FRU-690 draws it, with no sentence under the title. */}
+      <ScreenHead title={t('Connectors')}>
+        {connected && !cannot ? (
+          // FRU-690: the catalogue is on the page; « New connector » leads to its search.
+          <Button size="panel" inset={10} gap={6} onClick={toCatalogue}>
+            <SettingsIcon name="add" size={14} />
+            {t('New connector')}
+          </Button>
+        ) : null}
+      </ScreenHead>
       {/* FRU-690: the settings of a connector, in a dialog, where they were an accordion under its row. */}
       <Dialog
         open={open !== undefined && Panel !== undefined}
@@ -477,7 +477,8 @@ export default function Connectors() {
           </div>
         )}
       </Dialog>
-      <div className="flex min-w-0 flex-col gap-[32px]">
+      {/* FRU-738: 24 px under the head, 20 px from the edges as its title, 24 px between the parts. */}
+      <div className={`${SCREEN_INSET} mt-[24px] flex min-w-0 flex-col gap-[24px]`}>
         {unread || healthUnread ? (
           <div className="flex flex-wrap items-center gap-[12px]">
             <p role="alert" className="min-w-0 flex-1 text-small text-muted">
