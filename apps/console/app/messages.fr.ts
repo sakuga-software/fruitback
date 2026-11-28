@@ -827,8 +827,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne fonctionne plus : ajouter le site à nouveau lui donne un nouveau script. Les notes que Fruitback garde pour lui sont supprimées. Les notes déjà dans un outil de suivi y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
-  'Connect a tracker once. Every site of {workspace} can then send its notes there.':
-    'Connectez un outil de suivi une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
   'No tracker yet. The notes stay in Fruitback.': 'Pas encore d’outil de suivi. Les notes restent dans Fruitback.',
   'An issue in a project, cloud or self-managed.': 'Un ticket dans un projet, cloud ou auto-hébergé.',
   'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
