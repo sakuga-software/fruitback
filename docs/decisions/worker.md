@@ -5560,8 +5560,7 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   labels? }`, `201 { id, identifier, stage }`. `createTask` of the store of the accounts writes it in
   one transaction: the row of `notes`, its status, its fields, its labels and its row of the index.
   `readNewTask` of `task-fields.ts` reads the body; `/mcp` takes the same two (FRU-659).
-- **The site is required.** The index, the statuses, the rights of a guest and the removal of a site
-  are all by site: a task with no site needs them by workspace, which is a ticket of its own.
+- **The site was required here.** A task with no site came with FRU-672 (below).
 - **The task is kept by the worker, whatever the destination of its site**: place `fruitback`,
   reference `FB-<n>`. It never goes to a connector, so no `note.*` event of a REST address carries
   it. The routes of a task kept by the worker (status, fields, archive, deletion) take it as they
@@ -5576,6 +5575,39 @@ the rule of FRU-257 for an address; it waits for the explicit agreement of Mathi
   `get_note`, where a note of a page is `{ note }`.
 - **A task put in To do at its creation starts the agent of its site** (`moved-to-todo`), as a move
   of a person there does.
+
+## A task with no site (FRU-672)
+
+### The rules, in short
+
+- **A task written by hand may have no site: it belongs to its workspace.** `POST …/notes` with no
+  `site` (absent or `null`) writes it; `create_task` of `/mcp` still needs a site, since a key reads
+  the sites of its grant only.
+- **Its site is `NO_SITE`, the empty string**, in `notes` (`client_id`) and in the index (`site_id`),
+  as its page is `NO_PAGE`. No site has an empty id, so no route of a site, no share with a guest and
+  no grant of a key names it, and the id of the task (`noteIdOf('', note)`) goes through every route
+  of a task as it is. The primary key of the index stays `(site_id, note_id)`, and so do the keys of
+  `done_notices` and `note_versions` that point at it.
+- **Migration `0062_tasks_with_no_site`** (0063 in the plan of the wave, renumbered as the others
+  merge): the foreign key of the index to `sites` moves from `site_id` to `site_ref`, a column that
+  PostgreSQL computes as `NULLIF(site_id, '')`, with its index for the removal of a site. A row of a
+  site still goes with its site; a row with no site goes with its workspace
+  (`note_index_workspace_id_fkey`). `dropWorkspace` deletes its rows of `notes`, which have no key.
+  No row of before changes. Considered: `site_id` NULL. Refused: it is in the primary key and in two
+  foreign keys of other tables, and every comparison of a cursor (`(created_at, site_id, note_id) <`)
+  would need a `COALESCE`.
+- **Its statuses are the built-in ones only** (the decision asked in the ticket): no row of `statuses`
+  has the site `''`, so `ownStatusOf` takes `own:new` to `own:closed` and refuses any other
+  (`status-changed`), and the list gives them for the site `''`. Statuses of the workspace would be a
+  screen and a table of their own, for no need seen yet.
+- **A member reads and writes it, a guest never** (the decision of the orchestrator): a guest reaches
+  the sites shared with them, which never hold `''`, so every route of a task answers `404` to her, as
+  for a site she does not reach, and the list, the counts of the bar and the search leave it out. The
+  rights of a change are those of a task of a site: its author, or a role that manages the sites.
+- **What a site gives, it does not have**: no trigger of an agent, no event to an address, no notice
+  when it is done, no destination. The list joins `sites` by `site_ref` and keeps it with no address;
+  the list of the notes of the instance too.
+- **It stays when a site goes**, and goes with its workspace.
 
 ## The views of a person (FRU-723)
 

@@ -52,7 +52,7 @@ import {
 } from './postgres-schema.ts';
 import { type TaskFields, type TaskLabel, isPriority } from './task-fields.ts';
 import { DONE_CLAIM_MS, DONE_NOTICE_KEEP_MS, type DoneNotice, type DoneNotices } from './done-notices.ts';
-import { isSameNote, keptRowOf } from './note-rows.ts';
+import { NO_SITE, isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
 /** The index of the notes in the database of the worker (FRU-237). See `notes-index.ts`. */
@@ -76,6 +76,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       // The deliveries first: a few rows, read once, then matched to the notes by their key.
       const pending = await pendingOf(db, workspace);
       const narrowed = filtered(workspace, query, pending);
+      // FRU-672: a task of the workspace has no site: the join with `sites` (the search of its
+      // address) leaves it in, with no address.
       // The list is `narrowed` (role, site, stage, author, search) and `inPlace`. The counts read
       // `narrowed` once: by place for the chips, and by stage under `inPlace` for the groups, so a
       // group counts what the list shows (FRU-551).
@@ -106,7 +108,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             memberRole: member.role,
           })
           .from(note_index)
-          .innerJoin(sites, eq(sites.id, note_index.site_id))
+          .leftJoin(sites, eq(sites.id, note_index.site_ref))
           .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
           .leftJoin(
             member,
@@ -137,7 +139,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
                   inPlace === undefined ? count() : sql<number>`count(*) FILTER (WHERE ${inPlace})`.mapWith(Number),
               })
               .from(note_index)
-              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .leftJoin(sites, eq(sites.id, note_index.site_ref))
               .where(narrowed)
               .groupBy(keyOf, note_index.stage),
         // The notes of the filter that have a delivery: those of its references, matched to their
@@ -151,7 +153,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
                 reference: note_index.reference,
               })
               .from(note_index)
-              .innerJoin(sites, eq(sites.id, note_index.site_id))
+              .leftJoin(sites, eq(sites.id, note_index.site_ref))
               .where(
                 and(narrowed, sql`${note_index.reference} = ANY(${sql.param(keys.map((key) => key[2]))}::text[])`),
               ),
@@ -365,7 +367,13 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .select({ site: note_index.site_id, notes: count() })
           .from(note_index)
           .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.author_account_id, account), waitsForCheck()),
+            and(
+              eq(note_index.workspace_id, workspace),
+              eq(note_index.author_account_id, account),
+              waitsForCheck(),
+              // FRU-672: counts by site; a task of the workspace has none.
+              ne(note_index.site_id, NO_SITE),
+            ),
           )
           .groupBy(note_index.site_id),
       );
@@ -387,7 +395,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           })
           .from(note_index)
           // `note_index_by_workspace` (workspace_id, site_id, stage) reads the notes of these sites only.
-          .where(and(eq(note_index.workspace_id, workspace), readable(only)))
+          // FRU-672: counts by site; a task of the workspace has none.
+          .where(and(eq(note_index.workspace_id, workspace), readable(only), ne(note_index.site_id, NO_SITE)))
           .groupBy(note_index.site_id, note_index.stage),
       );
 

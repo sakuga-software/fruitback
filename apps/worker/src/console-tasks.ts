@@ -3,7 +3,7 @@ import { requestAgent } from './agent-triggers.ts';
 import { readJsonObject } from './bounded-body.ts';
 import { json } from './http.ts';
 import { invalidatePages, withoutTracker } from './note-helpers.ts';
-import { NO_PAGE } from './note-rows.ts';
+import { NO_PAGE, NO_SITE } from './note-rows.ts';
 import { type NotesContext, authorView, noteIdOf } from './console-notes.ts';
 import { notesOf, readLabel, readNewTask, readTaskChange, readTasksChange } from './task-fields.ts';
 import { afterStatusMoved, ownKeyOf } from './console-status.ts';
@@ -16,7 +16,8 @@ import { withoutTrackerStatus } from './site-statuses.ts';
  *   its column and the archive, with the rights of the status (the author of the note, or a role that
  *   manages the sites). `DELETE …/notes/<note>/task` deletes it, with the same rights (FRU-665).
  * - `POST …/notes`: writes a task by hand (FRU-657), with no page and no pin, in a site the caller
- *   reads. `GET …/notes/<note>` reads it as `{ task }`, where a note of a page is `{ note }`.
+ *   reads, or with no site (FRU-672): a task of the workspace, which a guest neither writes nor reads.
+ *   `GET …/notes/<note>` reads it as `{ task }`, where a note of a page is `{ note }`.
  *   A role that sees the tracker reads its versions there too (FRU-704, `versions`), oldest first, and,
  *   for a note its visitor deleted, until when it is kept (`deleted`, `deleted-notes.ts`).
  * - `POST …/notes/<note>/restore` (FRU-704): a role that sees the tracker restores a note its visitor
@@ -178,13 +179,15 @@ async function createTask(request: Request, context: NotesContext): Promise<Resp
   const { headers } = context;
   if (context.tasks === 'off') return json(403, { error: 'tasks-off' }, headers);
   const body = await readJsonObject(request);
-  const site = body?.site;
-  if (typeof site !== 'string' || !/^[A-Za-z0-9_-]+$/.test(site)) {
+  // FRU-672: no site (absent or `null`): a task of the workspace itself.
+  const site = body?.site === undefined || body.site === null ? NO_SITE : body.site;
+  if (typeof site !== 'string' || (site !== NO_SITE && !/^[A-Za-z0-9_-]+$/.test(site))) {
     return json(400, { error: 'invalid-task', field: 'site' }, headers);
   }
   const input = readNewTask(body, { title: TASK_TITLE_MAX_LENGTH, text: NOTE_MAX_LENGTH });
   if ('invalid' in input) return json(400, { error: 'invalid-task', field: input.invalid }, headers);
-  // A guest writes only in the sites shared with them (FRU-250); any other site is none.
+  // A guest writes only in the sites shared with them (FRU-250); any other site is none, and so is
+  // the workspace itself: a guest reads no task of it.
   const reach = await context.reach();
   if (reach === undefined || (reach.sites !== 'every' && !reach.sites.includes(site))) {
     return json(404, { error: 'not-found' }, headers);

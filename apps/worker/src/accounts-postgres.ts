@@ -101,7 +101,7 @@ import {
   parseTask,
 } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import { NO_PAGE, identifierFor, isSameNote, keptRowOf, readJson, stageOf, widgetIdOf } from './note-rows.ts';
+import { NO_PAGE, NO_SITE, identifierFor, isSameNote, keptRowOf, readJson, stageOf, widgetIdOf } from './note-rows.ts';
 import { excerptOf } from './notes-index.ts';
 import { repliesOf } from './notes-postgres.ts';
 import { changedTaskFields, ownStatusName } from './note-events.ts';
@@ -369,11 +369,32 @@ export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
     workspace,
     ids.map((row) => row.id),
   );
+  // FRU-672: the tasks of the workspace itself, which no site names. Their rows of the index go with
+  // the workspace, by its foreign key.
+  const own = await db
+    .select({ place: note_index.place, reference: note_index.reference })
+    .from(note_index)
+    .where(and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, NO_SITE)));
+  const rows = own.flatMap((row) => {
+    const id = keptRowOf(row.place, null, row.reference);
+
+    return id === undefined ? [] : [id];
+  });
+  if (rows.length > 0) await db.delete(notes).where(and(inArray(notes.id, rows), eq(notes.client_id, NO_SITE)));
   await db.delete(organization).where(eq(organization.id, workspace));
 }
 
-/** Whether `site` is a site of `workspace`, read in the transaction of `db`, and held until it ends. */
+/**
+ * Whether `site` is a site of `workspace`, read in the transaction of `db`, and held until it ends.
+ * FRU-672: `NO_SITE` is the site of the tasks of the workspace itself, which has no row to hold and no
+ * status of its own: it is there when the workspace is.
+ */
 async function siteHeld(db: Db, workspace: string, site: string): Promise<boolean> {
+  if (site === NO_SITE) {
+    const found = await db.select({ id: organization.id }).from(organization).where(eq(organization.id, workspace));
+
+    return found.length === 1;
+  }
   const rows = await db
     .select({ id: sites.id })
     .from(sites)
@@ -2323,7 +2344,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           createdAt: new Date(now).toISOString(),
           title: input.title,
           ...(input.text === undefined ? {} : { text: input.text }),
-          client: { id: site },
+          // FRU-672: a task of the workspace names no site.
+          ...(site === NO_SITE ? {} : { client: { id: site } }),
           reporter: {
             id: who.account,
             ...(person === undefined || person.name === '' ? {} : { name: person.name }),
