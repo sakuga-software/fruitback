@@ -179,6 +179,12 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - **Each run of a spec has a page of its own**, a retry and each `--repeat-each` repetition
   included (`caseOf` of `e2e/pin.ts`). The worker's store lives for the whole run. A flaky spec is
   measured with `--repeat-each 20 --workers 1`.
+- **On CI, a test that passes only on its retry keeps the trace of its first run** (FRU-737).
+  The config records that run with `retain-on-first-failure`, and `tools/ci/e2e-flaky.ts` reads the
+  `json` report. The part stays green, and its artifact `playwright-report-<part>` is kept as for a
+  failed part. Open the trace with `npx playwright show-trace <trace.zip>`. Before, only a failed
+  part kept its traces, and `on-first-retry` recorded the retry, which passed: FRU-736 read the first
+  error again in 30 logs of jobs.
 - **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
   search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 
