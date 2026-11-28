@@ -4,7 +4,7 @@ import { type SiteChoice, call } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { type StatusChoice, statusName } from '../note-status';
-import { STAGE_NAMES, type Stage } from '../stages';
+import { STAGES, STAGE_NAMES, type Stage } from '../stages';
 import { Button, Checks, Choice, Dialog, Field, Problem, TextBox } from '../ui';
 import { useLocale } from '../use-locale';
 import type { TaskLabel, TaskPerson } from './task-menu';
@@ -21,9 +21,7 @@ const BUILT_IN = /^own:(new|todo|progress|done|closed)$/u;
  */
 const WORKSPACE = '@workspace';
 /** The statuses of a task of the workspace: the built-in ones, as the worker gives them. */
-const BUILT_IN_STATUSES: readonly StatusChoice[] = (['new', 'todo', 'progress', 'done', 'closed'] as const).map(
-  (stage) => ({ key: `own:${stage}`, name: '', stage }),
-);
+const BUILT_IN_STATUSES: readonly StatusChoice[] = STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage }));
 
 /** The sentence for a task the worker did not write (FRU-657). */
 const CREATE_PROBLEMS: Readonly<Record<string, string>> = {
