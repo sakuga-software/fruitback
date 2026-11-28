@@ -84,6 +84,14 @@ test('at 834 px the table drops « Used by », keeps « Retry » in its frame, a
   }
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, '834 px');
+
+  // FRU-738: the table is 20 px from the edges of the screen, so it is wider. Up to 900 px « Used by »
+  // stays 0 px wide: « Account » takes the room left (12 px went to « Used by » at 860 px before).
+  for (const width of [860, 899]) {
+    await page.setViewportSize({ width, height: 1112 });
+    await expect.poll(async () => (await box(frame)).width, `the table at ${width} px`).toBe(width - 40);
+    expect((await box(head)).width, `« Used by » at ${width} px`).toBeLessThan(1);
+  }
 });
 
 test('at 390 px a connector is a card: its logo, its name and « … », its account, its health and sites, then « Retry »', async ({

@@ -2,7 +2,13 @@ import { describe, it, onTestFinished } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { readBearerToken, signIdentityToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
+import {
+  readBearerToken,
+  signIdentityToken,
+  signedWith,
+  stripClaimedVerification,
+  verifyIdentityToken,
+} from './identity.ts';
 
 const SECRET = 'a-secret-long-enough-to-not-be-guessed';
 const HOUR = 3_600_000;
@@ -442,5 +448,37 @@ describe('readBearerToken', () => {
     ]) {
       assert.equal(readBearerToken(value), undefined, `${value} is not a bearer token`);
     }
+  });
+});
+
+describe('signedWith (FRU-706)', () => {
+  it('says yes for a token this secret signed, whatever its claims: expired, of the future, with no subject', async () => {
+    assert.equal(await signedWith(await signIdentityToken({ sub: 'u', exp: inSeconds(HOUR) }, SECRET), SECRET), true);
+    assert.equal(await signedWith(await signIdentityToken({ sub: 'u', exp: inSeconds(-HOUR) }, SECRET), SECRET), true);
+    assert.equal(
+      await signedWith(await signToken({ sub: 'u', exp: inSeconds(HOUR), iat: inSeconds(HOUR) }, SECRET), SECRET),
+      true,
+    );
+    assert.equal(await signedWith(signRaw({ alg: 'HS256' }, '{}'), SECRET), true);
+  });
+
+  it('says no for another secret, an edited payload, another algorithm, and a token of another shape', async () => {
+    const token = await signIdentityToken({ sub: 'u', exp: inSeconds(HOUR) }, SECRET);
+    assert.equal(await signedWith(token, 'another-secret-long-enough-to-not-be-guessed'), false);
+    const [header, , signature] = token.split('.');
+    const edited = Buffer.from(JSON.stringify({ sub: 'v', exp: inSeconds(HOUR) })).toString('base64url');
+    assert.equal(await signedWith(`${header}.${edited}.${signature}`, SECRET), false);
+    // `alg` is asserted, never read: a token signed with the right key but another `alg` is not ours.
+    assert.equal(await signedWith(signRaw({ alg: 'HS512' }, '{}'), SECRET), false);
+    assert.equal(await signedWith(signRaw({ alg: 'none' }, '{}'), SECRET), false);
+    assert.equal(await signedWith('not.a.token', SECRET), false);
+    assert.equal(await signedWith('two.parts', SECRET), false);
+    assert.equal(await signedWith('', SECRET), false);
+  });
+
+  it('says no for a token longer than 4096 characters, even one this secret signed', async () => {
+    const long = signRaw({ alg: 'HS256' }, JSON.stringify({ sub: 'u', pad: 'x'.repeat(4096) }));
+    assert.ok(long.length > 4096);
+    assert.equal(await signedWith(long, SECRET), false);
   });
 });
