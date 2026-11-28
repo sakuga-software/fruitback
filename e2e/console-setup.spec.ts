@@ -30,7 +30,7 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     page.evaluate(async (origin) => {
       const answer = await fetch(`${origin}/console/me`, { credentials: 'include' });
 
-      return ((await answer.json()) as { workspaces: { id: string; name: string }[] }).workspaces;
+      return ((await answer.json()) as { workspaces: { id: string; name: string; slug: string }[] }).workspaces;
     }, WORKER_ORIGIN);
 
   test('a new address goes from the link to its site, with a workspace named after its domain', async ({
